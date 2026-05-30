@@ -21,7 +21,7 @@ sudo apt install -y --fix-missing locales make build-essential \
         tmpreaper libgdk-pixbuf2.0-0 libffi-dev shared-mime-info \
         python3-cffi libpango-1.0-0 libpangocairo-1.0-0 \
         swig openssl curl qpdf wkhtmltopdf poppler-utils mupdf-tools
-sudo update-locate LANG=pt_BR.UTF-8
+sudo update-locale LANG=pt_BR.UTF-8
 sudo timedatectl set-timezone America/Fortaleza
 
 # instalar uv
