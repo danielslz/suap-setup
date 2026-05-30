@@ -45,7 +45,7 @@ if [ -d $SUAP_DIR/.git ]; then
 	git checkout master
 	git pull
 else
-	git clone $GIT_URL
+	git clone --depth 1 $GIT_URL
 	cd $SUAP_DIR
 fi
 
@@ -53,7 +53,7 @@ fi
 cp $SUAP_DIR/suap/settings_sample.py $SUAP_DIR/suap/settings.py
 
 # gerar .env
-cp $SUAP_DIR/suap/.env.dev.sample $SUAP_DIR/suap/.env
+cp $SUAP_DIR/.env.dev.sample $SUAP_DIR/.env
 
 # instalar python
 echo "${GREEN} >>> Instalando Python ${NO_COLOR}" $PYTHON_VERSION
