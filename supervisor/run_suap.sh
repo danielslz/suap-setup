@@ -22,7 +22,7 @@ export UV_COMPILE_BYTECODE=1
 export UV_LINK_MODE=copy
 export UV_CACHE_DIR=$VENV_DIR/.cache/uv
 export UV_PYTHON_INSTALL_DIR=$VENV_DIR/.local/share/uv/python
-export UV_PROJECT_ENVIRONMENT=$VENV_DIR
+export UV_PROJECT_ENVIRONMENT=$VENV_DIR/suap
 
 # execucao do script
 echo "${GREEN}### Iniciando Gunicorn${NO_COLOR}"
