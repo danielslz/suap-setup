@@ -11,8 +11,7 @@ NO_COLOR=`tput sgr0`
 
 # instalar dependencias do sistema
 echo "${GREEN} >>> Instalando as dependências do sistema operacional ${NO_COLOR}"
-
-BASE="locales vim git build-essential cron ntpdate openssl curl libpq-dev tmpreaper swig"
+BASE="locales vim git build-essential language-pack-pt openssl curl libpq-dev tmpreaper swig"
 LDAP="libldap2-dev libsasl2-dev"
 PILLOW="libjpeg-dev libfreetype6-dev zlib1g-dev"
 PYMSSQL="freetds-dev"
@@ -20,12 +19,10 @@ LXML="libxmlsec1-dev libxml2-dev libxslt1-dev"
 WEASYPRINT="libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0"
 MAGIC="libmagic1"
 PDF="qpdf ghostscript poppler-utils mupdf-tools wkhtmltopdf"
-
 sudo apt update -qy; \
 sudo apt install -y --fix-missing $BASE $LDAP $PILLOW $PYMSSQL $LXML $WEASYPRINT $MAGIC $PDF
 sudo update-locale LANG=pt_BR.UTF-8
 sudo timedatectl set-timezone America/Fortaleza
-
 
 # instalar uv
 if ! [ -x "$(command -v uv)" ]; then

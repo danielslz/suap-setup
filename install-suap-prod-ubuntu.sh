@@ -11,16 +11,16 @@ NO_COLOR=`tput sgr0`
 
 # instalar dependencias do sistema
 echo "${GREEN} >>> Instalando as dependências do sistema operacional ${NO_COLOR}"
-sudo apt update
-sudo apt install -y --fix-missing locales make build-essential \
-        git libldap2-dev libsasl2-dev libpq-dev ghostscript \
-        libjpeg-dev libfreetype6-dev zlib1g-dev language-pack-pt \
-        freetds-dev libxmlsec1-dev libxml2-dev libxslt1-dev \
-        libblas-dev liblapack-dev libatlas-base-dev gfortran \
-        libglu1-mesa libcairo2 libcairo2-dev libcups2 libdbus-glib-1-2 libxinerama1 libsm6 \
-        tmpreaper libgdk-pixbuf2.0-0 libffi-dev shared-mime-info \
-        python3-cffi libpango-1.0-0 libpangocairo-1.0-0 \
-        swig openssl curl qpdf wkhtmltopdf poppler-utils mupdf-tools
+BASE="locales vim git build-essential language-pack-pt cron ntpdate openssl curl libpq-dev tmpreaper swig"
+LDAP="libldap2-dev libsasl2-dev"
+PILLOW="libjpeg-dev libfreetype6-dev zlib1g-dev"
+PYMSSQL="freetds-dev"
+LXML="libxmlsec1-dev libxml2-dev libxslt1-dev"
+WEASYPRINT="libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0"
+MAGIC="libmagic1"
+PDF="qpdf ghostscript poppler-utils mupdf-tools wkhtmltopdf"
+sudo apt update -qy; \
+sudo apt install -y --fix-missing $BASE $LDAP $PILLOW $PYMSSQL $LXML $WEASYPRINT $MAGIC $PDF
 sudo update-locale LANG=pt_BR.UTF-8
 sudo timedatectl set-timezone America/Fortaleza
 
@@ -73,6 +73,7 @@ cd $SUAP_DIR
 uv sync --group prod
 
 # mensagem final
-echo "${GREEN} SUAP instalado com sucesso! ${NO_COLOR}"
+echo "${GREEN} SUAP instalado com sucesso em $SUAP_DIR! ${NO_COLOR}"
 echo "Para configurar as variáveis de ambiente, edite o arquivo ${GREEN}$SUAP_DIR/suap/.env ${NO_COLOR}"
-echo "Para rodar o servidor de desenvolvimento, rode: ${GREEN}uv run -- suap runserver 0.0.0.0:8000${NO_COLOR}"
+echo "Para recarregar as configurações neste terminal, rode: ${GREEN}source $HOME/.bashrc${NO_COLOR}"
+echo "Para rodar o servidor de desenvolvimento, rode: ${GREEN}uv python manage.py runserver 0.0.0.0:8000${NO_COLOR}"
