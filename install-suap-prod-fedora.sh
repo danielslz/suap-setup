@@ -4,6 +4,8 @@
 PYTHON_VERSION=3.12
 BASE_DIR=/opt
 SUAP_DIR=$BASE_DIR/suap
+VENV_DIR=$SUAP_DIR/.venv
+INSTALL_SCRIPT_DIR=$(dirname $(readlink -f $0))
 GIT_URL=git@gitlab.ifma.edu.br:ndsis/suap.git
 
 GREEN=`tput setaf 2`
@@ -11,7 +13,7 @@ NO_COLOR=`tput sgr0`
 
 # instalar dependencias do sistema
 echo "${GREEN}>>> Instalando as dependências do sistema operacional ${NO_COLOR}"
-BASE="glibc-langpack-pt_BR vim git openssl curl postgresql-devel tmpwatch swig cronie chrony"
+BASE="glibc-langpack-pt_BR vim git openssl supervisor curl postgresql-devel tmpwatch swig cronie chrony"
 LDAP="openldap-devel cyrus-sasl-devel"
 PILLOW="libjpeg-turbo-devel freetype-devel zlib-devel"
 PYMSSQL="freetds-devel"

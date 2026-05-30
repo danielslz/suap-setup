@@ -4,6 +4,7 @@
 PYTHON_VERSION=3.12
 BASE_DIR=$HOME/Projetos
 SUAP_DIR=$BASE_DIR/suap
+VENV_DIR=$SUAP_DIR/.venv
 GIT_URL=git@gitlab.ifma.edu.br:ndsis/suap.git
 
 GREEN=`tput setaf 2`

@@ -4,6 +4,8 @@
 PYTHON_VERSION=3.12
 BASE_DIR=/opt
 SUAP_DIR=$BASE_DIR/suap
+VENV_DIR=$SUAP_DIR/.venv
+INSTALL_SCRIPT_DIR=$(dirname $(readlink -f $0))
 GIT_URL=git@gitlab.ifma.edu.br:ndsis/suap.git
 
 GREEN=`tput setaf 2`
@@ -11,7 +13,7 @@ NO_COLOR=`tput sgr0`
 
 # instalar dependencias do sistema
 echo "${GREEN}>>> Instalando as dependências do sistema operacional ${NO_COLOR}"
-BASE="locales vim git build-essential language-pack-pt cron ntpdate openssl curl libpq-dev tmpreaper swig"
+BASE="locales vim git build-essential language-pack-pt cron ntpdate supervisor openssl curl libpq-dev tmpreaper swig"
 LDAP="libldap2-dev libsasl2-dev"
 PILLOW="libjpeg-dev libfreetype6-dev zlib1g-dev"
 PYMSSQL="freetds-dev"
@@ -72,9 +74,87 @@ echo "${GREEN}>>> Instalando libs SUAP ${NO_COLOR}"
 cd $SUAP_DIR
 uv sync --group prod
 
+# configurar supervisor
+echo "${GREEN}>>> Configurando o Supervisor ${NO_COLOR}"
+mkdir -p $BASE_DIR/logs
+mkdir -p $BASE_DIR/scripts
+
+# Perguntar ao usuário o que configurar
+echo ""
+echo "Qual serviço você deseja configurar no Supervisor?"
+echo "1) SUAP (servidor web)"
+echo "2) Celery (processamento de tarefas assíncronas)"
+echo "3) Ambos (SUAP + Celery)"
+echo ""
+read -p "Escolha uma opção (1/2/3): " supervisor_choice
+
+# Copiar arquivos baseado na escolha do usuário
+case $supervisor_choice in
+	1)
+		echo "${GREEN}>>> Configurando supervisor para SUAP ${NO_COLOR}"
+		if [ -f "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" ]; then
+			sudo cp "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" /etc/supervisor/conf.d/suap.conf
+			sudo cp "$INSTALL_SCRIPT_DIR/supervisor/run_suap.sh" "$BASE_DIR/scripts/run_suap.sh"
+			sudo chmod +x "$BASE_DIR/scripts/run_suap.sh"
+			echo "${GREEN}✓ SUAP configurado${NO_COLOR}"
+		else
+			echo "Erro: arquivo supervisor/suap.conf não encontrado em $INSTALL_SCRIPT_DIR"
+			exit 1
+		fi
+		;;
+	2)
+		echo "${GREEN}>>> Configurando supervisor para Celery ${NO_COLOR}"
+		if [ -f "$INSTALL_SCRIPT_DIR/supervisor/celery.conf" ]; then
+			sudo cp "$INSTALL_SCRIPT_DIR/supervisor/celery.conf" /etc/supervisor/conf.d/celery.conf
+			sudo cp "$INSTALL_SCRIPT_DIR/supervisor/run_celery.sh" "$BASE_DIR/scripts/run_celery.sh"
+			sudo chmod +x "$BASE_DIR/scripts/run_celery.sh"
+			echo "${GREEN}✓ Celery configurado${NO_COLOR}"
+		else
+			echo "Erro: arquivo supervisor/celery.conf não encontrado em $INSTALL_SCRIPT_DIR"
+			exit 1
+		fi
+		;;
+	3)
+		echo "${GREEN}>>> Configurando supervisor para SUAP e Celery ${NO_COLOR}"
+		if [ -f "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" ] && [ -f "$INSTALL_SCRIPT_DIR/supervisor/celery.conf" ]; then
+			sudo cp "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" /etc/supervisor/conf.d/suap.conf
+			sudo cp "$INSTALL_SCRIPT_DIR/supervisor/run_suap.sh" "$BASE_DIR/scripts/run_suap.sh"
+			sudo chmod +x "$BASE_DIR/scripts/run_suap.sh"
+			sudo cp "$INSTALL_SCRIPT_DIR/supervisor/celery.conf" /etc/supervisor/conf.d/celery.conf
+			sudo cp "$INSTALL_SCRIPT_DIR/supervisor/run_celery.sh" "$BASE_DIR/scripts/run_celery.sh"
+			sudo chmod +x "$BASE_DIR/scripts/run_celery.sh"
+			echo "${GREEN}✓ SUAP e Celery configurados${NO_COLOR}"
+		else
+			echo "Erro: um ou mais arquivos de configuração não foram encontrados em $INSTALL_SCRIPT_DIR/supervisor"
+			exit 1
+		fi
+		;;
+	*)
+		echo "Opção inválida. Abortando."
+		exit 1
+		;;
+esac
+
+sudo supervisorctl reread
+sudo supervisorctl update
+
 # mensagem final
+echo ""
 echo "${GREEN}SUAP instalado com sucesso em $SUAP_DIR! ${NO_COLOR}"
-echo "Para recarregar as configurações neste terminal, rode: ${GREEN}source $HOME/.bashrc${NO_COLOR}"
-echo "Para configurar as variáveis de ambiente, edite o arquivo ${GREEN}$SUAP_DIR/suap/.env ${NO_COLOR}"
-echo "Para ir para a pasta do SUAP, rode: ${GREEN}cd $SUAP_DIR${NO_COLOR}"
-echo "Para rodar o servidor de desenvolvimento, rode: ${GREEN}uv run python manage.py runserver 0.0.0.0:8000${NO_COLOR}"
+echo ""
+echo "Próximos passos:"
+echo "1. Para recarregar as configurações neste terminal: ${GREEN}source $HOME/.bashrc${NO_COLOR}"
+echo "2. Para configurar as variáveis de ambiente, edite: ${GREEN}$SUAP_DIR/suap/.env ${NO_COLOR}"
+echo "3. Para ir para a pasta do SUAP: ${GREEN}cd $SUAP_DIR${NO_COLOR}"
+echo ""
+case $supervisor_choice in
+	1)
+		echo "4. Para rodar o SUAP: ${GREEN}sudo supervisorctl start suap${NO_COLOR}"
+		;;
+	2)
+		echo "4. Para rodar o Celery: ${GREEN}sudo supervisorctl start celery${NO_COLOR}"
+		;;
+	3)
+		echo "4. Para rodar SUAP e Celery: ${GREEN}sudo supervisorctl start all${NO_COLOR}"
+		;;
+esac

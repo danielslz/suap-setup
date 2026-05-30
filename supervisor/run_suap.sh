@@ -3,7 +3,7 @@
 ### definicao de variaveis
 BASE_DIR=/opt
 SUAP_DIR=$BASE_DIR/suap
-VENV_DIR=$BASE_DIR/venv
+VENV_DIR=$BASE_DIR/venv/suap
 LOG_DIR=$BASE_DIR/logs
 LOG_FILE=$LOG_DIR/gunicorn.log
 TIMEOUT=600  # 10 minutos
