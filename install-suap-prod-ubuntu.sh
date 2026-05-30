@@ -86,9 +86,6 @@ echo "${GREEN}>>> Instalando libs SUAP ${NO_COLOR}"
 cd $SUAP_DIR
 uv sync --group prod --no-dev --no-install-project
 
-# corrigir permissoes arquivos
-chown -R www-data:www-data $SUAP_DIR
-
 # configurar supervisor
 echo "${GREEN}>>> Configurando o Supervisor ${NO_COLOR}"
 mkdir -p $BASE_DIR/logs
@@ -163,7 +160,10 @@ case $supervisor_choice in
 esac
 
 supervisorctl reread
-supervisorctl update
+
+# corrigir permissoes arquivos
+chown -R www-data:www-data $SUAP_DIR
+chown -R www-data:www-data $BASE_DIR/logs
 
 # mensagem final
 echo ""
@@ -194,4 +194,3 @@ case $supervisor_choice in
 		echo "   - Todos: ${GREEN}supervisorctl start all${NO_COLOR}"
 		;;
 esac
-
