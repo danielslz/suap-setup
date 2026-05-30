@@ -165,6 +165,7 @@ case $supervisor_choice in
 esac
 
 supervisorctl reread
+supervisorctl update
 
 # corrigir permissoes arquivos
 chown -R www-data:www-data $SUAP_DIR
