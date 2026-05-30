@@ -4,7 +4,7 @@
 PYTHON_VERSION=3.12
 BASE_DIR=/opt
 SUAP_DIR=$BASE_DIR/suap
-VENV_DIR=$SUAP_DIR/.venv
+VENV_DIR=$BASE_DIR/venv
 INSTALL_SCRIPT_DIR=$(dirname $(readlink -f $0))
 GIT_URL=git@gitlab.ifma.edu.br:ndsis/suap.git
 
@@ -32,17 +32,17 @@ update-locale LANG=pt_BR.UTF-8
 timedatectl set-timezone America/Fortaleza
 
 # instalar uv
-export UV_PYTHON_DOWNLOADS=never
+export UV_PYTHON_DOWNLOADS=manual
 export UV_COMPILE_BYTECODE=1
 export UV_LINK_MODE=copy
 export UV_CACHE_DIR=$SUAP_DIR/.cache/uv
 export UV_PYTHON_INSTALL_DIR=$SUAP_DIR/.local/share/uv/python
 export UV_PROJECT_ENVIRONMENT=$VENV_DIR
 
-mkdir -p $SUAP_DIR/.cache/uv
-mkdir -p $SUAP_DIR/.local/share/uv/python
 mkdir -p $VENV_DIR
-chown -R www-data:www-data $SUAP_DIR/.cache $SUAP_DIR/.local $VENV_DIR
+mkdir -p $VENV_DIR/.cache/uv
+mkdir -p $VENV_DIR/.local/share/uv/python
+chown -R www-data:www-data $VENV_DIR
 
 if ! [ -x "$(command -v uv)" ]; then
 	echo "${GREEN}>>> Instalando o uv ${NO_COLOR}"
@@ -169,7 +169,7 @@ supervisorctl reread
 # corrigir permissoes arquivos
 chown -R www-data:www-data $SUAP_DIR
 chown -R www-data:www-data $BASE_DIR/logs
-chown -R www-data:www-data $SUAP_DIR/.local/share/uv $VENV_DIR
+chown -R www-data:www-data $VENV_DIR/.local/share/uv
 
 # mensagem final
 echo ""
