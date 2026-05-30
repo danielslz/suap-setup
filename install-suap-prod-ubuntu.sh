@@ -8,6 +8,11 @@ VENV_DIR=$SUAP_DIR/.venv
 INSTALL_SCRIPT_DIR=$(dirname $(readlink -f $0))
 GIT_URL=git@gitlab.ifma.edu.br:ndsis/suap.git
 
+if [ "$EUID" -ne 0 ]; then
+  echo "Este script deve ser executado como root. Use sudo ou entre como root."
+  exit 1
+fi
+
 GREEN=`tput setaf 2`
 NO_COLOR=`tput sgr0`
 
@@ -21,23 +26,23 @@ LXML="libxmlsec1-dev libxml2-dev libxslt1-dev"
 WEASYPRINT="libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0"
 MAGIC="libmagic1"
 PDF="qpdf ghostscript poppler-utils mupdf-tools wkhtmltopdf"
-su -
 apt update -qy
 apt install -y --fix-missing $BASE $LDAP $PILLOW $PYMSSQL $LXML $WEASYPRINT $MAGIC $PDF
 update-locale LANG=pt_BR.UTF-8
 timedatectl set-timezone America/Fortaleza
 
 # instalar uv
-UV_PYTHON_DOWNLOADS=never
-UV_COMPILE_BYTECODE=1
-UV_LINK_MODE=copy
-UV_CACHE_DIR=/var/www/.cache/uv
-UV_PYTHON_INSTALL_DIR=/var/www/.local/share/uv/python
-UV_PROJECT_ENVIRONMENT=/var/www/.venv
+export UV_PYTHON_DOWNLOADS=never
+export UV_COMPILE_BYTECODE=1
+export UV_LINK_MODE=copy
+export UV_CACHE_DIR=$SUAP_DIR/.cache/uv
+export UV_PYTHON_INSTALL_DIR=$SUAP_DIR/.local/share/uv/python
+export UV_PROJECT_ENVIRONMENT=$VENV_DIR
 
-mkdir -p /var/www/
-mkdir -p /var/www/.cache/uv /var/www/.local/share/uv/python /var/www/.venv
-chown -R www-data:www-data /var/www/.cache /var/www/.local /var/www/.venv
+mkdir -p $SUAP_DIR/.cache/uv
+mkdir -p $SUAP_DIR/.local/share/uv/python
+mkdir -p $VENV_DIR
+chown -R www-data:www-data $SUAP_DIR/.cache $SUAP_DIR/.local $VENV_DIR
 
 if ! [ -x "$(command -v uv)" ]; then
 	echo "${GREEN}>>> Instalando o uv ${NO_COLOR}"
@@ -77,7 +82,7 @@ echo "${GREEN}>>> Instalando Python ${NO_COLOR}" $PYTHON_VERSION
 uv python install $PYTHON_VERSION
 
 # criar virtualenv
-echo "${GREEN}>>> Criando virtualenv ${NO_COLOR}" $VIRTUALENV_NAME
+echo "${GREEN}>>> Criando virtualenv ${NO_COLOR}$VENV_DIR"
 cd $SUAP_DIR
 uv venv --python $PYTHON_VERSION
 
@@ -164,6 +169,7 @@ supervisorctl reread
 # corrigir permissoes arquivos
 chown -R www-data:www-data $SUAP_DIR
 chown -R www-data:www-data $BASE_DIR/logs
+chown -R www-data:www-data $SUAP_DIR/.local/share/uv $VENV_DIR
 
 # mensagem final
 echo ""
