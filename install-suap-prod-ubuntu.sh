@@ -179,7 +179,6 @@ echo "Próximos passos:"
 echo "1. Para recarregar as configurações neste terminal: ${GREEN}source $HOME/.bashrc${NO_COLOR}"
 echo "2. Para configurar as variáveis de ambiente, edite: ${GREEN}$SUAP_DIR/suap/.env ${NO_COLOR}"
 echo "3. Para ir para a pasta do SUAP: ${GREEN}cd $SUAP_DIR${NO_COLOR}"
-echo ""
 case $supervisor_choice in
 	1)
 		echo "4. Para rodar o SUAP: ${GREEN}supervisorctl start suap${NO_COLOR}"
