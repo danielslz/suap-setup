@@ -10,7 +10,7 @@ GREEN=`tput setaf 2`
 NO_COLOR=`tput sgr0`
 
 # instalar dependencias do sistema
-echo "${GREEN} >>> Instalando as dependências do sistema operacional ${NO_COLOR}"
+echo "${GREEN}>>> Instalando as dependências do sistema operacional ${NO_COLOR}"
 BASE="glibc-langpack-pt_BR vim git openssl curl postgresql-devel tmpwatch swig cronie chrony"
 LDAP="openldap-devel cyrus-sasl-devel"
 PILLOW="libjpeg-turbo-devel freetype-devel zlib-devel"
@@ -25,7 +25,7 @@ sudo timedatectl set-timezone America/Fortaleza
 
 # instalar uv
 if ! [ -x "$(command -v uv)" ]; then
-	echo "${GREEN} >>> Instalando o uv ${NO_COLOR}"
+	echo "${GREEN}>>> Instalando o uv ${NO_COLOR}"
 	curl -LsSf https://astral.sh/uv/install.sh | sh
 	# adiciona variaveis ao bashrc
 	echo 'eval "$(uv generate-shell-completion bash)"' >> $HOME/.bashrc
@@ -39,7 +39,7 @@ if ! [ -x "$(command -v uv)" ]; then
 fi
 
 # baixar codigo do suap
-echo "${GREEN} >>> Baixando código SUAP ${NO_COLOR}"
+echo "${GREEN}>>> Baixando código SUAP ${NO_COLOR}"
 mkdir -p $BASE_DIR
 cd $BASE_DIR
 if [ -d $SUAP_DIR/.git ]; then
@@ -58,21 +58,21 @@ cp $SUAP_DIR/suap/settings_sample.py $SUAP_DIR/suap/settings.py
 cp $SUAP_DIR/.env.dev.sample $SUAP_DIR/.env
 
 # instalar python
-echo "${GREEN} >>> Instalando Python ${NO_COLOR}" $PYTHON_VERSION
+echo "${GREEN}>>> Instalando Python ${NO_COLOR}" $PYTHON_VERSION
 uv python install $PYTHON_VERSION
 
 # criar virtualenv
-echo "${GREEN} >>> Criando virtualenv ${NO_COLOR}" $VIRTUALENV_NAME
+echo "${GREEN}>>> Criando virtualenv ${NO_COLOR}" $VIRTUALENV_NAME
 cd $SUAP_DIR
 uv venv --python $PYTHON_VERSION
 
 # instalar dependencias
-echo "${GREEN} >>> Instalando libs SUAP ${NO_COLOR}"
+echo "${GREEN}>>> Instalando libs SUAP ${NO_COLOR}"
 cd $SUAP_DIR
 uv sync --group prod
 
 # mensagem final
-echo "${GREEN} SUAP instalado com sucesso em $SUAP_DIR! ${NO_COLOR}"
+echo "${GREEN}SUAP instalado com sucesso em $SUAP_DIR! ${NO_COLOR}"
 echo "Para configurar as variáveis de ambiente, edite o arquivo ${GREEN}$SUAP_DIR/suap/.env ${NO_COLOR}"
 echo "Para recarregar as configurações neste terminal, rode: ${GREEN}source $HOME/.bashrc${NO_COLOR}"
 echo "Para rodar o servidor de desenvolvimento, rode: ${GREEN}uv python manage.py runserver 0.0.0.0:8000${NO_COLOR}"
