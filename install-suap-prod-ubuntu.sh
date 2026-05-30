@@ -32,8 +32,9 @@ if ! [ -x "$(command -v uv)" ]; then
 	echo 'eval "$(uv generate-shell-completion bash)"' >> $HOME/.bashrc
 	# carrega novos valores bashrc
 	source $HOME/.bashrc
-	# testa se tem pyenv no path, caso contrario exporta agora
+	# testa se tem uv no path, caso contrario exporta agora
 	if ! [ -x "$(command -v uv)" ]; then
+		source $HOME/.local/bin/env
 		eval "$(uv generate-shell-completion bash)"
 	fi
 fi
