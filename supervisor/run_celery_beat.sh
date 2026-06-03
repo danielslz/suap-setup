@@ -9,6 +9,6 @@ GREEN=`tput setaf 2`
 NO_COLOR=`tput sgr0`
 
 echo "${GREEN}### Iniciando Celery Beat${NO_COLOR}"
-source $VENV_DIR/bin/activate
+source $VENV_DIR/suap/bin/activate
 cd $SUAP_DIR
 celery -A suap beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler

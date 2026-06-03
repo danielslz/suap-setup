@@ -13,6 +13,6 @@ GREEN=`tput setaf 2`
 NO_COLOR=`tput sgr0`
 
 echo "${GREEN}### Iniciando Celery Worker${NO_COLOR}"
-source $VENV_DIR/bin/activate
+source $VENV_DIR/suap/bin/activate
 cd $SUAP_DIR
 celery -A suap worker --autoscale=$MAX_WORKERS,$MIN_WORKERS -l INFO -Q $CELERY_QUEUE

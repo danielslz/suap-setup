@@ -12,6 +12,6 @@ GREEN=`tput setaf 2`
 NO_COLOR=`tput sgr0`
 
 echo "${GREEN}### Iniciando Celery Flower${NO_COLOR}"
-source $VENV_DIR/bin/activate
+source $VENV_DIR/suap/bin/activate
 cd $SUAP_DIR
 celery -b "${CELERY_BROKER_URL}" flower --purge_offline_workers=1 --basic_auth=$FLOWER_BASIC_AUTH
