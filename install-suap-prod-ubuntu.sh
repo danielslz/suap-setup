@@ -60,6 +60,7 @@ python3 -m venv $VENV_DIR/suap
 echo "${GREEN}>>> Instalando libs SUAP ${NO_COLOR}"
 cd $SUAP_DIR
 source $VENV_DIR/suap/bin/activate
+pip install --upgrade pip
 pip install . --group prod
 
 # configurar supervisor
