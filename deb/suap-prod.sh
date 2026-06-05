@@ -14,10 +14,11 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 GREEN=`tput setaf 2`
+YELLOW=`tput setaf 3`
 NO_COLOR=`tput sgr0`
 
 # instalar dependencias do sistema
-echo "${GREEN}>>> Instalando as dependências do sistema operacional ${NO_COLOR}"
+echo "${GREEN}>>> Verificando dependências do sistema operacional ${NO_COLOR}"
 BASE="locales vim git build-essential language-pack-pt cron ntpdate supervisor openssl curl libpq-dev tmpreaper swig"
 PYTHON="python3-dev python3-venv python3-pip"
 LDAP="libldap2-dev libsasl2-dev"
@@ -27,37 +28,81 @@ LXML="libxmlsec1-dev libxml2-dev libxslt1-dev"
 WEASYPRINT="libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0"
 MAGIC="libmagic1"
 PDF="qpdf ghostscript poppler-utils mupdf-tools wkhtmltopdf"
-apt update -qy
-apt upgrade -y
-apt install -y --fix-missing $BASE $PYTHON $LDAP $PILLOW $PYMSSQL $LXML $WEASYPRINT $MAGIC $PDF
-update-locale LANG=pt_BR.UTF-8
-timedatectl set-timezone America/Fortaleza
+
+# Verificar se as dependências já foram instaladas
+DEPS_INSTALLED=true
+for pkg in $BASE $PYTHON $LDAP $PILLOW $PYMSSQL $LXML $WEASYPRINT $MAGIC $PDF; do
+	if ! dpkg -l | grep -q "^ii  $pkg"; then
+		DEPS_INSTALLED=false
+		break
+	fi
+done
+
+if [ "$DEPS_INSTALLED" = false ]; then
+	echo "${GREEN}>>> Instalando as dependências do sistema operacional ${NO_COLOR}"
+	apt update -qy
+	apt upgrade -y
+	apt install -y --fix-missing $BASE $PYTHON $LDAP $PILLOW $PYMSSQL $LXML $WEASYPRINT $MAGIC $PDF
+fi
+
+# Verificar locale
+CURRENT_LANG=$(locale | grep "LANG=" | cut -d'=' -f2 | cut -d' ' -f1)
+if [ "$CURRENT_LANG" != "pt_BR.UTF-8" ]; then
+	echo "${GREEN}>>> Configurando locale para pt_BR.UTF-8 ${NO_COLOR}"
+	update-locale LANG=pt_BR.UTF-8
+else
+	echo "${YELLOW}>>> Locale já configurado para pt_BR.UTF-8 ${NO_COLOR}"
+fi
+
+# Verificar timezone
+CURRENT_TZ=$(timedatectl show -p Timezone --value)
+if [ "$CURRENT_TZ" != "America/Fortaleza" ]; then
+	echo "${GREEN}>>> Configurando timezone para America/Fortaleza ${NO_COLOR}"
+	timedatectl set-timezone America/Fortaleza
+else
+	echo "${YELLOW}>>> Timezone já configurado para America/Fortaleza ${NO_COLOR}"
+fi
 
 # baixar codigo do suap
-echo "${GREEN}>>> Baixando código SUAP ${NO_COLOR}"
-cd $BASE_DIR
-if [ -d $SUAP_DIR/.git ]; then
+if [ ! -d $SUAP_DIR/.git ]; then
+	echo "${GREEN}>>> Baixando código SUAP ${NO_COLOR}"
+	cd $BASE_DIR
+	git clone --depth 1 $GIT_URL
+	cd $SUAP_DIR
+else
+	echo "${YELLOW}>>> Código SUAP já foi baixado, atualizando... ${NO_COLOR}"
 	cd $SUAP_DIR
 	git checkout master
 	git pull
-else
-	git clone --depth 1 $GIT_URL
-	cd $SUAP_DIR
 fi
 
 # gerar settings.py
-cp $SUAP_DIR/suap/settings_sample.py $SUAP_DIR/suap/settings.py
+if [ ! -f $SUAP_DIR/suap/settings.py ]; then
+	echo "${GREEN}>>> Gerando settings.py ${NO_COLOR}"
+	cp $SUAP_DIR/suap/settings_sample.py $SUAP_DIR/suap/settings.py
+else
+	echo "${YELLOW}>>> settings.py já foi gerado ${NO_COLOR}"
+fi
 
 # gerar .env
-cp $SUAP_DIR/.env.dev.sample $SUAP_DIR/.env
+if [ ! -f $SUAP_DIR/.env ]; then
+	echo "${GREEN}>>> Gerando .env ${NO_COLOR}"
+	cp $SUAP_DIR/.env.dev.sample $SUAP_DIR/.env
+else
+	echo "${YELLOW}>>> .env já foi gerado ${NO_COLOR}"
+fi
 
 # criar virtualenv
-echo "${GREEN}>>> Criando virtualenv ${NO_COLOR}$VENV_DIR"
-mkdir -p $VENV_DIR
-python3 -m venv $VENV_DIR/suap
+if [ ! -d $VENV_DIR/suap ]; then
+	echo "${GREEN}>>> Criando virtualenv ${NO_COLOR}$VENV_DIR"
+	mkdir -p $VENV_DIR
+	python3 -m venv $VENV_DIR/suap
+else
+	echo "${YELLOW}>>> Virtualenv já foi criado ${NO_COLOR}"
+fi
 
 # instalar dependencias
-echo "${GREEN}>>> Instalando libs SUAP ${NO_COLOR}"
+echo "${GREEN}>>> Instalando/atualizando libs SUAP ${NO_COLOR}"
 cd $SUAP_DIR
 source $VENV_DIR/suap/bin/activate
 pip install --upgrade pip
