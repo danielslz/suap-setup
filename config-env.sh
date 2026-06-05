@@ -46,7 +46,7 @@ case "${CHOICE}" in
     SCRIPT="$DISTRO_TYPE/suap-prod.sh"
     if [ -f "$SCRIPT" ]; then
       echo "Executando $SCRIPT..."
-      bash "$SCRIPT"
+      bash sudo "$SCRIPT"
     else
       echo "Arquivo '$SCRIPT' não encontrado no diretório atual."
       exit 2

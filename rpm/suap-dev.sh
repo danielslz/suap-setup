@@ -8,10 +8,11 @@ VENV_DIR=$SUAP_DIR/.venv
 GIT_URL=git@gitlab.ifma.edu.br:ndsis/suap.git
 
 GREEN=`tput setaf 2`
+YELLOW=`tput setaf 3`
 NO_COLOR=`tput sgr0`
 
 # instalar dependencias do sistema
-echo "${GREEN}>>> Instalando as dependências do sistema operacional ${NO_COLOR}"
+echo "${GREEN}>>> Verificando dependências do sistema operacional ${NO_COLOR}"
 BASE="glibc-langpack-pt_BR vim git openssl curl postgresql-devel tmpwatch swig cronie chrony"
 LDAP="openldap-devel cyrus-sasl-devel"
 PILLOW="libjpeg-turbo-devel freetype-devel zlib-devel"
@@ -20,9 +21,38 @@ LXML="xmlsec1-devel libxml2-devel libxslt-devel"
 WEASYPRINT="pango harfbuzz"
 MAGIC="file-libs"
 PDF="qpdf ghostscript poppler-utils mupdf-tools wkhtmltopdf"
-sudo dnf -y install $BASE $LDAP $PILLOW $PYMSSQL $LXML $WEASYPRINT $MAGIC $PDF
-sudo localectl set-locale LANG=pt_BR.UTF-8
-sudo timedatectl set-timezone America/Fortaleza
+
+# Verificar se as dependências já foram instaladas
+DEPS_INSTALLED=true
+for pkg in $BASE $LDAP $PILLOW $PYMSSQL $LXML $WEASYPRINT $MAGIC $PDF; do
+	if ! rpm -q "$pkg" &>/dev/null; then
+		DEPS_INSTALLED=false
+		break
+	fi
+done
+
+if [ "$DEPS_INSTALLED" = false ]; then
+	echo "${GREEN}>>> Instalando as dependências do sistema operacional ${NO_COLOR}"
+	sudo dnf -y install $BASE $LDAP $PILLOW $PYMSSQL $LXML $WEASYPRINT $MAGIC $PDF
+fi
+
+# Verificar locale
+CURRENT_LANG=$(localectl | grep "LANG=" | cut -d'=' -f2)
+if [ "$CURRENT_LANG" != "pt_BR.UTF-8" ]; then
+	echo "${GREEN}>>> Configurando locale para pt_BR.UTF-8 ${NO_COLOR}"
+	sudo localectl set-locale LANG=pt_BR.UTF-8
+else
+	echo "${YELLOW}>>> Locale já configurado para pt_BR.UTF-8 ${NO_COLOR}"
+fi
+
+# Verificar timezone
+CURRENT_TZ=$(timedatectl show -p Timezone --value)
+if [ "$CURRENT_TZ" != "America/Fortaleza" ]; then
+	echo "${GREEN}>>> Configurando timezone para America/Fortaleza ${NO_COLOR}"
+	sudo timedatectl set-timezone America/Fortaleza
+else
+	echo "${YELLOW}>>> Timezone já configurado para America/Fortaleza ${NO_COLOR}"
+fi
 
 # instalar uv
 if ! [ -x "$(command -v uv)" ]; then
@@ -37,43 +67,64 @@ if ! [ -x "$(command -v uv)" ]; then
 		source $HOME/.local/bin/env
 		eval "$(uv generate-shell-completion bash)"
 	fi
+else
+	echo "${YELLOW}>>> uv já foi instalado anteriormente ${NO_COLOR}"
 fi
 
 # baixar codigo do suap
-echo "${GREEN}>>> Baixando código SUAP ${NO_COLOR}"
-mkdir -p $BASE_DIR
-cd $BASE_DIR
-if [ -d $SUAP_DIR/.git ]; then
+if [ ! -d $SUAP_DIR/.git ]; then
+	echo "${GREEN}>>> Baixando código SUAP ${NO_COLOR}"
+	mkdir -p $BASE_DIR
+	cd $BASE_DIR
+	git clone $GIT_URL
+	cd $SUAP_DIR
+else
+	echo "${YELLOW}>>> Código SUAP já foi baixado, atualizando... ${NO_COLOR}"
 	cd $SUAP_DIR
 	git checkout master
 	git pull
-else
-	git clone $GIT_URL
-	cd $SUAP_DIR
 fi
 
 # gerar settings.py
-cp $SUAP_DIR/suap/settings_sample.py $SUAP_DIR/suap/settings.py
+if [ ! -f $SUAP_DIR/suap/settings.py ]; then
+	echo "${GREEN}>>> Gerando settings.py ${NO_COLOR}"
+	cp $SUAP_DIR/suap/settings_sample.py $SUAP_DIR/suap/settings.py
+else
+	echo "${YELLOW}>>> settings.py já foi gerado ${NO_COLOR}"
+fi
 
 # gerar .env
-cp $SUAP_DIR/.env.dev.sample $SUAP_DIR/.env
+if [ ! -f $SUAP_DIR/.env ]; then
+	echo "${GREEN}>>> Gerando .env ${NO_COLOR}"
+	cp $SUAP_DIR/.env.dev.sample $SUAP_DIR/.env
+else
+	echo "${YELLOW}>>> .env já foi gerado ${NO_COLOR}"
+fi
 
 # instalar python
-echo "${GREEN}>>> Instalando Python ${NO_COLOR}" $PYTHON_VERSION
-uv python install $PYTHON_VERSION
+if ! uv python list | grep -q $PYTHON_VERSION; then
+	echo "${GREEN}>>> Instalando Python ${NO_COLOR}" $PYTHON_VERSION
+	uv python install $PYTHON_VERSION
+else
+	echo "${YELLOW}>>> Python $PYTHON_VERSION já foi instalado ${NO_COLOR}"
+fi
 
 # criar virtualenv
-echo "${GREEN}>>> Criando virtualenv ${NO_COLOR}" $VIRTUALENV_NAME
-cd $SUAP_DIR
-uv venv --python $PYTHON_VERSION
+if [ ! -d $VENV_DIR ]; then
+	echo "${GREEN}>>> Criando virtualenv ${NO_COLOR}"
+	cd $SUAP_DIR
+	uv venv --python $PYTHON_VERSION
+else
+	echo "${YELLOW}>>> Virtualenv já foi criado ${NO_COLOR}"
+fi
 
 # instalar dependencias
-echo "${GREEN}>>> Instalando libs SUAP ${NO_COLOR}"
+echo "${GREEN}>>> Instalando/atualizando libs SUAP ${NO_COLOR}"
 cd $SUAP_DIR
 uv sync --group dev
 
 # mensagem final
-echo "${GREEN}SUAP instalado com sucesso em $SUAP_DIR! ${NO_COLOR}"
+echo "${GREEN}SUAP instalado/atualizado com sucesso em $SUAP_DIR! ${NO_COLOR}"
 echo "Para recarregar as configurações neste terminal, rode: ${GREEN}source $HOME/.bashrc${NO_COLOR}"
 echo "Para configurar as variáveis de ambiente, edite o arquivo ${GREEN}$SUAP_DIR/suap/.env ${NO_COLOR}"
 echo "Para ir para a pasta do SUAP, rode: ${GREEN}cd $SUAP_DIR${NO_COLOR}"
