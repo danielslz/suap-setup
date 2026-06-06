@@ -5,7 +5,7 @@ PYTHON_VERSION=3.12
 BASE_DIR=/opt
 SUAP_DIR=$BASE_DIR/suap
 VENV_DIR=$BASE_DIR/venv
-INSTALL_SCRIPT_DIR=$(dirname $(readlink -f $0))
+INSTALL_SCRIPT_DIR=$(cd "$(dirname $(readlink -f $0))" && cd .. && pwd)
 GIT_URL=git@gitlab.ifma.edu.br:ndsis/suap.git
 
 if [ "$EUID" -ne 0 ]; then
