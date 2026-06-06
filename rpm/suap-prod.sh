@@ -112,6 +112,7 @@ pip install . --group prod --no-cache-dir
 
 # configurar supervisor
 echo "${GREEN}>>> Configurando o Supervisor ${NO_COLOR}"
+systemctl enable --now supervisord
 mkdir -p $BASE_DIR/logs
 mkdir -p $BASE_DIR/scripts
 
@@ -128,7 +129,7 @@ read -p "Escolha uma opção (1/2/3): " supervisor_choice
 case $supervisor_choice in
 	1)
 		echo "${GREEN}>>> Configurando supervisor para SUAP ${NO_COLOR}"
-		if [ -f "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" ]; then
+		if [ -f "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" ]; then			
 			cp "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" /etc/supervisor/conf.d/suap.conf
 			cp "$INSTALL_SCRIPT_DIR/supervisor/run_suap.sh" "$BASE_DIR/scripts/run_suap.sh"
 			chmod +x "$BASE_DIR/scripts/run_suap.sh"
