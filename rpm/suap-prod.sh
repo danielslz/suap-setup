@@ -41,6 +41,7 @@ done
 
 if [ "$DEPS_INSTALLED" = false ]; then
     echo "${GREEN}>>> Instalando as dependências do sistema operacional ${NO_COLOR}"
+	dnf upgrade -y
     dnf -y install $BASE $PYTHON $LDAP $PILLOW $PYMSSQL $LXML $WEASYPRINT $MAGIC $PDF
 fi
 

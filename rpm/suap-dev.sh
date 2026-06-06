@@ -33,6 +33,7 @@ done
 
 if [ "$DEPS_INSTALLED" = false ]; then
 	echo "${GREEN}>>> Instalando as dependências do sistema operacional ${NO_COLOR}"
+	sudo dnf upgrade -y
 	sudo dnf -y install $BASE $LDAP $PILLOW $PYMSSQL $LXML $WEASYPRINT $MAGIC $PDF
 fi
 
