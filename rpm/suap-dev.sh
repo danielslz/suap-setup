@@ -13,7 +13,7 @@ NO_COLOR=`tput sgr0`
 
 # instalar dependencias do sistema
 echo "${GREEN}>>> Verificando dependências do sistema operacional ${NO_COLOR}"
-BASE="glibc-langpack-pt_BR vim git openssl curl postgresql-devel tmpwatch swig cronie chrony"
+BASE="glibc-langpack-pt_BR vim git openssl curl postgresql-devel tmpwatch swig cronie chrony gcc gcc-c++"
 LDAP="openldap-devel cyrus-sasl-devel"
 PILLOW="libjpeg-turbo-devel freetype-devel zlib-devel"
 PYMSSQL="freetds-devel"
