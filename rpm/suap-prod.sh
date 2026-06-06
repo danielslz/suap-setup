@@ -130,7 +130,7 @@ case $supervisor_choice in
 	1)
 		echo "${GREEN}>>> Configurando supervisor para SUAP ${NO_COLOR}"
 		if [ -f "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" ]; then			
-			cp "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" /etc/supervisor/conf.d/suap.conf
+			cp "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" /etc/supervisord.d/suap.conf
 			cp "$INSTALL_SCRIPT_DIR/supervisor/run_suap.sh" "$BASE_DIR/scripts/run_suap.sh"
 			chmod +x "$BASE_DIR/scripts/run_suap.sh"
 			echo "${GREEN}✓ SUAP configurado${NO_COLOR}"
@@ -142,13 +142,13 @@ case $supervisor_choice in
 	2)
 		echo "${GREEN}>>> Configurando supervisor para Celery ${NO_COLOR}"
 		if [ -f "$INSTALL_SCRIPT_DIR/supervisor/celery_worker.conf" ]; then
-			cp "$INSTALL_SCRIPT_DIR/supervisor/celery_worker.conf" /etc/supervisor/conf.d/celery_worker.conf
+			cp "$INSTALL_SCRIPT_DIR/supervisor/celery_worker.conf" /etc/supervisord.d/celery_worker.conf
 			cp "$INSTALL_SCRIPT_DIR/supervisor/run_celery_worker.sh" "$BASE_DIR/scripts/run_celery_worker.sh"
 			chmod +x "$BASE_DIR/scripts/run_celery_worker.sh"
-			cp "$INSTALL_SCRIPT_DIR/supervisor/celery_beat.conf" /etc/supervisor/conf.d/celery_beat.conf
+			cp "$INSTALL_SCRIPT_DIR/supervisor/celery_beat.conf" /etc/supervisord.d/celery_beat.conf
 			cp "$INSTALL_SCRIPT_DIR/supervisor/run_celery_beat.sh" "$BASE_DIR/scripts/run_celery_beat.sh"
 			chmod +x "$BASE_DIR/scripts/run_celery_beat.sh"
-			cp "$INSTALL_SCRIPT_DIR/supervisor/celery_flower.conf" /etc/supervisor/conf.d/celery_flower.conf
+			cp "$INSTALL_SCRIPT_DIR/supervisor/celery_flower.conf" /etc/supervisord.d/celery_flower.conf
 			cp "$INSTALL_SCRIPT_DIR/supervisor/run_celery_flower.sh" "$BASE_DIR/scripts/run_celery_flower.sh"
 			chmod +x "$BASE_DIR/scripts/run_celery_flower.sh"
 			echo "${GREEN}✓ Celery configurado${NO_COLOR}"
@@ -160,16 +160,16 @@ case $supervisor_choice in
 	3)
 		echo "${GREEN}>>> Configurando supervisor para SUAP e Celery ${NO_COLOR}"
 		if [ -f "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" ] && [ -f "$INSTALL_SCRIPT_DIR/supervisor/celery_worker.conf" ]; then
-			cp "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" /etc/supervisor/conf.d/suap.conf
+			cp "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" /etc/supervisord.d/suap.conf
 			cp "$INSTALL_SCRIPT_DIR/supervisor/run_suap.sh" "$BASE_DIR/scripts/run_suap.sh"
 			chmod +x "$BASE_DIR/scripts/run_suap.sh"
-			cp "$INSTALL_SCRIPT_DIR/supervisor/celery_worker.conf" /etc/supervisor/conf.d/celery_worker.conf
+			cp "$INSTALL_SCRIPT_DIR/supervisor/celery_worker.conf" /etc/supervisord.d/celery_worker.conf
 			cp "$INSTALL_SCRIPT_DIR/supervisor/run_celery_worker.sh" "$BASE_DIR/scripts/run_celery_worker.sh"
 			chmod +x "$BASE_DIR/scripts/run_celery_worker.sh"
-			cp "$INSTALL_SCRIPT_DIR/supervisor/celery_beat.conf" /etc/supervisor/conf.d/celery_beat.conf
+			cp "$INSTALL_SCRIPT_DIR/supervisor/celery_beat.conf" /etc/supervisord.d/celery_beat.conf
 			cp "$INSTALL_SCRIPT_DIR/supervisor/run_celery_beat.sh" "$BASE_DIR/scripts/run_celery_beat.sh"
 			chmod +x "$BASE_DIR/scripts/run_celery_beat.sh"
-			cp "$INSTALL_SCRIPT_DIR/supervisor/celery_flower.conf" /etc/supervisor/conf.d/celery_flower.conf
+			cp "$INSTALL_SCRIPT_DIR/supervisor/celery_flower.conf" /etc/supervisord.d/celery_flower.conf
 			cp "$INSTALL_SCRIPT_DIR/supervisor/run_celery_flower.sh" "$BASE_DIR/scripts/run_celery_flower.sh"
 			chmod +x "$BASE_DIR/scripts/run_celery_flower.sh"
 			echo "${GREEN}✓ SUAP e Celery configurados${NO_COLOR}"
