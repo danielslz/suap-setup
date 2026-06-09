@@ -19,8 +19,6 @@ server {
 
     client_max_body_size 100M;
     
-    set $bucket_static "ifma-suap-static-ohio.s3.us-east-2.amazonaws.com";
-    
     error_page 500 502 503 504 /500.html;
     location = /500.html {
         root /opt/suap/deploy/templates;
