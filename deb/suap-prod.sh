@@ -6,7 +6,24 @@ BASE_DIR=/opt
 SUAP_DIR=$BASE_DIR/suap
 VENV_DIR=$BASE_DIR/venv
 INSTALL_SCRIPT_DIR=$(cd "$(dirname $(readlink -f $0))" && cd .. && pwd)
-GIT_URL=git@gitlab.ifma.edu.br:ndsis/suap.git
+ENV_FILE="$INSTALL_SCRIPT_DIR/.env"
+
+# Carregar GIT_URL do arquivo .env ou perguntar ao usuário
+if [ -f "$ENV_FILE" ] && grep -q "^GIT_URL=" "$ENV_FILE"; then
+	GIT_URL=$(grep "^GIT_URL=" "$ENV_FILE" | cut -d'=' -f2-)
+else
+	read -p "Informe a URL do repositório Git do SUAP: " GIT_URL
+	if [ -z "$GIT_URL" ]; then
+		echo "Erro: a URL do repositório não pode ser vazia."
+		exit 1
+	fi
+	# Salvar no arquivo .env
+	if [ -f "$ENV_FILE" ]; then
+		echo "GIT_URL=$GIT_URL" >> "$ENV_FILE"
+	else
+		echo "GIT_URL=$GIT_URL" > "$ENV_FILE"
+	fi
+fi
 
 if [ "$EUID" -ne 0 ]; then
   echo "Este script deve ser executado como root. Use sudo ou entre como root."
