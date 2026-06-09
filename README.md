@@ -85,8 +85,8 @@ Os scripts de infraestrutura instalam e configuram:
 ### 1. Clonar o repositório
 
 ```bash
-git clone https://gitlab.ifma.edu.br/ndsis/suap-scripts.git
-cd suap-scripts
+git clone https://github.com/danielslz/suap-env-scripts.git
+cd suap-env-scripts
 ```
 
 ### 2. Executar o wrapper interativo
