@@ -1,0 +1,37 @@
+# docker/dev/docker-compose.yml - Ambiente de desenvolvimento SUAP
+# Serviços: aplicação SUAP, banco de dados PostgreSQL 16 e Redis
+
+services:
+  suap:
+    build:
+      context: ../..
+      dockerfile: docker/dev/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../../:/app  # Código-fonte montado para edição em tempo real (hot-reload)
+    env_file:
+      - ../../.env
+    depends_on:
+      - db
+      - redis
+    command: uv run python manage.py runserver 0.0.0.0:8000
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: suap
+      POSTGRES_USER: suap
+      POSTGRES_PASSWORD: suap
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:

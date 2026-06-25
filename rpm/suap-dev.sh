@@ -1,157 +1,163 @@
 #!/bin/bash
+set -u
 
-### definicao de variaveis
-PYTHON_VERSION=3.12
-BASE_DIR=$HOME/Projetos
-SUAP_DIR=$BASE_DIR/suap
-VENV_DIR=$SUAP_DIR/.venv
-SCRIPT_DIR=$(cd "$(dirname $(readlink -f $0))" && cd .. && pwd)
-ENV_FILE="$SCRIPT_DIR/.env"
+# rpm/suap-dev.sh - Configuração do ambiente de desenvolvimento SUAP (RPM/Fedora/RHEL/CentOS)
+# Algoritmo:
+# 1. Source lib/common.sh
+# 2. load_env_file() - carregar variáveis centralizadas
+# 3. resolve_git_url() - garantir GIT_URL disponível
+# 4. Verificar e instalar dependências do sistema (check_all_packages_installed)
+# 5. Configurar locale pt_BR.UTF-8 (se necessário)
+# 6. Configurar timezone America/Fortaleza (se necessário)
+# 7. Instalar UV (se não disponível no PATH)
+# 8. Clone/pull do repositório SUAP
+# 9. Gerar settings.py e .env (se não existem)
+# 10. Instalar Python via UV (se não disponível)
+# 11. Criar virtualenv (se não existe)
+# 12. Instalar/atualizar dependências Python
+# 13. Exibir mensagem final com próximos passos
 
-# Carregar GIT_URL do arquivo .env ou perguntar ao usuário
-if [ -f "$ENV_FILE" ] && grep -q "^GIT_URL=" "$ENV_FILE"; then
-	GIT_URL=$(grep "^GIT_URL=" "$ENV_FILE" | cut -d'=' -f2-)
+### Determinar diretório raiz do projeto
+SCRIPT_DIR=$(cd "$(dirname "$(readlink -f "$0")")" && cd .. && pwd)
+
+### 1. Source lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+### Forçar tipo de distribuição para RPM
+DISTRO_TYPE="rpm"
+export DISTRO_TYPE
+
+### 2. Carregar variáveis centralizadas
+load_env_file "${SCRIPT_DIR}/.env"
+
+### Sobrescrever variáveis para ambiente de desenvolvimento
+PYTHON_VERSION="${PYTHON_VERSION:-3.12}"
+BASE_DIR="${HOME}/Projetos"
+SUAP_DIR="${BASE_DIR}/suap"
+VENV_DIR="${SUAP_DIR}/.venv"
+
+### 3. Garantir GIT_URL disponível
+resolve_git_url "${SCRIPT_DIR}/.env"
+
+### 4. Verificar e instalar dependências do sistema
+PACKAGES=(
+  gcc gcc-c++ make
+  python3-devel
+  openldap-devel cyrus-sasl-devel
+  libjpeg-turbo-devel libpng-devel zlib-devel freetype-devel
+  freetds-devel
+  libxml2-devel libxslt-devel
+  cairo-devel pango-devel gdk-pixbuf2-devel
+  libffi-devel
+  poppler-utils
+  git curl wget
+)
+
+if ! check_all_packages_installed "${PACKAGES[@]}"; then
+  msg_action "Instalando dependências do sistema operacional"
+  sudo dnf install -y "${PACKAGES[@]}"
 else
-	read -p "Informe a URL do repositório Git do SUAP: " GIT_URL
-	if [ -z "$GIT_URL" ]; then
-		echo "Erro: a URL do repositório não pode ser vazia."
-		exit 1
-	fi
-	# Salvar no arquivo .env
-	if [ -f "$ENV_FILE" ]; then
-		echo "GIT_URL=$GIT_URL" >> "$ENV_FILE"
-	else
-		echo "GIT_URL=$GIT_URL" > "$ENV_FILE"
-	fi
+  msg_skip "Dependências do sistema já estão instaladas"
 fi
 
-GREEN=`tput setaf 2`
-YELLOW=`tput setaf 3`
-NO_COLOR=`tput sgr0`
-
-# instalar dependencias do sistema
-echo "${GREEN}>>> Verificando dependências do sistema operacional ${NO_COLOR}"
-BASE="glibc-langpack-pt_BR vim git openssl curl postgresql-devel tmpwatch swig cronie chrony gcc gcc-c++"
-LDAP="openldap-devel cyrus-sasl-devel"
-PILLOW="libjpeg-turbo-devel freetype-devel zlib-devel"
-PYMSSQL="freetds-devel"
-LXML="xmlsec1-devel libxml2-devel libxslt-devel"
-WEASYPRINT="pango harfbuzz"
-MAGIC="file-libs"
-PDF="qpdf ghostscript poppler-utils mupdf-tools wkhtmltopdf"
-
-# Verificar se as dependências já foram instaladas
-DEPS_INSTALLED=true
-for pkg in $BASE $LDAP $PILLOW $PYMSSQL $LXML $WEASYPRINT $MAGIC $PDF; do
-	if ! rpm -q "$pkg" &>/dev/null; then
-		DEPS_INSTALLED=false
-		break
-	fi
-done
-
-if [ "$DEPS_INSTALLED" = false ]; then
-	echo "${GREEN}>>> Instalando as dependências do sistema operacional ${NO_COLOR}"
-	sudo dnf upgrade -y
-	sudo dnf -y install $BASE $LDAP $PILLOW $PYMSSQL $LXML $WEASYPRINT $MAGIC $PDF
-fi
-
-# Verificar locale
-CURRENT_LANG=$(localectl | grep "LANG=" | cut -d'=' -f2)
-if [ "$CURRENT_LANG" != "pt_BR.UTF-8" ]; then
-	echo "${GREEN}>>> Configurando locale para pt_BR.UTF-8 ${NO_COLOR}"
-	sudo localectl set-locale LANG=pt_BR.UTF-8
+### 5. Configurar locale pt_BR.UTF-8 (se necessário)
+if [[ "$(localectl status)" != *"pt_BR.UTF-8"* ]]; then
+  msg_action "Configurando locale para pt_BR.UTF-8"
+  sudo dnf install -y glibc-langpack-pt
+  sudo localectl set-locale LANG=pt_BR.UTF-8
 else
-	echo "${YELLOW}>>> Locale já configurado para pt_BR.UTF-8 ${NO_COLOR}"
+  msg_skip "Locale já configurado para pt_BR.UTF-8"
 fi
 
-# Verificar timezone
-CURRENT_TZ=$(timedatectl show -p Timezone --value)
-if [ "$CURRENT_TZ" != "America/Fortaleza" ]; then
-	echo "${GREEN}>>> Configurando timezone para America/Fortaleza ${NO_COLOR}"
-	sudo timedatectl set-timezone America/Fortaleza
+### 6. Configurar timezone America/Fortaleza (se necessário)
+CURRENT_TZ=$(timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || echo "")
+if [ "${CURRENT_TZ}" != "America/Fortaleza" ]; then
+  msg_action "Configurando timezone para America/Fortaleza"
+  sudo timedatectl set-timezone America/Fortaleza
 else
-	echo "${YELLOW}>>> Timezone já configurado para America/Fortaleza ${NO_COLOR}"
+  msg_skip "Timezone já configurado para America/Fortaleza"
 fi
 
-# instalar uv
-if ! [ -x "$(command -v uv)" ]; then
-	echo "${GREEN}>>> Instalando o uv ${NO_COLOR}"
-	curl -LsSf https://astral.sh/uv/install.sh | sh
-	# adiciona variaveis ao bashrc
-	echo 'eval "$(uv generate-shell-completion bash)"' >> $HOME/.bashrc
-	# carrega novos valores bashrc
-	source $HOME/.bashrc
-	# testa se tem uv no path, caso contrario exporta agora
-	if ! [ -x "$(command -v uv)" ]; then
-		source $HOME/.local/bin/env
-		eval "$(uv generate-shell-completion bash)"
-	fi
+### 7. Instalar UV (se não disponível no PATH)
+if ! command -v uv &>/dev/null; then
+  msg_action "Instalando o UV"
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  # Adicionar auto-completar ao .bashrc
+  echo 'eval "$(uv generate-shell-completion bash)"' >> "${HOME}/.bashrc"
+  # Carregar UV no PATH para esta sessão
+  source "${HOME}/.bashrc" 2>/dev/null || true
+  if ! command -v uv &>/dev/null; then
+    source "${HOME}/.local/bin/env" 2>/dev/null || true
+    eval "$(uv generate-shell-completion bash)" 2>/dev/null || true
+  fi
 else
-	echo "${YELLOW}>>> uv já foi instalado anteriormente ${NO_COLOR}"
+  msg_skip "UV já está instalado"
 fi
 
-# baixar codigo do suap
-if [ ! -d $SUAP_DIR/.git ]; then
-	echo "${GREEN}>>> Baixando código SUAP ${NO_COLOR}"
-	mkdir -p $BASE_DIR
-	cd $BASE_DIR
-	git clone $GIT_URL
-	cd $SUAP_DIR
+### 8. Clone/pull do repositório SUAP
+if [ ! -d "${SUAP_DIR}/.git" ]; then
+  msg_action "Baixando código SUAP"
+  mkdir -p "${BASE_DIR}"
+  cd "${BASE_DIR}"
+  git clone "${GIT_URL}"
+  cd "${SUAP_DIR}"
 else
-	echo "${YELLOW}>>> Código SUAP já foi baixado, atualizando... ${NO_COLOR}"
-	cd $SUAP_DIR
-	git checkout master
-	git pull
+  msg_skip "Código SUAP já existe, atualizando..."
+  cd "${SUAP_DIR}"
+  git checkout master
+  git pull
 fi
 
-# gerar settings.py
-if [ ! -f $SUAP_DIR/suap/settings.py ]; then
-	echo "${GREEN}>>> Gerando settings.py ${NO_COLOR}"
-	cp $SUAP_DIR/suap/settings_sample.py $SUAP_DIR/suap/settings.py
+### 9. Gerar settings.py e .env (se não existem)
+if [ ! -f "${SUAP_DIR}/suap/settings.py" ]; then
+  msg_action "Gerando settings.py"
+  cp "${SUAP_DIR}/suap/settings_sample.py" "${SUAP_DIR}/suap/settings.py"
 else
-	echo "${YELLOW}>>> settings.py já foi gerado ${NO_COLOR}"
+  msg_skip "settings.py já existe"
 fi
 
-# gerar .env
-if [ ! -f $SUAP_DIR/.env ]; then
-	echo "${GREEN}>>> Gerando .env ${NO_COLOR}"
-	cp $SUAP_DIR/.env.dev.sample $SUAP_DIR/.env
+if [ ! -f "${SUAP_DIR}/.env" ]; then
+  msg_action "Gerando .env do SUAP"
+  cp "${SUAP_DIR}/.env.dev.sample" "${SUAP_DIR}/.env"
 else
-	echo "${YELLOW}>>> .env já foi gerado ${NO_COLOR}"
+  msg_skip ".env do SUAP já existe"
 fi
 
-# instalar python
-if ! uv python list | grep -q $PYTHON_VERSION; then
-	echo "${GREEN}>>> Instalando Python ${NO_COLOR}" $PYTHON_VERSION
-	uv python install $PYTHON_VERSION
+### 10. Instalar Python via UV (se não disponível)
+if ! uv python list 2>/dev/null | grep -q "${PYTHON_VERSION}"; then
+  msg_action "Instalando Python ${PYTHON_VERSION}"
+  uv python install "${PYTHON_VERSION}"
 else
-	echo "${YELLOW}>>> Python $PYTHON_VERSION já foi instalado ${NO_COLOR}"
+  msg_skip "Python ${PYTHON_VERSION} já está instalado"
 fi
 
-# criar virtualenv
-if [ ! -d $VENV_DIR ]; then
-	echo "${GREEN}>>> Criando virtualenv ${NO_COLOR}"
-	cd $SUAP_DIR
-	uv venv --python $PYTHON_VERSION
+### 11. Criar virtualenv (se não existe)
+if [ ! -d "${VENV_DIR}" ]; then
+  msg_action "Criando virtualenv"
+  cd "${SUAP_DIR}"
+  uv venv --python "${PYTHON_VERSION}"
 else
-	echo "${YELLOW}>>> Virtualenv já foi criado ${NO_COLOR}"
+  msg_skip "Virtualenv já existe"
 fi
 
-# instalar dependencias
-echo "${GREEN}>>> Instalando/atualizando libs SUAP ${NO_COLOR}"
-cd $SUAP_DIR
-if [ -f "$SUAP_DIR/pyproject.toml" ]; then
-	uv sync --group dev
-elif [ -d "$SUAP_DIR/requirements" ]; then
-	uv pip install -r requirements/development.txt
+### 12. Instalar/atualizar dependências Python
+msg_action "Instalando/atualizando dependências Python"
+cd "${SUAP_DIR}"
+if [ -f "${SUAP_DIR}/pyproject.toml" ]; then
+  uv sync --group dev
+elif [ -d "${SUAP_DIR}/requirements" ]; then
+  uv pip install -r requirements/development.txt
 else
-	echo "Erro: não foi encontrado o pyproject.toml nem a pasta requirements em $SUAP_DIR"
-	exit 1
+  msg_error "Não foi encontrado pyproject.toml nem pasta requirements em ${SUAP_DIR}"
+  exit 1
 fi
 
-# mensagem final
-echo "${GREEN}SUAP instalado/atualizado com sucesso em $SUAP_DIR! ${NO_COLOR}"
-echo "Para recarregar as configurações neste terminal, rode: ${GREEN}source $HOME/.bashrc${NO_COLOR}"
-echo "Para configurar as variáveis de ambiente, edite o arquivo ${GREEN}$SUAP_DIR/suap/.env ${NO_COLOR}"
-echo "Para ir para a pasta do SUAP, rode: ${GREEN}cd $SUAP_DIR${NO_COLOR}"
-echo "Para rodar o servidor de desenvolvimento, rode: ${GREEN}uv run python manage.py runserver 0.0.0.0:8000${NO_COLOR}"
+### 13. Mensagem final com próximos passos
+echo ""
+msg_action "SUAP instalado/atualizado com sucesso em ${SUAP_DIR}!"
+echo ""
+echo "Próximos passos:"
+echo "  Para recarregar as configurações neste terminal, rode: ${GREEN}source ${HOME}/.bashrc${NO_COLOR}"
+echo "  Para configurar as variáveis de ambiente, edite o arquivo: ${GREEN}${SUAP_DIR}/suap/.env${NO_COLOR}"
+echo "  Para ir para a pasta do SUAP, rode: ${GREEN}cd ${SUAP_DIR}${NO_COLOR}"
+echo "  Para rodar o servidor de desenvolvimento, rode: ${GREEN}uv run python manage.py runserver 0.0.0.0:8000${NO_COLOR}"

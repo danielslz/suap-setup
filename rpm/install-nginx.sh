@@ -1,36 +1,55 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -u
 
-echo "Instalando Nginx"
+# Determinar diretório raiz do projeto (parent de rpm/)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Instalar Nginx
-sudo dnf install -y nginx
+# Source da biblioteca compartilhada
+source "${SCRIPT_DIR}/lib/common.sh"
 
-# Iniciar o serviço Nginx
+# Definir tipo de distribuição
+DISTRO_TYPE="rpm"
+export DISTRO_TYPE
+
+# --- Instalar pacote Nginx ---
+
+if is_pkg_installed "nginx"; then
+  msg_skip "Nginx já está instalado."
+else
+  msg_action "Instalando Nginx..."
+  sudo dnf install -y nginx
+fi
+
+# --- Iniciar e habilitar serviço ---
+
+msg_action "Iniciando serviço Nginx..."
 sudo systemctl start nginx
 
-# Habilitar Nginx para iniciar automaticamente
+msg_action "Habilitando Nginx para iniciar no boot..."
 sudo systemctl enable nginx
 
-# Copiar arquivo de configuração do SUAP
-echo "Copiando configuração do SUAP..."
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-sudo cp "$SCRIPT_DIR/nginx/suap" /etc/nginx/conf.d/suap.conf
+# --- Copiar configuração do SUAP ---
 
-# Testar configuração do Nginx
-echo "Testando configuração do Nginx..."
+NGINX_CONF_PATH=$(get_nginx_conf_path)
+
+msg_action "Copiando configuração do SUAP para ${NGINX_CONF_PATH}..."
+sudo cp "${SCRIPT_DIR}/nginx/suap" "${NGINX_CONF_PATH}"
+
+# --- Testar configuração ---
+
+msg_action "Testando configuração do Nginx..."
 sudo nginx -t
 
-# Recarregar Nginx para aplicar a nova configuração
-echo "Recarregando Nginx..."
+# --- Recarregar Nginx ---
+
+msg_action "Recarregando Nginx..."
 sudo systemctl reload nginx
 
-# Verificar status
-echo "Verificando status do Nginx..."
-sudo systemctl status nginx
+# --- Mensagem de sucesso ---
 
-echo "Nginx instalado com sucesso!"
 echo ""
-echo "⚠️  IMPORTANTE: Não esqueça de configurar os endereços IPs no arquivo de configuração do SUAP"
-echo "Arquivo: /etc/nginx/conf.d/suap.conf"
-echo "Certifique-se de informar corretamente os IPs dos servidores backend (upstream)."
+msg_action "Nginx instalado e configurado com sucesso!"
+echo ""
+echo "⚠️  IMPORTANTE: Edite o arquivo de configuração para ajustar os IPs dos servidores backend (upstream)."
+echo "Arquivo: ${NGINX_CONF_PATH}"
+echo "Certifique-se de informar corretamente os IPs dos servidores no bloco 'upstream app_django'."

@@ -1,45 +1,66 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -u
 
-echo "Instalando Nginx"
+# Determinar diretório raiz do projeto (parent de deb/)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Atualizar repositórios
-sudo apt-get update
+# Source da biblioteca compartilhada
+source "${SCRIPT_DIR}/lib/common.sh"
 
-# Instalar Nginx
-sudo apt-get install -y nginx
+# Definir tipo de distribuição
+DISTRO_TYPE="deb"
+export DISTRO_TYPE
 
-# Iniciar o serviço Nginx
+# --- Instalar pacote Nginx ---
+
+if is_pkg_installed "nginx"; then
+  msg_skip "Nginx já está instalado."
+else
+  msg_action "Instalando Nginx..."
+  sudo apt-get update
+  sudo apt-get install -y nginx
+fi
+
+# --- Iniciar e habilitar serviço ---
+
+msg_action "Iniciando serviço Nginx..."
 sudo systemctl start nginx
 
-# Habilitar Nginx para iniciar automaticamente
+msg_action "Habilitando Nginx para iniciar no boot..."
 sudo systemctl enable nginx
 
-# Copiar arquivo de configuração do SUAP
-echo "Copiando configuração do SUAP..."
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-sudo cp "$SCRIPT_DIR/nginx/suap" /etc/nginx/sites-available/suap
+# --- Copiar configuração do SUAP ---
+
+NGINX_CONF_PATH=$(get_nginx_conf_path)
+
+msg_action "Copiando configuração do SUAP para ${NGINX_CONF_PATH}..."
+sudo cp "${SCRIPT_DIR}/nginx/suap" "${NGINX_CONF_PATH}"
 
 # Criar link simbólico em sites-enabled
+msg_action "Criando link simbólico em /etc/nginx/sites-enabled/suap..."
 sudo ln -sf /etc/nginx/sites-available/suap /etc/nginx/sites-enabled/suap
 
-# Desabilitar configuração padrão se existir
-sudo rm -f /etc/nginx/sites-enabled/default
+# Remover configuração padrão se existir
+if [ -e /etc/nginx/sites-enabled/default ]; then
+  msg_action "Removendo configuração padrão do Nginx..."
+  sudo rm -f /etc/nginx/sites-enabled/default
+fi
 
-# Testar configuração do Nginx
-echo "Testando configuração do Nginx..."
+# --- Testar configuração ---
+
+msg_action "Testando configuração do Nginx..."
 sudo nginx -t
 
-# Recarregar Nginx para aplicar a nova configuração
-echo "Recarregando Nginx..."
+# --- Recarregar Nginx ---
+
+msg_action "Recarregando Nginx..."
 sudo systemctl reload nginx
 
-# Verificar status
-echo "Verificando status do Nginx..."
-sudo systemctl status nginx
+# --- Mensagem de sucesso ---
 
-echo "Nginx instalado com sucesso!"
 echo ""
-echo "⚠️  IMPORTANTE: Não esqueça de configurar os endereços IPs no arquivo de configuração do SUAP"
-echo "Arquivo: /etc/nginx/sites-available/suap"
-echo "Certifique-se de informar corretamente os IPs dos servidores backend (upstream)."
+msg_action "Nginx instalado e configurado com sucesso!"
+echo ""
+echo "⚠️  IMPORTANTE: Edite o arquivo de configuração para ajustar os IPs dos servidores backend (upstream)."
+echo "Arquivo: ${NGINX_CONF_PATH}"
+echo "Certifique-se de informar corretamente os IPs dos servidores no bloco 'upstream app_django'."

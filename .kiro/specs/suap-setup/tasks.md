@@ -6,8 +6,8 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
 
 ## Tasks
 
-- [ ] 1. Criar biblioteca compartilhada e arquivo .env centralizado
-  - [~] 1.1 Criar `lib/common.sh` com funções utilitárias base
+- [x] 1. Criar biblioteca compartilhada e arquivo .env centralizado
+  - [x] 1.1 Criar `lib/common.sh` com funções utilitárias base
     - Criar diretório `lib/` e arquivo `common.sh`
     - Implementar constantes de cor (`GREEN`, `YELLOW`, `RED`, `NO_COLOR`) usando `tput`
     - Implementar funções de output: `msg_action()`, `msg_skip()`, `msg_error()`
@@ -16,7 +16,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Implementar `resolve_git_url()` que lê `GIT_URL` do `.env` ou solicita via prompt
     - _Requisitos: 1.1, 1.6, 1.7, 4.1, 4.2, 4.3, 4.4, 25.1, 25.2, 25.3, 25.4_
 
-  - [~] 1.2 Implementar detecção de distribuição e funções de caminho
+  - [x] 1.2 Implementar detecção de distribuição e funções de caminho
     - Implementar `detect_distro()` que lê `/etc/os-release` e classifica em "deb" ou "rpm"
     - Retornar exit 3 se `/etc/os-release` não existe ou distro não suportada
     - Implementar `get_supervisor_conf_dir()` que retorna caminho por distro
@@ -26,22 +26,22 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Implementar `check_docker_available()` para verificar Docker e Docker Compose
     - _Requisitos: 2.1, 2.2, 2.3, 17.1, 17.2, 20.1, 20.3_
 
-  - [ ]* 1.3 Escrever teste de propriedade para round-trip do .env
+  - [x]* 1.3 Escrever teste de propriedade para round-trip do .env
     - **Property 1: Round-trip do arquivo .env**
     - **Valida: Requisitos 1.2, 1.3, 1.4, 1.5, 4.1, 4.3, 4.5**
 
-  - [ ]* 1.4 Escrever teste de propriedade para classificação de distribuição
+  - [x]* 1.4 Escrever teste de propriedade para classificação de distribuição
     - **Property 2: Classificação de distribuição determina caminhos corretos**
     - **Valida: Requisitos 2.1, 17.1, 17.2, 20.1, 20.3**
 
-  - [ ]* 1.5 Escrever testes unitários para funções de output e utilitários
+  - [x]* 1.5 Escrever testes unitários para funções de output e utilitários
     - Testar `msg_action()`, `msg_skip()`, `msg_error()` quanto ao formato de saída
     - Testar `is_pkg_installed()` com mocks de dpkg/rpm
     - Testar `check_docker_available()` com cenários de sucesso e falha
     - _Requisitos: 25.1, 25.2, 25.3, 25.4_
 
-- [ ] 2. Implementar wrapper principal (`setup.sh`)
-  - [~] 2.1 Criar `setup.sh` com menu interativo e roteamento
+- [x] 2. Implementar wrapper principal (`setup.sh`)
+  - [x] 2.1 Criar `setup.sh` com menu interativo e roteamento
     - Renomear/recriar o ponto de entrada principal como `setup.sh`
     - Adicionar `set -u` e determinação de `SCRIPT_DIR`
     - Fazer source de `lib/common.sh`
@@ -53,15 +53,15 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Opções Docker (5, 6) não dependem de detecção de distro
     - _Requisitos: 3.1, 3.2, 3.3, 3.4_
 
-  - [ ]* 2.2 Escrever teste de propriedade para roteamento do menu
+  - [x]* 2.2 Escrever teste de propriedade para roteamento do menu
     - **Property 3: Roteamento do menu produz caminho de script correto**
     - **Valida: Requisitos 3.2, 3.3**
 
-- [~] 3. Checkpoint - Verificar base do projeto
+- [x] 3. Checkpoint - Verificar base do projeto
   - Garantir que todos os testes passem, perguntar ao usuário se houver dúvidas.
 
-- [ ] 4. Implementar scripts de desenvolvimento
-  - [~] 4.1 Implementar `deb/suap-dev.sh`
+- [x] 4. Implementar scripts de desenvolvimento
+  - [x] 4.1 Implementar `deb/suap-dev.sh`
     - Fazer source de `lib/common.sh` e carregar `.env`
     - Chamar `resolve_git_url()`
     - Verificar e instalar dependências do sistema via apt (ferramentas de compilação, LDAP, Pillow, etc.)
@@ -78,7 +78,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Garantir idempotência em todas as etapas (mensagens amarelas para pulos)
     - _Requisitos: 1.2, 1.8, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 8.1, 8.2, 9.1, 9.2, 9.3, 9.4, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 24.1, 24.3, 25.1, 25.2, 26.1_
 
-  - [~] 4.2 Implementar `rpm/suap-dev.sh`
+  - [x] 4.2 Implementar `rpm/suap-dev.sh`
     - Mesma lógica de `deb/suap-dev.sh` adaptada para distribuições RPM
     - Usar dnf como gerenciador de pacotes
     - Usar `localectl set-locale` para configuração de locale
@@ -86,15 +86,15 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Adaptar nomes de pacotes para o ecossistema RPM
     - _Requisitos: 1.2, 1.8, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 8.1, 8.2, 9.1, 9.2, 9.3, 9.4, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 24.1, 24.3, 25.1, 25.2, 26.1_
 
-  - [ ]* 4.3 Escrever testes unitários para fluxo de desenvolvimento
+  - [x]* 4.3 Escrever testes unitários para fluxo de desenvolvimento
     - Testar carregamento de variáveis e resolução de GIT_URL
     - Testar lógica de idempotência (pular etapas já concluídas)
     - Testar geração de arquivos de configuração (não sobrescrever existentes)
     - Testar detecção de pyproject.toml vs requirements/
     - _Requisitos: 9.1, 9.2, 9.3, 9.4, 10.4, 10.5, 10.6, 24.1, 24.3_
 
-- [ ] 5. Implementar scripts de produção
-  - [~] 5.1 Implementar `deb/suap-prod.sh`
+- [x] 5. Implementar scripts de produção
+  - [x] 5.1 Implementar `deb/suap-prod.sh`
     - Fazer source de `lib/common.sh` e carregar `.env`
     - Validar execução como root (exit 1 se EUID != 0)
     - Chamar `resolve_git_url()`
@@ -112,7 +112,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Exibir mensagem final com próximos passos
     - _Requisitos: 1.3, 1.9, 4.5, 4.6, 11.1, 11.2, 11.3, 12.1, 12.2, 13.1, 13.2, 14.1, 14.2, 14.3, 14.4, 14.5, 15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.7, 15.8, 16.1, 17.1, 24.2, 24.4, 25.3, 25.4, 26.2_
 
-  - [~] 5.2 Implementar `rpm/suap-prod.sh`
+  - [x] 5.2 Implementar `rpm/suap-prod.sh`
     - Mesma lógica de `deb/suap-prod.sh` adaptada para distribuições RPM
     - Usar dnf como gerenciador de pacotes
     - Copiar configs para `/etc/supervisord.d/`
@@ -120,18 +120,18 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Usar serviço `supervisord` em vez de `supervisor`
     - _Requisitos: 1.3, 1.9, 4.5, 4.6, 11.1, 11.2, 11.3, 12.1, 12.2, 13.1, 13.2, 14.1, 14.2, 14.3, 14.4, 14.5, 15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.7, 15.8, 16.1, 17.2, 24.2, 24.4, 25.3, 25.4, 26.2_
 
-  - [ ]* 5.3 Escrever testes unitários para fluxo de produção
+  - [x]* 5.3 Escrever testes unitários para fluxo de produção
     - Testar validação de root (EUID)
     - Testar menu do Supervisor e cópia de arquivos
     - Testar lógica de permissões
     - Testar clone com --depth 1
     - _Requisitos: 12.1, 12.2, 15.1, 15.5, 15.6, 16.1_
 
-- [~] 6. Checkpoint - Verificar scripts de dev e prod
+- [x] 6. Checkpoint - Verificar scripts de dev e prod
   - Garantir que todos os testes passem, perguntar ao usuário se houver dúvidas.
 
-- [ ] 7. Implementar scripts de Redis e Nginx
-  - [~] 7.1 Implementar `deb/install-redis.sh` e `rpm/install-redis.sh`
+- [x] 7. Implementar scripts de Redis e Nginx
+  - [x] 7.1 Implementar `deb/install-redis.sh` e `rpm/install-redis.sh`
     - Fazer source de `lib/common.sh`
     - Instalar pacote Redis (redis-server para Debian, redis para RPM)
     - Iniciar serviço via systemctl
@@ -139,7 +139,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Exibir status do serviço
     - _Requisitos: 18.1, 18.2, 18.3_
 
-  - [~] 7.2 Implementar `deb/install-nginx.sh` e `rpm/install-nginx.sh`
+  - [x] 7.2 Implementar `deb/install-nginx.sh` e `rpm/install-nginx.sh`
     - Fazer source de `lib/common.sh`
     - Instalar pacote Nginx
     - Iniciar e habilitar serviço via systemctl
@@ -150,7 +150,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Recarregar Nginx com `systemctl reload nginx`
     - _Requisitos: 19.1, 19.2, 19.3, 19.4, 19.5, 19.6, 20.1, 20.2, 20.3_
 
-  - [~] 7.3 Atualizar configuração Nginx (`nginx/suap`)
+  - [x] 7.3 Atualizar configuração Nginx (`nginx/suap`)
     - Configurar upstream com `least_conn` apontando para porta 8000
     - Configurar `client_max_body_size 100m`
     - Configurar location para servir arquivos estáticos (`/opt/suap/deploy/static`)
@@ -161,14 +161,14 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Configurar buffers de proxy aumentados
     - _Requisitos: 21.1, 21.2, 21.3, 21.4, 21.5, 21.6, 21.7, 21.8_
 
-  - [ ]* 7.4 Escrever testes de fumaça para configurações estáticas
+  - [x]* 7.4 Escrever testes de fumaça para configurações estáticas
     - Validar sintaxe do arquivo `nginx/suap`
     - Validar presença de diretivas obrigatórias no Nginx
     - Validar arquivos `.conf` do Supervisor
     - _Requisitos: 21.1, 21.2, 21.3, 21.4, 21.5, 21.6, 21.7, 21.8_
 
 - [ ] 8. Implementar ambiente Docker
-  - [~] 8.1 Criar `docker/dev/Dockerfile` e `docker/dev/docker-compose.yml`
+  - [x] 8.1 Criar `docker/dev/Dockerfile` e `docker/dev/docker-compose.yml`
     - Criar Dockerfile de desenvolvimento com todas as dependências
     - Criar docker-compose.yml com serviços: suap, db (PostgreSQL 16), redis
     - Montar código-fonte como volume para edição em tempo real
@@ -177,7 +177,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Configurar volumes persistentes para PostgreSQL
     - _Requisitos: 22.1, 22.2, 22.6, 22.7, 22.8_
 
-  - [~] 8.2 Criar `docker/dev/docker-setup.sh`
+  - [ ] 8.2 Criar `docker/dev/docker-setup.sh`
     - Fazer source de `lib/common.sh`
     - Chamar `load_env_file()` e `check_docker_available()`
     - Chamar `resolve_git_url()`
@@ -185,7 +185,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Exibir mensagem com URL de acesso e comandos úteis
     - _Requisitos: 1.4, 22.3, 22.4, 22.5, 22.9_
 
-  - [~] 8.3 Criar `docker/prod/Dockerfile` e `docker/prod/docker-compose.prod.yml`
+  - [ ] 8.3 Criar `docker/prod/Dockerfile` e `docker/prod/docker-compose.prod.yml`
     - Criar Dockerfile otimizado com multi-stage build
     - Criar docker-compose.prod.yml com serviços: suap, celery-worker, celery-beat, celery-flower, redis, nginx
     - Configurar volumes persistentes para static, media e logs
@@ -194,7 +194,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Expor portas 80, 8001 e 5555
     - _Requisitos: 23.1, 23.2, 23.6, 23.7, 23.8, 23.9_
 
-  - [~] 8.4 Criar `docker/prod/docker-setup.sh`
+  - [ ] 8.4 Criar `docker/prod/docker-setup.sh`
     - Fazer source de `lib/common.sh`
     - Chamar `load_env_file()` e `check_docker_available()`
     - Chamar `resolve_git_url()`
@@ -209,11 +209,11 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Validar Dockerfiles (FROM, COPY, CMD presentes)
     - _Requisitos: 22.1, 22.2, 23.1, 23.2_
 
-- [~] 9. Checkpoint - Verificar Docker e serviços
+- [ ] 9. Checkpoint - Verificar Docker e serviços
   - Garantir que todos os testes passem, perguntar ao usuário se houver dúvidas.
 
 - [ ] 10. Configurar framework de testes e testes de integração
-  - [~] 10.1 Configurar estrutura de testes com bats-core
+  - [ ] 10.1 Configurar estrutura de testes com bats-core
     - Criar diretório `tests/` com subdiretórios: `unit/`, `property/`, `integration/`, `smoke/`
     - Configurar bats-core, bats-assert e bats-support como dependências de teste
     - Criar helper de setup compartilhado para os testes
@@ -230,7 +230,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - _Requisitos: Infraestrutura de testes_
 
 - [ ] 11. Integração final e documentação
-  - [~] 11.1 Atualizar `README.md` com instruções de uso
+  - [ ] 11.1 Atualizar `README.md` com instruções de uso
     - Documentar pré-requisitos do sistema
     - Documentar uso do `setup.sh` e menu de opções
     - Documentar variáveis do `.env` centralizado
@@ -238,14 +238,14 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Documentar execução de testes
     - _Requisitos: Documentação geral_
 
-  - [~] 11.2 Garantir integração entre todos os componentes
+  - [ ] 11.2 Garantir integração entre todos os componentes
     - Verificar que todos os scripts fazem source de `lib/common.sh` corretamente
     - Verificar que `setup.sh` roteia para todos os scripts
     - Verificar que `.env` é utilizado consistentemente por todos os scripts
     - Remover variáveis hardcoded remanescentes dos scripts existentes
     - _Requisitos: 1.2, 1.3, 1.4, 1.5, 1.8, 1.9, 3.2_
 
-- [~] 12. Checkpoint final - Verificar integração completa
+- [ ] 12. Checkpoint final - Verificar integração completa
   - Garantir que todos os testes passem, perguntar ao usuário se houver dúvidas.
 
 ## Notes

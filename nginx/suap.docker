@@ -1,13 +1,16 @@
+# Nginx configuration for Docker production environment
+# Uses container service name 'suap' instead of 127.0.0.1
+
 # Custom log format with request time and upstream response time
 log_format suap_log '$remote_addr - $remote_user [$time_local] '
                     '"$request" $status $body_bytes_sent '
                     '"$http_referer" "$http_user_agent" '
                     'rt=$request_time uct=$upstream_connect_time uht=$upstream_header_time urt=$upstream_response_time';
 
-# Upstream with least_conn strategy
+# Upstream with least_conn strategy (Docker service name)
 upstream suap_server {
     least_conn;
-    server 127.0.0.1:8000;
+    server suap:8000;
 }
 
 # Main server block (port 80)
@@ -15,8 +18,8 @@ server {
     listen 80;
     server_name _;
 
-    access_log /var/log/nginx/suap_access.log suap_log;
-    error_log /var/log/nginx/suap_error.log;
+    access_log /opt/logs/nginx/suap_access.log suap_log;
+    error_log /opt/logs/nginx/suap_error.log;
 
     client_max_body_size 100m;
 
@@ -39,7 +42,7 @@ server {
         access_log off;
     }
 
-    # Proxy to SUAP
+    # Proxy to SUAP container
     location / {
         proxy_pass http://suap_server;
         proxy_set_header Host $host;
@@ -70,8 +73,8 @@ server {
     listen 8001;
     server_name _;
 
-    access_log /var/log/nginx/suap_8001_access.log suap_log;
-    error_log /var/log/nginx/suap_8001_error.log;
+    access_log /opt/logs/nginx/suap_8001_access.log suap_log;
+    error_log /opt/logs/nginx/suap_8001_error.log;
 
     client_max_body_size 100m;
 

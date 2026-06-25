@@ -1,0 +1,78 @@
+# docker/prod/docker-compose.prod.yml - Ambiente de produção SUAP
+# Serviços: aplicação SUAP (Gunicorn), Celery Worker, Celery Beat, Celery Flower, Redis, Nginx
+
+services:
+  suap:
+    build:
+      context: ../..
+      dockerfile: docker/prod/Dockerfile
+    env_file:
+      - ../../.env
+    depends_on:
+      - redis
+    restart: unless-stopped
+    volumes:
+      - static:/opt/suap/deploy/static
+      - media:/opt/suap/deploy/media
+      - logs:/opt/logs
+
+  celery-worker:
+    build:
+      context: ../..
+      dockerfile: docker/prod/Dockerfile
+    command: celery -A suap worker -l info
+    env_file:
+      - ../../.env
+    depends_on:
+      - redis
+    restart: unless-stopped
+    volumes:
+      - logs:/opt/logs
+
+  celery-beat:
+    build:
+      context: ../..
+      dockerfile: docker/prod/Dockerfile
+    command: celery -A suap beat -l info
+    env_file:
+      - ../../.env
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  celery-flower:
+    build:
+      context: ../..
+      dockerfile: docker/prod/Dockerfile
+    command: celery -A suap flower
+    env_file:
+      - ../../.env
+    depends_on:
+      - redis
+    restart: unless-stopped
+    ports:
+      - "5555:5555"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "8001:8001"
+    volumes:
+      - ../../nginx/suap.docker:/etc/nginx/conf.d/default.conf:ro
+      - static:/opt/suap/deploy/static:ro
+      - media:/opt/suap/deploy/media:ro
+      - logs:/opt/logs/nginx
+    depends_on:
+      - suap
+    restart: unless-stopped
+
+volumes:
+  static:
+  media:
+  logs:
+  pgdata:

@@ -1,19 +1,36 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -u
 
-echo "Instalando Redis..."
+# Determinar diretório raiz do projeto (um nível acima de rpm/)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Instalar Redis
-sudo dnf install -y redis
+# Source funções utilitárias
+source "${SCRIPT_DIR}/lib/common.sh"
 
-# Iniciar o serviço Redis
-sudo systemctl start redis
+# Definir tipo de distribuição
+DISTRO_TYPE="rpm"
+export DISTRO_TYPE
 
-# Habilitar Redis para iniciar automaticamente
-sudo systemctl enable redis
+# --- Instalação do Redis ---
 
-# Verificar status
-echo "Verificando status do Redis..."
-sudo systemctl status redis
+REDIS_PKG="redis"
+REDIS_SERVICE="redis"
 
-echo "Redis instalado com sucesso!"
+if is_pkg_installed "${REDIS_PKG}"; then
+  msg_skip "Redis (${REDIS_PKG}) já está instalado."
+else
+  msg_action "Instalando ${REDIS_PKG}..."
+  sudo dnf install -y "${REDIS_PKG}"
+fi
+
+# Iniciar serviço
+msg_action "Iniciando serviço ${REDIS_SERVICE}..."
+sudo systemctl start "${REDIS_SERVICE}"
+
+# Habilitar início automático no boot
+msg_action "Habilitando ${REDIS_SERVICE} para iniciar no boot..."
+sudo systemctl enable "${REDIS_SERVICE}"
+
+# Exibir status do serviço
+msg_action "Status do serviço ${REDIS_SERVICE}:"
+sudo systemctl status "${REDIS_SERVICE}" --no-pager
