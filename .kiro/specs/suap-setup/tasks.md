@@ -177,7 +177,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Configurar volumes persistentes para PostgreSQL
     - _Requisitos: 22.1, 22.2, 22.6, 22.7, 22.8_
 
-  - [ ] 8.2 Criar `docker/dev/docker-setup.sh`
+  - [x] 8.2 Criar `docker/dev/docker-setup.sh`
     - Fazer source de `lib/common.sh`
     - Chamar `load_env_file()` e `check_docker_available()`
     - Chamar `resolve_git_url()`
@@ -185,7 +185,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Exibir mensagem com URL de acesso e comandos úteis
     - _Requisitos: 1.4, 22.3, 22.4, 22.5, 22.9_
 
-  - [ ] 8.3 Criar `docker/prod/Dockerfile` e `docker/prod/docker-compose.prod.yml`
+  - [x] 8.3 Criar `docker/prod/Dockerfile` e `docker/prod/docker-compose.prod.yml`
     - Criar Dockerfile otimizado com multi-stage build
     - Criar docker-compose.prod.yml com serviços: suap, celery-worker, celery-beat, celery-flower, redis, nginx
     - Configurar volumes persistentes para static, media e logs
