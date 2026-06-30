@@ -63,7 +63,9 @@ O script detecta automaticamente se o sistema é Debian-like ou RPM-like usando 
 
 ### Variáveis de ambiente centralizadas (`.env`)
 
-Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.env` na raiz do repositório. Se o arquivo não existir ao executar `setup.sh`, ele será criado automaticamente com valores padrão.
+Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.env` na raiz do repositório. Na primeira execução do `setup.sh`, um **wizard interativo** guia o usuário pela criação do arquivo, solicitando cada variável com descrição, exemplos e valor padrão.
+
+> **Importante:** Se um script individual (`deb/suap-dev.sh`, `docker/dev/docker-setup.sh`, etc.) for executado diretamente sem que o `.env` exista, ele exibirá uma mensagem de erro orientando a executar `setup.sh` primeiro e encerrará com código 1.
 
 | Variável | Descrição | Valor padrão |
 |----------|-----------|--------------|
@@ -87,32 +89,34 @@ GIT_URL=
 
 Os scripts de desenvolvimento realizam:
 
-- instalação de dependências do sistema
+- verificação da existência do `.env` (exit 1 se ausente)
+- instalação de dependências do sistema (halt imediato em caso de falha)
 - configuração de locale para `pt_BR.UTF-8`
 - configuração de timezone `America/Fortaleza`
-- instalação de `uv`
+- instalação de `uv` (com detecção em `~/.cargo/bin` e `~/.local/bin` antes de baixar)
 - clone ou atualização do código SUAP
 - geração de `settings.py` e `.env` quando necessário
 - criação de virtualenv para Python 3.12
-- instalação de dependências do grupo `dev`
+- instalação de dependências do grupo `dev` (halt imediato em caso de falha)
 
 ### Ambiente de produção
 
 Os scripts de produção realizam:
 
-- instalação de dependências do sistema
+- validação de execução como root (exit 1 se não for root)
+- instalação de dependências do sistema (halt imediato em caso de falha)
 - configuração de locale para `pt_BR.UTF-8`
 - configuração de timezone `America/Fortaleza`
-- clone ou atualização do código SUAP
+- clone ou atualização do código SUAP (com `--depth 1`)
 - geração de `settings.py` e `.env` quando necessário
 - criação de virtualenv com `python3 -m venv`
-- instalação de dependências do grupo `prod`
+- instalação de dependências do grupo `prod` (halt imediato em caso de falha)
 - menu interativo para configurar Supervisor para:
   - SUAP
   - Celery
   - SUAP + Celery
 - deploy dos arquivos de configuração do Supervisor
-- recarga do Supervisor
+- recarga condicional do Supervisor (só quando arquivos são efetivamente copiados)
 - ajuste de permissões em diretórios importantes
 
 ### Docker — Desenvolvimento (opção 5)
@@ -277,10 +281,21 @@ O projeto utiliza [bats-core](https://github.com/bats-core/bats-core) como frame
 
 | Diretório | Tipo | Descrição |
 |-----------|------|-----------|
-| `tests/unit/` | Unitários | Testam funções isoladas (carregamento de .env, detecção de distro, roteamento) |
+| `tests/unit/` | Unitários | Testam funções isoladas (carregamento de .env, detecção de distro, roteamento, wizard) |
 | `tests/property/` | Propriedade | Validam propriedades com inputs gerados aleatoriamente (mínimo 100 iterações) |
-| `tests/smoke/` | Fumaça | Validação estática de configs (nginx, docker-compose, supervisor) |
+| `tests/smoke/` | Fumaça | Validação estática de configs (nginx, docker-compose, supervisor, dockhand) |
 | `tests/integration/` | Integração | Fluxos completos em containers Docker isolados |
+
+Propriedades verificadas nos testes:
+
+1. **Round-trip do .env** — escrever e carregar pares chave=valor preserva os valores originais
+2. **Classificação de distribuição** — IDs de `/etc/os-release` produzem caminhos corretos
+3. **Roteamento do menu** — combinações opção + distro geram caminho de script correto
+4. **Idempotência** — segunda execução pula etapas com mensagens amarelas
+5. **Idempotência do Dockhand** — re-execução não cria segundo container
+6. **Round-trip do Wizard** — valores fornecidos ao wizard são preservados no .env gerado
+7. **Fallback de .env** — scripts individuais encerram com exit 1 quando .env não existe
+8. **Mensagens verdes** — todos os scripts usam `msg_action()` para feedback visual
 
 > Pré-requisito: executar `git submodule update --init --recursive` para instalar bats-core e bibliotecas auxiliares.
 
@@ -391,7 +406,13 @@ docker compose -f docker/prod/docker-compose.prod.yml down
 ## Observações
 
 - `setup.sh` facilita a escolha do script certo para a família de distribuição.
-- Os scripts são projetados para serem idempotentes, evitando repetição de etapas quando possível.
+- Os scripts são projetados para serem **idempotentes**: etapas já concluídas são puladas com mensagens amarelas, enquanto ações em execução são exibidas em verde.
+- **Wizard interativo**: na primeira execução, `setup.sh` solicita valores para cada variável do `.env` com descrições, exemplos e defaults. `GIT_URL` é obrigatória.
+- **Fallback de .env**: scripts individuais executados diretamente (sem o wrapper) verificam se `.env` existe e abortam com erro se ausente.
+- **Halt em falhas críticas**: se a instalação de pacotes (`apt`/`dnf`) ou de dependências Python (`uv sync`/`pip install`) falhar, o script encerra imediatamente com código 1.
+- **Supervisorctl condicional**: em produção, `supervisorctl reread` e `supervisorctl update` só são executados quando arquivos de configuração foram efetivamente copiados (evita recargas desnecessárias em re-execuções).
+- **Remoção condicional do nginx default**: em Debian, o link `/etc/nginx/sites-enabled/default` só é removido após a configuração do SUAP ter sido copiada e ativada com sucesso.
+- **Detecção inteligente de UV**: antes de baixar da internet, os scripts verificam locais conhecidos (`~/.cargo/bin/uv`, `~/.local/bin/uv`) e adicionam ao PATH se encontrado.
 - A configuração de Supervisor e Nginx depende dos arquivos em `supervisor/` e `nginx/`.
 - Para Docker, o arquivo `nginx/suap.docker` utiliza nomes de serviço do Compose para resolução DNS interna.
 - As opções Docker (5, 6 e 7) não dependem da distribuição detectada — funcionam em qualquer sistema com Docker.
