@@ -262,6 +262,49 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
 - [x] 12. Checkpoint final - Verificar integração completa
   - Garantir que todos os testes passem, perguntar ao usuário se houver dúvidas.
 
+- [x] 13. Implementar integração com Dockhand
+  - [x] 13.1 Criar `docker/dockhand-setup.sh`
+    - Criar arquivo `docker/dockhand-setup.sh` com `set -u`
+    - Fazer source de `lib/common.sh`
+    - Chamar `check_docker_available()` para verificar pré-requisitos Docker (exit 1 com `msg_error` se não disponível)
+    - Verificar se já existe container "dockhand" em execução (`docker ps --filter name=dockhand`)
+      - Se sim: exibir `msg_skip` informando que já está ativo + URL de acesso (http://localhost:9093) e encerrar com sucesso
+    - Executar `docker pull lscr.io/linuxserver/dockhand:latest` para obter imagem mais recente
+    - Executar `docker run -d --name dockhand -p 9093:3000 -v /var/run/docker.sock:/var/run/docker.sock --restart unless-stopped lscr.io/linuxserver/dockhand:latest`
+    - Verificar se o container iniciou com sucesso (exit 1 com `msg_error` indicando motivo da falha se não iniciou)
+    - Exibir URL de acesso (http://localhost:9093) com `msg_action` em caso de sucesso
+    - _Requisitos: 27.1, 27.2, 27.3, 27.4, 27.5, 27.6, 27.7, 27.8_
+
+  - [x] 13.2 Atualizar `setup.sh` para incluir opção 7 (Dockhand)
+    - Adicionar opção "7) Iniciar Dockhand" no menu exibido ao usuário
+    - Adicionar case `7)` no roteamento que executa `docker/dockhand-setup.sh`
+    - A opção 7 não depende de detecção de distro (análogo às opções 5 e 6)
+    - Verificar existência do script antes de executar (exit 2 se não encontrado, conforme padrão do wrapper)
+    - _Requisitos: 3.1, 3.2, 3.4, 27.1_
+
+  - [x] 13.3 Atualizar teste de propriedade de roteamento para incluir opção 7
+    - Atualizar `tests/property/test_routing.bats`
+    - Adicionar opção `7` → `docker/dockhand-setup.sh` na função `_resolve_target_script()`
+    - Atualizar teste Property 3.2 para incluir opção 7 como path fixo (independente de distro)
+    - Atualizar teste Property 3.3 para ajustar o gerador de opções inválidas (opções > 7 são inválidas)
+    - Atualizar teste Property 3.4 para incluir opção 7 na lista de opções válidas
+    - **Property 3: Roteamento do menu produz caminho de script correto**
+    - **Valida: Requisitos 3.2, 3.3, 27.1**
+
+  - [x] 13.4 Escrever testes de fumaça para `docker/dockhand-setup.sh`
+    - Criar `tests/smoke/test_dockhand.bats` (ou estender `tests/smoke/test_docker.bats`)
+    - Testar que o script faz source de `lib/common.sh`
+    - Testar idempotência: quando container já existe, não tenta criar outro
+    - Testar mensagem de erro quando Docker não está disponível
+    - Testar que a porta mapeada é 9093:3000
+    - Testar que o volume `/var/run/docker.sock` é montado
+    - Testar que `--restart unless-stopped` é utilizado
+    - **Property 5: Idempotência do Dockhand**
+    - **Valida: Requisitos 27.1, 27.2, 27.7, 27.8**
+
+- [x] 14. Checkpoint final - Verificar integração Dockhand
+  - Garantir que todos os testes passem, perguntar ao usuário se houver dúvidas.
+
 ## Notes
 
 - Tasks marcadas com `*` são opcionais e podem ser puladas para um MVP mais rápido
@@ -288,7 +331,9 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     { "id": 8, "tasks": ["8.4", "8.5"] },
     { "id": 9, "tasks": ["10.1"] },
     { "id": 10, "tasks": ["10.2", "10.3"] },
-    { "id": 11, "tasks": ["11.1", "11.2"] }
+    { "id": 11, "tasks": ["11.1", "11.2"] },
+    { "id": 12, "tasks": ["13.1", "13.2"] },
+    { "id": 13, "tasks": ["13.3", "13.4"] }
   ]
 }
 ```

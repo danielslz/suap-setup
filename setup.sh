@@ -25,8 +25,9 @@ echo "3) Instalar Redis"
 echo "4) Instalar Nginx"
 echo "5) Configurar ambiente dev via Docker"
 echo "6) Configurar ambiente prod via Docker"
+echo "7) Iniciar Dockhand"
 echo ""
-read -rp "Escolha uma opção [1-6]: " CHOICE
+read -rp "Escolha uma opção [1-7]: " CHOICE
 
 # Determinar script a executar baseado na opção
 case "${CHOICE}" in
@@ -48,8 +49,11 @@ case "${CHOICE}" in
   6)
     TARGET_SCRIPT="${SCRIPT_DIR}/docker/prod/docker-setup.sh"
     ;;
+  7)
+    TARGET_SCRIPT="${SCRIPT_DIR}/docker/dockhand-setup.sh"
+    ;;
   *)
-    msg_error "Opção inválida: use 1, 2, 3, 4, 5 ou 6."
+    msg_error "Opção inválida: use 1, 2, 3, 4, 5, 6 ou 7."
     exit 1
     ;;
 esac

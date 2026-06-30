@@ -30,11 +30,13 @@ graph TD
     C -->|RPM| K[rpm/install-nginx.sh]
     A --> L[docker/dev/docker-setup.sh]
     A --> M[docker/prod/docker-setup.sh]
+    A --> S[docker/dockhand-setup.sh]
     B --> N[.env - Variáveis Centralizadas]
     L --> O[docker/dev/Dockerfile]
     L --> P[docker/dev/docker-compose.yml]
     M --> Q[docker/prod/Dockerfile]
     M --> R[docker/prod/docker-compose.prod.yml]
+    S --> T[lscr.io/linuxserver/dockhand:latest]
 
 ```
 
@@ -49,7 +51,7 @@ flowchart TD
     EnvExists -->|Sim| Detect[Detectar distribuição via /etc/os-release]
     Detect --> DistroOk{Distribuição suportada?}
     DistroOk -->|Não| ErrDistro[Erro: distribuição não suportada - exit 3]
-    DistroOk -->|Sim| Menu[Exibir menu com 6 opções]
+    DistroOk -->|Sim| Menu[Exibir menu com 7 opções]
     Menu --> Choice{Opção escolhida}
     Choice -->|1| DevScript[Executar DISTRO/suap-dev.sh]
     Choice -->|2| ProdScript[Executar sudo DISTRO/suap-prod.sh]
@@ -57,6 +59,7 @@ flowchart TD
     Choice -->|4| NginxScript[Executar DISTRO/install-nginx.sh]
     Choice -->|5| DockerDev[Executar docker/dev/docker-setup.sh]
     Choice -->|6| DockerProd[Executar docker/prod/docker-setup.sh]
+    Choice -->|7| Dockhand[Executar docker/dockhand-setup.sh]
     Choice -->|Inválida| ErrChoice[Erro: opção inválida - exit 1]
 ```
 
@@ -163,7 +166,7 @@ set -u
 # 2. Source lib/common.sh
 # 3. Carregar .env (criar se não existir)
 # 4. Detectar distribuição (detect_distro)
-# 5. Exibir menu com 6 opções
+# 5. Exibir menu com 7 opções
 # 6. Validar entrada e executar script correspondente
 # 7. Verificar existência do script antes de executar
 
@@ -174,6 +177,7 @@ set -u
 # 4 → ${DISTRO_TYPE}/install-nginx.sh
 # 5 → docker/dev/docker-setup.sh
 # 6 → docker/prod/docker-setup.sh
+# 7 → docker/dockhand-setup.sh
 ```
 
 ### 3. Scripts de Desenvolvimento (`deb/suap-dev.sh`, `rpm/suap-dev.sh`)
@@ -283,6 +287,39 @@ Os scripts de Redis e Nginx seguem padrão simples:
 # 8. Exibir mensagem sobre configuração de IPs
 ```
 
+### 7. Script Dockhand (`docker/dockhand-setup.sh`)
+
+```bash
+#!/usr/bin/env bash
+set -u
+# Algoritmo do script Dockhand:
+#
+# 1. Source lib/common.sh
+# 2. check_docker_available() - exit 1 se Docker não disponível
+# 3. Verificar se já existe container "dockhand" em execução
+#    - Se sim: exibir mensagem informando que já está ativo + URL de acesso
+#    - Se não: continuar para pull e start
+# 4. docker pull lscr.io/linuxserver/dockhand:latest
+# 5. docker run -d \
+#      --name dockhand \
+#      -p 9093:3000 \
+#      -v /var/run/docker.sock:/var/run/docker.sock \
+#      --restart unless-stopped \
+#      lscr.io/linuxserver/dockhand:latest
+# 6. Verificar se o container iniciou com sucesso
+#    - Se falhou: exibir msg_error com motivo + exit 1
+#    - Se sucesso: exibir URL de acesso (http://localhost:9093)
+```
+
+**Decisões de Design para o Dockhand:**
+
+- **Imagem**: `lscr.io/linuxserver/dockhand:latest` — mantém sempre a versão mais recente do LinuxServer.
+- **Porta 9093**: A porta interna do Dockhand (3000) é mapeada para 9093 no host para evitar conflito com outros serviços.
+- **Docker Socket**: Montagem de `/var/run/docker.sock` é obrigatória para que o Dockhand consiga gerenciar os containers do host.
+- **Idempotência**: Antes de criar o container, verifica se já existe um com nome "dockhand" em execução. Se existir, apenas informa o status.
+- **Restart policy**: `unless-stopped` garante que o Dockhand reinicia automaticamente após reboot do host.
+- **Reuso de `check_docker_available()`**: Reutiliza a função já existente em `lib/common.sh` para validar pré-requisitos Docker.
+
 ## Data Models
 
 ### Arquivo `.env` Centralizado
@@ -336,10 +373,11 @@ suap-setup/
 │   │   ├── Dockerfile           # Imagem dev
 │   │   ├── docker-compose.yml   # Compose dev
 │   │   └── docker-setup.sh      # Script de setup Docker dev
-│   └── prod/
-│       ├── Dockerfile           # Imagem prod (multi-stage)
-│       ├── docker-compose.prod.yml  # Compose prod
-│       └── docker-setup.sh      # Script de setup Docker prod
+│   ├── prod/
+│   │   ├── Dockerfile           # Imagem prod (multi-stage)
+│   │   ├── docker-compose.prod.yml  # Compose prod
+│   │   └── docker-setup.sh      # Script de setup Docker prod
+│   └── dockhand-setup.sh        # Script de setup Dockhand
 ├── nginx/
 │   └── suap                     # Configuração Nginx proxy reverso
 ├── supervisor/
@@ -489,6 +527,7 @@ volumes:
 | 4     | rpm    | `rpm/install-nginx.sh`              | Não  |
 | 5     | *      | `docker/dev/docker-setup.sh`        | Não  |
 | 6     | *      | `docker/prod/docker-setup.sh`       | Não  |
+| 7     | *      | `docker/dockhand-setup.sh`          | Não  |
 
 ### Tabela de Caminhos por Distribuição
 
@@ -521,15 +560,21 @@ volumes:
 
 ### Property 3: Roteamento do menu produz caminho de script correto
 
-*Para qualquer* combinação válida de opção do menu (1-6) e tipo de distribuição detectada (deb/rpm), o wrapper deve construir o caminho correto do script de acordo com a tabela de roteamento, e opções fora do intervalo válido devem resultar em código de saída 1.
+*Para qualquer* combinação válida de opção do menu (1-7) e tipo de distribuição detectada (deb/rpm), o wrapper deve construir o caminho correto do script de acordo com a tabela de roteamento, e opções fora do intervalo válido devem resultar em código de saída 1.
 
-**Validates: Requirements 3.2, 3.3**
+**Validates: Requirements 3.2, 3.3, 27.1**
 
 ### Property 4: Idempotência de execução
 
 *Para qualquer* script (dev ou prod) executado duas vezes consecutivas no mesmo ambiente, o estado final do sistema após a segunda execução deve ser idêntico ao estado após a primeira execução, e a segunda execução deve exibir mensagens em amarelo (pulo) em vez de verde (ação) para todas as etapas já concluídas.
 
 **Validates: Requirements 24.3, 24.4, 25.1, 25.2, 25.3, 25.4**
+
+### Property 5: Idempotência do Dockhand
+
+*Para qualquer* estado do sistema onde o container Dockhand já está em execução, executar o script `docker/dockhand-setup.sh` novamente deve resultar em uma mensagem informativa (sem criar um segundo container) e exibir a URL de acesso existente.
+
+**Validates: Requirements 27.8**
 
 ## Error Handling
 
@@ -591,6 +636,7 @@ Dada a natureza do projeto (scripts shell com efeitos colaterais no sistema oper
   - `# Feature: suap-setup, Property 2: Classificação de distribuição`
   - `# Feature: suap-setup, Property 3: Roteamento do menu`
   - `# Feature: suap-setup, Property 4: Idempotência de execução`
+  - `# Feature: suap-setup, Property 5: Idempotência do Dockhand`
 
 ### Estrutura de Testes
 
@@ -604,7 +650,8 @@ tests/
 ├── property/
 │   ├── test_env_roundtrip.bats   # Property 1: round-trip .env
 │   ├── test_distro_paths.bats    # Property 2: distro → paths
-│   └── test_routing.bats         # Property 3: opção + distro → script
+│   ├── test_routing.bats         # Property 3: opção + distro → script
+│   └── test_idempotency.bats     # Property 4 & 5: idempotência
 ├── integration/
 │   ├── Dockerfile.debian         # Container Debian para testes
 │   ├── Dockerfile.fedora         # Container Fedora para testes
@@ -615,7 +662,8 @@ tests/
 └── smoke/
     ├── test_nginx_config.bats    # Validação do arquivo nginx/suap
     ├── test_docker_compose.bats  # Validação dos docker-compose files
-    └── test_supervisor_confs.bats # Validação dos .conf do Supervisor
+    ├── test_supervisor_confs.bats # Validação dos .conf do Supervisor
+    └── test_docker.bats          # Validação do script Dockhand e Docker
 ```
 
 ### Execução

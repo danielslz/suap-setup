@@ -23,6 +23,7 @@ Os scripts automatizam a instalação de dependências, configuração de ambien
 - `rpm/`: scripts específicos para Fedora/RHEL/CentOS.
 - `docker/dev/`: Dockerfile, Compose e script de setup para ambiente de desenvolvimento Docker.
 - `docker/prod/`: Dockerfile, Compose e script de setup para ambiente de produção Docker.
+- `docker/dockhand-setup.sh`: script para iniciar o Dockhand (interface web de gerenciamento Docker).
 - `nginx/`: configurações Nginx para SUAP (nativo e Docker).
 - `supervisor/`: arquivos de configuração e scripts de execução para Supervisor.
 - `tests/`: testes automatizados (unitários, propriedade, fumaça e integração).
@@ -42,6 +43,7 @@ Os scripts automatizam a instalação de dependências, configuração de ambien
 | `rpm/install-nginx.sh` | Infraestrutura | Instala e habilita Nginx e deploya configuração SUAP em Fedora/RHEL |
 | `docker/dev/docker-setup.sh` | Docker Dev | Constrói e inicia containers para desenvolvimento |
 | `docker/prod/docker-setup.sh` | Docker Prod | Constrói e inicia containers para produção |
+| `docker/dockhand-setup.sh` | Docker | Inicia o Dockhand para gerenciamento de containers via web |
 
 ## Funcionalidades principais
 
@@ -55,8 +57,9 @@ Os scripts automatizam a instalação de dependências, configuração de ambien
 4. Instalar Nginx
 5. Configurar ambiente dev via Docker
 6. Configurar ambiente prod via Docker
+7. Iniciar Dockhand
 
-O script detecta automaticamente se o sistema é Debian-like ou RPM-like usando `/etc/os-release` e chama o script equivalente em `deb/` ou `rpm/`. Para as opções Docker (5 e 6), não há dependência de distribuição — os scripts Docker funcionam em qualquer sistema com Docker e Docker Compose instalados.
+O script detecta automaticamente se o sistema é Debian-like ou RPM-like usando `/etc/os-release` e chama o script equivalente em `deb/` ou `rpm/`. Para as opções Docker (5, 6 e 7), não há dependência de distribuição — os scripts Docker funcionam em qualquer sistema com Docker e Docker Compose instalados.
 
 ### Variáveis de ambiente centralizadas (`.env`)
 
@@ -155,6 +158,27 @@ bash setup.sh  # Selecionar opção 6
 bash docker/prod/docker-setup.sh
 ```
 
+### Dockhand — Gerenciamento de containers (opção 7)
+
+O [Dockhand](https://dockhand.pro/) é uma interface web para gerenciamento de containers Docker. O script `docker/dockhand-setup.sh` automatiza o download e execução do Dockhand como container, sem necessidade de instalação adicional.
+
+| Propriedade | Valor |
+|-------------|-------|
+| Imagem | `lscr.io/linuxserver/dockhand:latest` |
+| Porta de acesso | `http://localhost:9093` |
+| Socket Docker | `/var/run/docker.sock` montado como volume |
+| Restart policy | `unless-stopped` |
+
+O script é idempotente: se o container Dockhand já estiver em execução, exibe apenas a URL de acesso sem tentar criar outro.
+
+```bash
+# Iniciar via wrapper
+bash setup.sh  # Selecionar opção 7
+
+# Ou diretamente
+bash docker/dockhand-setup.sh
+```
+
 ### Configuração Nginx para Docker (`nginx/suap.docker`)
 
 O arquivo `nginx/suap.docker` é uma configuração Nginx específica para ambientes Docker. Diferente do `nginx/suap` (que usa `127.0.0.1`), o `nginx/suap.docker` utiliza nomes de serviço do Docker Compose para resolução de upstream:
@@ -218,6 +242,7 @@ bash rpm/install-nginx.sh
 # Docker
 bash docker/dev/docker-setup.sh
 bash docker/prod/docker-setup.sh
+bash docker/dockhand-setup.sh
 ```
 
 > Observação: os scripts de produção devem ser executados como root. Os scripts Docker requerem Docker e Docker Compose instalados.
@@ -282,10 +307,11 @@ suap-setup/
 │   │   ├── Dockerfile                # Imagem dev
 │   │   ├── docker-compose.yml        # Compose dev (suap, db, redis)
 │   │   └── docker-setup.sh           # Script de setup Docker dev
-│   └── prod/
-│       ├── Dockerfile                # Imagem prod (multi-stage)
-│       ├── docker-compose.prod.yml   # Compose prod (suap, celery, redis, nginx)
-│       └── docker-setup.sh           # Script de setup Docker prod
+│   ├── prod/
+│   │   ├── Dockerfile                # Imagem prod (multi-stage)
+│   │   ├── docker-compose.prod.yml   # Compose prod (suap, celery, redis, nginx)
+│   │   └── docker-setup.sh           # Script de setup Docker prod
+│   └── dockhand-setup.sh             # Script de setup Dockhand
 ├── nginx/
 │   ├── suap                          # Config Nginx para instalação nativa
 │   └── suap.docker                   # Config Nginx para containers Docker
@@ -368,7 +394,7 @@ docker compose -f docker/prod/docker-compose.prod.yml down
 - Os scripts são projetados para serem idempotentes, evitando repetição de etapas quando possível.
 - A configuração de Supervisor e Nginx depende dos arquivos em `supervisor/` e `nginx/`.
 - Para Docker, o arquivo `nginx/suap.docker` utiliza nomes de serviço do Compose para resolução DNS interna.
-- As opções Docker (5 e 6) não dependem da distribuição detectada — funcionam em qualquer sistema com Docker.
+- As opções Docker (5, 6 e 7) não dependem da distribuição detectada — funcionam em qualquer sistema com Docker.
 
 ## Suporte
 

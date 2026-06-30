@@ -21,6 +21,7 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 - **Arquivo_Env**: Arquivo `.env` na raiz do projeto suap-setup que armazena variáveis de configuração compartilhadas entre todos os scripts (GIT_URL, PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, etc.).
 - **Arquivo_Env_Central**: Arquivo centralizado de configuração (`.env`) na raiz do repositório suap-setup que contém todas as variáveis reutilizáveis entre os scripts.
 - **Docker_Compose**: Ferramenta para definir e executar aplicações multi-container Docker usando arquivo `docker-compose.yml`.
+- **Dockhand**: Interface web para gerenciamento de containers Docker (https://dockhand.pro/), executada como container Docker.
 
 ## Requirements
 
@@ -56,8 +57,8 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 
 #### Acceptance Criteria
 
-1. WHEN a detecção da distribuição é concluída com sucesso, THE Wrapper SHALL exibir um menu com as opções: (1) Configurar ambiente dev, (2) Configurar ambiente prod, (3) Instalar Redis, (4) Instalar Nginx, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker.
-2. WHEN o usuário seleciona uma opção válida (1 a 6), THE Wrapper SHALL executar o script correspondente à distribuição detectada ou ao ambiente Docker.
+1. WHEN a detecção da distribuição é concluída com sucesso, THE Wrapper SHALL exibir um menu com as opções: (1) Configurar ambiente dev, (2) Configurar ambiente prod, (3) Instalar Redis, (4) Instalar Nginx, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker, (7) Iniciar Dockhand.
+2. WHEN o usuário seleciona uma opção válida (1 a 7), THE Wrapper SHALL executar o script correspondente à distribuição detectada, ao ambiente Docker ou ao Dockhand.
 3. IF o usuário informa uma opção inválida, THEN THE Wrapper SHALL exibir uma mensagem de erro e encerrar com código de saída 1.
 4. IF o arquivo do script correspondente não é encontrado no diretório, THEN THE Wrapper SHALL exibir uma mensagem de erro e encerrar com código de saída 2.
 
@@ -322,3 +323,18 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 
 1. WHEN a execução do Script_Dev é concluída com sucesso, THE Script_Dev SHALL exibir uma mensagem de sucesso e instruções para: recarregar o bashrc, editar variáveis de ambiente, acessar a pasta do SUAP e rodar o servidor de desenvolvimento.
 2. WHEN a execução do Script_Prod é concluída com sucesso, THE Script_Prod SHALL exibir uma mensagem de sucesso e instruções para: recarregar o bashrc, editar variáveis de ambiente, acessar a pasta do SUAP e iniciar os serviços configurados via Supervisor.
+
+### Requirement 27: Integração com Dockhand para gerenciamento de containers
+
+**User Story:** Como administrador de sistemas, eu quero iniciar o Dockhand a partir do menu do setup, para que eu possa gerenciar containers Docker por meio de uma interface web sem instalar ferramentas adicionais.
+
+#### Acceptance Criteria
+
+1. WHEN o usuário seleciona a opção 7 no menu, THE Wrapper SHALL verificar se o Docker está disponível no sistema antes de prosseguir.
+2. IF o Docker não está instalado ou o daemon não está em execução, THEN THE Wrapper SHALL exibir uma mensagem de erro informando que o Docker é pré-requisito para o Dockhand e encerrar com código de saída 1.
+3. WHEN o Docker está disponível, THE Wrapper SHALL executar `docker pull lscr.io/linuxserver/dockhand:latest` para obter a imagem mais recente do Dockhand.
+4. WHEN a imagem é obtida, THE Wrapper SHALL iniciar o container Dockhand expondo a interface web na porta 9093 do host.
+5. WHEN o container Dockhand é iniciado, THE Wrapper SHALL montar o socket do Docker (`/var/run/docker.sock`) como volume para permitir o gerenciamento dos containers do host.
+6. WHEN o container Dockhand é iniciado com sucesso, THE Wrapper SHALL exibir uma mensagem informando a URL de acesso à interface web (http://localhost:9093).
+7. IF o container Dockhand falha ao iniciar, THEN THE Wrapper SHALL exibir uma mensagem de erro com o motivo da falha e encerrar com código de saída 1.
+8. WHEN já existe um container Dockhand em execução, THE Wrapper SHALL exibir uma mensagem informando que o Dockhand já está ativo e mostrar a URL de acesso.

@@ -1,12 +1,12 @@
 #!/usr/bin/env bats
 # Feature: suap-setup, Property 3: Roteamento do menu produz caminho de script correto
 #
-# Para qualquer combinação válida de opção do menu (1-6) e tipo de distribuição
+# Para qualquer combinação válida de opção do menu (1-7) e tipo de distribuição
 # detectada (deb/rpm), o wrapper deve construir o caminho correto do script de
 # acordo com a tabela de roteamento, e opções fora do intervalo válido devem
 # resultar em código de saída 1.
 #
-# **Validates: Requirements 3.2, 3.3**
+# **Validates: Requirements 3.2, 3.3, 27.1**
 
 setup() {
     load '../test_helper/common-setup'
@@ -48,6 +48,9 @@ _resolve_target_script() {
         6)
             echo "docker/prod/docker-setup.sh"
             ;;
+        7)
+            echo "docker/dockhand-setup.sh"
+            ;;
         *)
             return 1
             ;;
@@ -69,8 +72,8 @@ random_invalid_option() {
     local category=$(( RANDOM % 4 ))
     case $category in
         0)
-            # Numbers outside 1-6 (0, 7-99, negative)
-            local -a nums=("0" "7" "8" "9" "10" "42" "99" "-1" "-5" "100" "255")
+            # Numbers outside 1-7 (0, 8-99, negative)
+            local -a nums=("0" "8" "9" "10" "42" "99" "-1" "-5" "100" "255")
             random_choice "${nums[@]}"
             ;;
         1)
@@ -124,13 +127,13 @@ random_invalid_option() {
     done
 }
 
-@test "Property 3.2: Docker options (5, 6) produce fixed paths regardless of distro (100 iterations)" {
+@test "Property 3.2: Docker options (5, 6, 7) produce fixed paths regardless of distro (100 iterations)" {
     local iterations=100
     local i
 
-    local -a docker_options=("5" "6")
+    local -a docker_options=("5" "6" "7")
     local -a distro_types=("deb" "rpm")
-    local -a expected_paths=("docker/dev/docker-setup.sh" "docker/prod/docker-setup.sh")
+    local -a expected_paths=("docker/dev/docker-setup.sh" "docker/prod/docker-setup.sh" "docker/dockhand-setup.sh")
 
     for ((i = 1; i <= iterations; i++)); do
         local option
@@ -149,8 +152,10 @@ random_invalid_option() {
         local expected
         if [ "$option" = "5" ]; then
             expected="${expected_paths[0]}"
-        else
+        elif [ "$option" = "6" ]; then
             expected="${expected_paths[1]}"
+        else
+            expected="${expected_paths[2]}"
         fi
 
         [ "$result" = "$expected" ] || fail "Iteration $i: option=$option distro=$distro → expected '$expected', got '$result'"
@@ -181,11 +186,11 @@ random_invalid_option() {
     done
 }
 
-@test "Property 3.4: All valid options (1-6) produce paths that match existing project scripts (100 iterations)" {
+@test "Property 3.4: All valid options (1-7) produce paths that match existing project scripts (100 iterations)" {
     local iterations=100
     local i
 
-    local -a all_options=("1" "2" "3" "4" "5" "6")
+    local -a all_options=("1" "2" "3" "4" "5" "6" "7")
     local -a distro_types=("deb" "rpm")
 
     for ((i = 1; i <= iterations; i++)); do
