@@ -175,6 +175,22 @@ GIT_URL=${git_url}
 # Autenticação do Celery Flower (interface web de monitoramento)
 # Formato: usuario:senha
 #CELERY_FLOWER_AUTH=admin:secret
+
+# Máximo de workers do Celery (autoscale)
+#CELERY_MAX_WORKERS=5
+
+# Mínimo de workers do Celery (autoscale)
+#CELERY_MIN_WORKERS=2
+
+# Filas do Celery (separadas por vírgula)
+#CELERY_QUEUE=geral,celery_beat
+
+# --- Gunicorn (produção) ---
+# Número de workers do Gunicorn (recomendado: 2n + 1, onde n = nº de CPUs)
+#GUNICORN_WORKERS=5
+
+# Número de threads por worker do Gunicorn
+#GUNICORN_THREADS=1
 EOF
 
   # --- Confirmação ---

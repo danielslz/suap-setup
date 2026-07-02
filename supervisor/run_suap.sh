@@ -19,8 +19,8 @@ LOG_DIR=${BASE_DIR}/logs
 LOG_FILE=${LOG_DIR}/gunicorn.log
 TIMEOUT=600  # 10 minutos
 
-NUM_WORKERS=5 # idealmente deve ser 2n + 1 (n = qtd de processadores)
-NUM_THREADS=1
+NUM_WORKERS=${GUNICORN_WORKERS:-5} # idealmente deve ser 2n + 1 (n = qtd de processadores)
+NUM_THREADS=${GUNICORN_THREADS:-1}
 
 # Detectar usuário de serviço: www-data (Debian) ou nginx (RPM)
 if id "www-data" &>/dev/null; then

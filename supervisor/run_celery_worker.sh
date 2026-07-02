@@ -13,9 +13,9 @@ fi
 : "${SUAP_DIR:=$BASE_DIR/suap}"
 : "${VENV_DIR:=$BASE_DIR/venv}"
 
-# Variáveis de execução
-MAX_WORKERS=5
-MIN_WORKERS=2
+# Variáveis de execução (configuráveis via .env)
+MAX_WORKERS=${CELERY_MAX_WORKERS:-5}
+MIN_WORKERS=${CELERY_MIN_WORKERS:-2}
 CELERY_QUEUE=${CELERY_QUEUE:-geral,celery_beat}
 
 # Execução

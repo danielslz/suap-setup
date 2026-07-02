@@ -283,6 +283,10 @@ case ${supervisor_choice} in
     echo "     ${GREEN}${BASE_DIR}/.env${NO_COLOR}"
     echo "     - ${YELLOW}CELERY_BROKER_URL${NO_COLOR}=redis://SEU_HOST_REDIS:6379/3"
     echo "     - ${YELLOW}CELERY_FLOWER_AUTH${NO_COLOR}=usuario:senha"
+    echo ""
+    echo "  ${YELLOW}Opcionais (workers):${NO_COLOR}"
+    echo "     - ${YELLOW}CELERY_MAX_WORKERS${NO_COLOR}=5  (padrão: 5)"
+    echo "     - ${YELLOW}CELERY_MIN_WORKERS${NO_COLOR}=2  (padrão: 2)"
     ;;
   3)
     echo "  4. Para rodar SUAP e todos os serviços Celery:"
@@ -296,6 +300,11 @@ case ${supervisor_choice} in
     echo "     ${GREEN}${BASE_DIR}/.env${NO_COLOR}"
     echo "     - ${YELLOW}CELERY_BROKER_URL${NO_COLOR}=redis://SEU_HOST_REDIS:6379/3"
     echo "     - ${YELLOW}CELERY_FLOWER_AUTH${NO_COLOR}=usuario:senha"
+    echo ""
+    echo "  ${YELLOW}Opcionais (workers):${NO_COLOR}"
+    echo "     - ${YELLOW}GUNICORN_WORKERS${NO_COLOR}=5   (padrão: 5, recomendado: 2n+1 onde n=CPUs)"
+    echo "     - ${YELLOW}CELERY_MAX_WORKERS${NO_COLOR}=5 (padrão: 5)"
+    echo "     - ${YELLOW}CELERY_MIN_WORKERS${NO_COLOR}=2 (padrão: 2)"
     ;;
 esac
 echo ""
