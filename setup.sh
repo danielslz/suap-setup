@@ -33,7 +33,7 @@ echo "3) Instalar Redis"
 echo "4) Instalar Nginx"
 echo "5) Configurar ambiente dev via Docker"
 echo "6) Configurar ambiente prod via Docker"
-echo "7) Iniciar Dockhand"
+echo "7) Iniciar Dockhand (via Docker)"
 echo "0) Sair"
 echo ""
 read -rp "Escolha uma opção [0-7]: " CHOICE
