@@ -40,7 +40,7 @@ PYMSSQL="freetds-devel"
 LXML="xmlsec1-devel libxml2-devel libxslt-devel"
 WEASYPRINT="pango harfbuzz"
 MAGIC="file-libs"
-PDF="qpdf ghostscript poppler-utils mupdf-tools wkhtmltopdf"
+PDF="qpdf ghostscript poppler-utils mupdf wkhtmltopdf"
 
 ALL_PACKAGES="$BASE $PYTHON $LDAP $PILLOW $PYMSSQL $LXML $WEASYPRINT $MAGIC $PDF"
 
