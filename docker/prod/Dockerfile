@@ -1,15 +1,21 @@
-# docker/prod/Dockerfile - Imagem de produção do SUAP (multi-stage build)
-# Stage 1: builder - instala dependências Python
-# Stage 2: runtime - imagem mínima com apenas o necessário para execução
+# docker/prod/Dockerfile - Imagem de produção do SUAP (multi-stage build com UV)
+# Referência: https://github.com/astral-sh/uv-docker-example/blob/main/multistage.Dockerfile
+#
+# Stage 1 (builder): instala dependências com UV
+# Stage 2 (runtime): imagem mínima sem UV, apenas o venv e runtime libs
 
 # ============================================================
 # Stage 1: Builder
 # ============================================================
-FROM python:3.12-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.12-trixie-slim AS builder
 
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+ENV UV_NO_DEV=1
+ENV UV_PYTHON_DOWNLOADS=0
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Instalar dependências de compilação necessárias para pip install
+# Instalar dependências de compilação necessárias para build de pacotes Python
 RUN apt-get update -qy && apt-get install -y --no-install-recommends \
     build-essential \
     git \
@@ -31,29 +37,32 @@ RUN apt-get update -qy && apt-get install -y --no-install-recommends \
     swig \
     && rm -rf /var/lib/apt/lists/*
 
-# Criar virtualenv para produção
-RUN python3 -m venv /opt/venv
-ENV PATH="/opt/venv/bin:${PATH}"
+WORKDIR /app
 
-# Copiar arquivos de dependências primeiro (cache de camadas)
-WORKDIR /build
-COPY pyproject.toml ./
-COPY requirements/ ./requirements/
+# Instalar dependências primeiro (sem o projeto — melhor cache de camadas)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    uv sync --locked --no-install-project
 
-# Instalar dependências Python
-RUN pip install --upgrade pip && \
-    if [ -f pyproject.toml ]; then \
-      pip install . --no-cache-dir || \
-      pip install -r requirements/production.txt --no-cache-dir; \
-    elif [ -d requirements ]; then \
-      pip install -r requirements/production.txt --no-cache-dir; \
-    fi && \
-    pip install "setuptools<82.0.0" gunicorn --no-cache-dir
+# Copiar código da aplicação
+COPY . /app
+
+# Sync final incluindo o projeto (non-editable para produção)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-editable
+
+# Instalar gunicorn no venv
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install gunicorn
 
 # ============================================================
 # Stage 2: Runtime
 # ============================================================
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim-trixie AS runtime
+
+# IMPORTANTE: a imagem runtime deve ter a mesma versão de Python que o builder
+# para que os paths do executável coincidam.
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -93,21 +102,23 @@ RUN sed -i '/pt_BR.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
 ENV LANG=pt_BR.UTF-8
 ENV LC_ALL=pt_BR.UTF-8
 
-# Copiar virtualenv do builder
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:${PATH}"
+# Criar usuário não-root com GID/UID fixos
+RUN groupadd --system --gid 999 suap \
+    && useradd --system --gid 999 --uid 999 --create-home suap
 
 # Criar diretórios necessários
-RUN mkdir -p /opt/suap /opt/suap/deploy/static /opt/suap/deploy/media /opt/logs
+RUN mkdir -p /opt/suap/deploy/static /opt/suap/deploy/media /opt/logs \
+    && chown -R suap:suap /opt/suap /opt/logs
 
-# Copiar código da aplicação
+# Copiar a aplicação do builder (inclui .venv)
+COPY --from=builder --chown=suap:suap /app /opt/suap
+
+# Colocar o virtualenv no PATH
+ENV PATH="/opt/suap/.venv/bin:$PATH"
+
 WORKDIR /opt/suap
-COPY . .
 
-# Criar usuário não-root para execução
-RUN useradd -r -s /bin/false suap && \
-    chown -R suap:suap /opt/suap /opt/logs
-
+# Executar como usuário não-root
 USER suap
 
 # Expor porta do Gunicorn

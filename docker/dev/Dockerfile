@@ -1,12 +1,18 @@
 # docker/dev/Dockerfile - Imagem de desenvolvimento do SUAP
-# Contém todas as dependências necessárias para rodar o SUAP localmente
+# Usa imagem oficial do UV com Python 3.12 pré-instalado
+# Referência: https://docs.astral.sh/uv/guides/integration/docker/
 
-FROM python:3.12-slim
+FROM ghcr.io/astral-sh/uv:python3.12-trixie-slim
 
 # Evitar prompts interativos durante instalação de pacotes
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Instalar dependências do sistema (mesmas de deb/suap-dev.sh)
+# Configurações do UV
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+ENV UV_PYTHON_DOWNLOADS=0
+
+# Instalar dependências do sistema necessárias para compilação de pacotes Python
 RUN apt-get update -qy && apt-get install -y --no-install-recommends \
     # Ferramentas de compilação e utilitários
     locales vim git build-essential openssl curl wget libpq-dev swig \
@@ -31,23 +37,24 @@ RUN sed -i '/pt_BR.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
 ENV LANG=pt_BR.UTF-8
 ENV LC_ALL=pt_BR.UTF-8
 
-# Instalar UV (gerenciador de pacotes Python)
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:${PATH}"
-
 # Definir diretório de trabalho
 WORKDIR /app
 
-# Copiar arquivos de dependências primeiro (para cache de camadas Docker)
-COPY pyproject.toml uv.lock* ./
+# Instalar dependências (camada separada do código - melhor cache)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    uv sync --locked --group dev --no-install-project
 
-# Instalar dependências Python (se pyproject.toml existir)
-RUN if [ -f pyproject.toml ]; then \
-      uv sync --group dev || true; \
-    fi
+# Copiar o código da aplicação
+COPY . /app
 
-# Copiar o restante do projeto
-COPY . .
+# Sync final incluindo o projeto
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --group dev
+
+# Colocar o virtualenv no PATH
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Expor porta do servidor de desenvolvimento
 EXPOSE 8000
