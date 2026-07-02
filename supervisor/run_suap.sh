@@ -21,8 +21,18 @@ TIMEOUT=600  # 10 minutos
 
 NUM_WORKERS=5 # idealmente deve ser 2n + 1 (n = qtd de processadores)
 NUM_THREADS=1
-USER=www-data
-GROUP=www-data
+
+# Detectar usuário de serviço: www-data (Debian) ou nginx (RPM)
+if id "www-data" &>/dev/null; then
+  USER=www-data
+  GROUP=www-data
+elif id "nginx" &>/dev/null; then
+  USER=nginx
+  GROUP=nginx
+else
+  USER=$(whoami)
+  GROUP=$(id -gn)
+fi
 
 # Execução
 echo "### Iniciando Gunicorn"
