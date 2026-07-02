@@ -103,6 +103,10 @@ else
     msg_skip ".env já foi gerado"
 fi
 
+# --- Copiar .env centralizado para BASE_DIR (usado pelos runners do Supervisor) ---
+msg_action "Copiando .env para ${BASE_DIR}/.env (usado pelos runners do Supervisor)"
+cp "$ENV_FILE" "$BASE_DIR/.env"
+
 # --- Instalar UV (se não disponível no PATH) ---
 if command -v uv &>/dev/null; then
     msg_skip "UV já está instalado"

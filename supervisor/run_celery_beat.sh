@@ -1,14 +1,20 @@
 #!/bin/bash
 
-### definicao de variaveis
-BASE_DIR=/opt
-SUAP_DIR=$BASE_DIR/suap
-VENV_DIR=$BASE_DIR/venv
+# Carregar variáveis centralizadas do .env de produção
+ENV_FILE="/opt/.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  source "$ENV_FILE"
+  set +a
+fi
 
-GREEN=`tput setaf 2`
-NO_COLOR=`tput sgr0`
+# Defaults caso variáveis não estejam definidas
+: "${BASE_DIR:=/opt}"
+: "${SUAP_DIR:=$BASE_DIR/suap}"
+: "${VENV_DIR:=$BASE_DIR/venv}"
 
-echo "${GREEN}### Iniciando Celery Beat${NO_COLOR}"
-source $VENV_DIR/suap/bin/activate
-cd $SUAP_DIR
+# Execução
+echo "### Iniciando Celery Beat"
+source "${VENV_DIR}/bin/activate"
+cd "${SUAP_DIR}"
 celery -A suap beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
