@@ -87,52 +87,52 @@ interactive_env_wizard() {
   local env_path="${1}"
 
   echo ""
-  echo "=== Assistente de Configuração do suap-setup ==="
+  echo "${GREEN}=== Assistente de Configuração do suap-setup ===${NO_COLOR}"
   echo "Responda às perguntas abaixo para criar o arquivo .env."
   echo "Pressione Enter para aceitar o valor padrão entre colchetes."
   echo ""
 
   # --- PYTHON_VERSION ---
-  echo "PYTHON_VERSION"
-  echo "  Descrição: Versão do Python a ser utilizada na instalação."
-  echo "  Exemplos: 3.11, 3.12, 3.13"
+  echo "${GREEN}PYTHON_VERSION${NO_COLOR}"
+  echo "  ${YELLOW}Descrição:${NO_COLOR} Versão do Python a ser utilizada na instalação."
+  echo "  ${YELLOW}Exemplos:${NO_COLOR} 3.11, 3.12, 3.13"
   local default_python="3.12"
-  read -rp "  Valor [${default_python}]: " input_python
+  read -rp "  Valor [${GREEN}${default_python}${NO_COLOR}]: " input_python
   local python_version="${input_python:-${default_python}}"
   echo ""
 
   # --- BASE_DIR ---
-  echo "BASE_DIR"
-  echo "  Descrição: Diretório base para instalação do projeto."
-  echo "  Exemplos: \$HOME/Projetos (dev), /opt (prod)"
+  echo "${GREEN}BASE_DIR${NO_COLOR}"
+  echo "  ${YELLOW}Descrição:${NO_COLOR} Diretório base para instalação do projeto."
+  echo "  ${YELLOW}Exemplos:${NO_COLOR} \$HOME/Projetos (dev), /opt (prod)"
   local default_basedir="\$HOME/Projetos"
-  read -rp "  Valor [${default_basedir}]: " input_basedir
+  read -rp "  Valor [${GREEN}${default_basedir}${NO_COLOR}]: " input_basedir
   local base_dir="${input_basedir:-${default_basedir}}"
   echo ""
 
   # --- SUAP_DIR ---
-  echo "SUAP_DIR"
-  echo "  Descrição: Diretório onde o código SUAP será clonado."
-  echo "  Exemplos: \${BASE_DIR}/suap, /opt/suap"
+  echo "${GREEN}SUAP_DIR${NO_COLOR}"
+  echo "  ${YELLOW}Descrição:${NO_COLOR} Diretório onde o código SUAP será clonado."
+  echo "  ${YELLOW}Exemplos:${NO_COLOR} \${BASE_DIR}/suap, /opt/suap"
   local default_suapdir="\${BASE_DIR}/suap"
-  read -rp "  Valor [${default_suapdir}]: " input_suapdir
+  read -rp "  Valor [${GREEN}${default_suapdir}${NO_COLOR}]: " input_suapdir
   local suap_dir="${input_suapdir:-${default_suapdir}}"
   echo ""
 
   # --- VENV_DIR ---
-  echo "VENV_DIR"
-  echo "  Descrição: Diretório do virtualenv Python."
-  echo "  Exemplos: \${SUAP_DIR}/.venv (dev), /opt/venv/suap (prod)"
+  echo "${GREEN}VENV_DIR${NO_COLOR}"
+  echo "  ${YELLOW}Descrição:${NO_COLOR} Diretório do virtualenv Python."
+  echo "  ${YELLOW}Exemplos:${NO_COLOR} \${SUAP_DIR}/.venv (dev), /opt/venv/suap (prod)"
   local default_venvdir="\${SUAP_DIR}/.venv"
-  read -rp "  Valor [${default_venvdir}]: " input_venvdir
+  read -rp "  Valor [${GREEN}${default_venvdir}${NO_COLOR}]: " input_venvdir
   local venv_dir="${input_venvdir:-${default_venvdir}}"
   echo ""
 
   # --- GIT_URL ---
-  echo "GIT_URL"
-  echo "  Descrição: URL do repositório Git do SUAP (obrigatório)."
-  echo "  Exemplos: https://github.com/org/suap.git, git@github.com:org/suap.git"
-  read -rp "  Valor (obrigatório): " input_giturl
+  echo "${GREEN}GIT_URL${NO_COLOR}"
+  echo "  ${YELLOW}Descrição:${NO_COLOR} URL do repositório Git do SUAP (${RED}obrigatório${NO_COLOR})."
+  echo "  ${YELLOW}Exemplos:${NO_COLOR} https://github.com/org/suap.git, git@github.com:org/suap.git"
+  read -rp "  Valor (${RED}obrigatório${NO_COLOR}): " input_giturl
   local git_url="${input_giturl}"
   echo ""
 
@@ -169,15 +169,16 @@ GIT_URL=${git_url}
 EOF
 
   # --- Confirmação ---
-  echo "=== Arquivo .env criado com sucesso ==="
-  echo "  Caminho: ${env_path}"
+  echo ""
+  echo "${GREEN}=== Arquivo .env criado com sucesso ===${NO_COLOR}"
+  echo "  Caminho: ${GREEN}${env_path}${NO_COLOR}"
   echo ""
   echo "  Valores configurados:"
-  echo "    PYTHON_VERSION = ${python_version}"
-  echo "    BASE_DIR       = ${base_dir}"
-  echo "    SUAP_DIR       = ${suap_dir}"
-  echo "    VENV_DIR       = ${venv_dir}"
-  echo "    GIT_URL        = ${git_url}"
+  echo "    ${YELLOW}PYTHON_VERSION${NO_COLOR} = ${python_version}"
+  echo "    ${YELLOW}BASE_DIR${NO_COLOR}       = ${base_dir}"
+  echo "    ${YELLOW}SUAP_DIR${NO_COLOR}       = ${suap_dir}"
+  echo "    ${YELLOW}VENV_DIR${NO_COLOR}       = ${venv_dir}"
+  echo "    ${YELLOW}GIT_URL${NO_COLOR}        = ${git_url}"
   echo ""
   msg_action "Configuração salva. Prosseguindo com a execução..."
 }
