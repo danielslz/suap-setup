@@ -166,6 +166,15 @@ VENV_DIR=${venv_dir}
 
 # URL do repositório Git do SUAP
 GIT_URL=${git_url}
+
+# --- Celery (produção) ---
+# URL do broker Redis usado pelo Celery
+# Formato: redis://HOST:PORTA/DB
+#CELERY_BROKER_URL=redis://127.0.0.1:6379/3
+
+# Autenticação do Celery Flower (interface web de monitoramento)
+# Formato: usuario:senha
+#CELERY_FLOWER_AUTH=admin:secret
 EOF
 
   # --- Confirmação ---

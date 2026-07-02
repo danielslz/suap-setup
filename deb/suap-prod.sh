@@ -278,6 +278,11 @@ case ${supervisor_choice} in
     echo "     - Beat: ${GREEN}supervisorctl start celery-beat${NO_COLOR}"
     echo "     - Flower: ${GREEN}supervisorctl start celery-flower${NO_COLOR}"
     echo "     - Todos: ${GREEN}supervisorctl start celery-worker celery-beat celery-flower${NO_COLOR}"
+    echo ""
+    echo "  ${YELLOW}⚠️  IMPORTANTE: Antes de iniciar o Flower, configure no .env:${NO_COLOR}"
+    echo "     ${GREEN}${BASE_DIR}/.env${NO_COLOR}"
+    echo "     - ${YELLOW}CELERY_BROKER_URL${NO_COLOR}=redis://SEU_HOST_REDIS:6379/3"
+    echo "     - ${YELLOW}CELERY_FLOWER_AUTH${NO_COLOR}=usuario:senha"
     ;;
   3)
     echo "  4. Para rodar SUAP e todos os serviços Celery:"
@@ -286,6 +291,11 @@ case ${supervisor_choice} in
     echo "     - Celery Beat: ${GREEN}supervisorctl start celery-beat${NO_COLOR}"
     echo "     - Celery Flower: ${GREEN}supervisorctl start celery-flower${NO_COLOR}"
     echo "     - Todos: ${GREEN}supervisorctl start all${NO_COLOR}"
+    echo ""
+    echo "  ${YELLOW}⚠️  IMPORTANTE: Antes de iniciar o Flower, configure no .env:${NO_COLOR}"
+    echo "     ${GREEN}${BASE_DIR}/.env${NO_COLOR}"
+    echo "     - ${YELLOW}CELERY_BROKER_URL${NO_COLOR}=redis://SEU_HOST_REDIS:6379/3"
+    echo "     - ${YELLOW}CELERY_FLOWER_AUTH${NO_COLOR}=usuario:senha"
     ;;
 esac
 echo ""
