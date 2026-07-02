@@ -182,7 +182,7 @@ case $supervisor_choice in
     1)
         msg_action "Configurando supervisor para SUAP"
         if [ -f "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" ]; then
-            cp "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" "$SUPERVISOR_CONF_DIR/suap.conf"
+            cp "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" "$SUPERVISOR_CONF_DIR/suap.ini"
             cp "$INSTALL_SCRIPT_DIR/supervisor/run_suap.sh" "$BASE_DIR/scripts/run_suap.sh"
             chmod +x "$BASE_DIR/scripts/run_suap.sh"
             FILES_COPIED=true
@@ -195,13 +195,13 @@ case $supervisor_choice in
     2)
         msg_action "Configurando supervisor para Celery"
         if [ -f "$INSTALL_SCRIPT_DIR/supervisor/celery_worker.conf" ]; then
-            cp "$INSTALL_SCRIPT_DIR/supervisor/celery_worker.conf" "$SUPERVISOR_CONF_DIR/celery_worker.conf"
+            cp "$INSTALL_SCRIPT_DIR/supervisor/celery_worker.conf" "$SUPERVISOR_CONF_DIR/celery_worker.ini"
             cp "$INSTALL_SCRIPT_DIR/supervisor/run_celery_worker.sh" "$BASE_DIR/scripts/run_celery_worker.sh"
             chmod +x "$BASE_DIR/scripts/run_celery_worker.sh"
-            cp "$INSTALL_SCRIPT_DIR/supervisor/celery_beat.conf" "$SUPERVISOR_CONF_DIR/celery_beat.conf"
+            cp "$INSTALL_SCRIPT_DIR/supervisor/celery_beat.conf" "$SUPERVISOR_CONF_DIR/celery_beat.ini"
             cp "$INSTALL_SCRIPT_DIR/supervisor/run_celery_beat.sh" "$BASE_DIR/scripts/run_celery_beat.sh"
             chmod +x "$BASE_DIR/scripts/run_celery_beat.sh"
-            cp "$INSTALL_SCRIPT_DIR/supervisor/celery_flower.conf" "$SUPERVISOR_CONF_DIR/celery_flower.conf"
+            cp "$INSTALL_SCRIPT_DIR/supervisor/celery_flower.conf" "$SUPERVISOR_CONF_DIR/celery_flower.ini"
             cp "$INSTALL_SCRIPT_DIR/supervisor/run_celery_flower.sh" "$BASE_DIR/scripts/run_celery_flower.sh"
             chmod +x "$BASE_DIR/scripts/run_celery_flower.sh"
             FILES_COPIED=true
@@ -214,16 +214,16 @@ case $supervisor_choice in
     3)
         msg_action "Configurando supervisor para SUAP e Celery"
         if [ -f "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" ] && [ -f "$INSTALL_SCRIPT_DIR/supervisor/celery_worker.conf" ]; then
-            cp "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" "$SUPERVISOR_CONF_DIR/suap.conf"
+            cp "$INSTALL_SCRIPT_DIR/supervisor/suap.conf" "$SUPERVISOR_CONF_DIR/suap.ini"
             cp "$INSTALL_SCRIPT_DIR/supervisor/run_suap.sh" "$BASE_DIR/scripts/run_suap.sh"
             chmod +x "$BASE_DIR/scripts/run_suap.sh"
-            cp "$INSTALL_SCRIPT_DIR/supervisor/celery_worker.conf" "$SUPERVISOR_CONF_DIR/celery_worker.conf"
+            cp "$INSTALL_SCRIPT_DIR/supervisor/celery_worker.conf" "$SUPERVISOR_CONF_DIR/celery_worker.ini"
             cp "$INSTALL_SCRIPT_DIR/supervisor/run_celery_worker.sh" "$BASE_DIR/scripts/run_celery_worker.sh"
             chmod +x "$BASE_DIR/scripts/run_celery_worker.sh"
-            cp "$INSTALL_SCRIPT_DIR/supervisor/celery_beat.conf" "$SUPERVISOR_CONF_DIR/celery_beat.conf"
+            cp "$INSTALL_SCRIPT_DIR/supervisor/celery_beat.conf" "$SUPERVISOR_CONF_DIR/celery_beat.ini"
             cp "$INSTALL_SCRIPT_DIR/supervisor/run_celery_beat.sh" "$BASE_DIR/scripts/run_celery_beat.sh"
             chmod +x "$BASE_DIR/scripts/run_celery_beat.sh"
-            cp "$INSTALL_SCRIPT_DIR/supervisor/celery_flower.conf" "$SUPERVISOR_CONF_DIR/celery_flower.conf"
+            cp "$INSTALL_SCRIPT_DIR/supervisor/celery_flower.conf" "$SUPERVISOR_CONF_DIR/celery_flower.ini"
             cp "$INSTALL_SCRIPT_DIR/supervisor/run_celery_flower.sh" "$BASE_DIR/scripts/run_celery_flower.sh"
             chmod +x "$BASE_DIR/scripts/run_celery_flower.sh"
             FILES_COPIED=true
@@ -240,8 +240,8 @@ case $supervisor_choice in
 esac
 
 if [ "$FILES_COPIED" = "true" ]; then
-    # Ajustar usuário nos .conf do Supervisor (www-data → nginx para RPM)
-    sed -i 's/www-data/nginx/g' "$SUPERVISOR_CONF_DIR"/*.conf 2>/dev/null || true
+    # Ajustar usuário nos .ini do Supervisor (www-data → nginx para RPM)
+    sed -i 's/www-data/nginx/g' "$SUPERVISOR_CONF_DIR"/*.ini 2>/dev/null || true
     supervisorctl reread
     supervisorctl update
 else
