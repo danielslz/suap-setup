@@ -32,7 +32,7 @@ SUPERVISOR_CONF_DIR=$(get_supervisor_conf_dir)
 
 # --- Instalar dependências do sistema ---
 msg_action "Verificando dependências do sistema operacional"
-BASE="glibc-langpack-pt_BR vim git openssl supervisor curl postgresql-devel tmpwatch swig cronie chrony gcc gcc-c++"
+BASE="glibc-langpack-pt vim git openssl supervisor curl postgresql-devel tmpwatch swig cronie chrony gcc gcc-c++"
 PYTHON="python3-devel python3-virtualenv python3-pip python3.12-devel"
 LDAP="openldap-devel cyrus-sasl-devel"
 PILLOW="libjpeg-turbo-devel freetype-devel zlib-devel"
