@@ -240,6 +240,8 @@ case $supervisor_choice in
 esac
 
 if [ "$FILES_COPIED" = "true" ]; then
+    # Ajustar usuário nos .conf do Supervisor (www-data → nginx para RPM)
+    sed -i 's/www-data/nginx/g' "$SUPERVISOR_CONF_DIR"/*.conf 2>/dev/null || true
     supervisorctl reread
     supervisorctl update
 else
@@ -247,9 +249,15 @@ else
 fi
 
 # --- Corrigir permissões ---
-chown -R www-data:www-data "$SUAP_DIR"
-chown -R www-data:www-data "$BASE_DIR/logs"
-chown -R www-data:www-data "$VENV_DIR"
+# Em distribuições RPM, o usuário padrão de serviços web é 'nginx'
+WEBUSER="nginx"
+if ! id "$WEBUSER" &>/dev/null; then
+    msg_action "Criando usuário $WEBUSER para execução dos serviços"
+    useradd -r -s /sbin/nologin "$WEBUSER"
+fi
+chown -R "$WEBUSER:$WEBUSER" "$SUAP_DIR"
+chown -R "$WEBUSER:$WEBUSER" "$BASE_DIR/logs"
+chown -R "$WEBUSER:$WEBUSER" "$VENV_DIR"
 
 # --- Mensagem final ---
 echo ""
