@@ -166,6 +166,13 @@ systemctl enable --now supervisord
 mkdir -p "$BASE_DIR/logs"
 mkdir -p "$BASE_DIR/scripts"
 
+# Garantir que o usuário de serviço existe antes de configurar o Supervisor
+WEBUSER="nginx"
+if ! id "$WEBUSER" &>/dev/null; then
+    msg_action "Criando usuário $WEBUSER para execução dos serviços"
+    useradd -r -s /sbin/nologin "$WEBUSER"
+fi
+
 # Menu do Supervisor
 echo ""
 echo "Qual serviço você deseja configurar no Supervisor?"
@@ -249,12 +256,6 @@ else
 fi
 
 # --- Corrigir permissões ---
-# Em distribuições RPM, o usuário padrão de serviços web é 'nginx'
-WEBUSER="nginx"
-if ! id "$WEBUSER" &>/dev/null; then
-    msg_action "Criando usuário $WEBUSER para execução dos serviços"
-    useradd -r -s /sbin/nologin "$WEBUSER"
-fi
 chown -R "$WEBUSER:$WEBUSER" "$SUAP_DIR"
 chown -R "$WEBUSER:$WEBUSER" "$BASE_DIR/logs"
 chown -R "$WEBUSER:$WEBUSER" "$VENV_DIR"
