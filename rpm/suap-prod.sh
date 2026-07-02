@@ -103,27 +103,51 @@ else
     msg_skip ".env já foi gerado"
 fi
 
-# --- Criar virtualenv ---
-if [ ! -d "$VENV_DIR/suap" ]; then
-    msg_action "Criando virtualenv $VENV_DIR"
-    mkdir -p "$VENV_DIR"
-    python3.12 -m venv "$VENV_DIR/suap"
+# --- Instalar UV (se não disponível no PATH) ---
+if command -v uv &>/dev/null; then
+    msg_skip "UV já está instalado"
+elif [ -x "${HOME}/.cargo/bin/uv" ]; then
+    msg_skip "UV encontrado em ~/.cargo/bin/uv, adicionando ao PATH"
+    export PATH="${HOME}/.cargo/bin:${PATH}"
+elif [ -x "${HOME}/.local/bin/uv" ]; then
+    msg_skip "UV encontrado em ~/.local/bin/uv, adicionando ao PATH"
+    export PATH="${HOME}/.local/bin:${PATH}"
 else
-    msg_skip "Virtualenv já foi criado"
+    msg_action "Instalando UV (gerenciador de pacotes Python)"
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    if [ -f "${HOME}/.local/bin/env" ]; then
+        source "${HOME}/.local/bin/env"
+    fi
 fi
 
-# --- Instalar dependências Python ---
+# --- Instalar Python via UV (se não disponível) ---
+if ! uv python list --only-installed 2>/dev/null | grep -q "${PYTHON_VERSION}"; then
+    msg_action "Instalando Python ${PYTHON_VERSION} via UV"
+    uv python install "${PYTHON_VERSION}"
+else
+    msg_skip "Python ${PYTHON_VERSION} já está instalado"
+fi
+
+# --- Criar virtualenv com UV ---
+if [ ! -d "$VENV_DIR" ]; then
+    msg_action "Criando virtualenv em $VENV_DIR"
+    mkdir -p "$(dirname "$VENV_DIR")"
+    uv venv --python "${PYTHON_VERSION}" "$VENV_DIR"
+else
+    msg_skip "Virtualenv já existe em $VENV_DIR"
+fi
+
+# --- Instalar dependências Python via UV ---
 msg_action "Instalando/atualizando libs SUAP"
 cd "$SUAP_DIR"
-source "$VENV_DIR/suap/bin/activate"
-pip install --upgrade pip
 if [ -f "$SUAP_DIR/pyproject.toml" ]; then
-    if ! pip install . --group prod --no-cache-dir; then
+    if ! uv sync --python "$VENV_DIR/bin/python" --group prod; then
         msg_error "Falha na instalação de dependências Python."
         exit 1
     fi
 elif [ -d "$SUAP_DIR/requirements" ]; then
-    if ! pip install -r requirements/production.txt --no-cache-dir; then
+    if ! uv pip install --python "$VENV_DIR/bin/python" -r requirements/production.txt; then
         msg_error "Falha na instalação de dependências Python."
         exit 1
     fi
@@ -131,7 +155,6 @@ else
     msg_error "Não foi encontrado o pyproject.toml nem a pasta requirements em $SUAP_DIR"
     exit 1
 fi
-pip install "setuptools<82.0.0"
 
 # --- Configurar Supervisor (RPM-specific: supervisord) ---
 msg_action "Configurando o Supervisor"
@@ -222,7 +245,7 @@ fi
 # --- Corrigir permissões ---
 chown -R www-data:www-data "$SUAP_DIR"
 chown -R www-data:www-data "$BASE_DIR/logs"
-chown -R www-data:www-data "$VENV_DIR/suap"
+chown -R www-data:www-data "$VENV_DIR"
 
 # --- Mensagem final ---
 echo ""
