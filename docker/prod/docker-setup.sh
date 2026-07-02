@@ -22,9 +22,11 @@ check_docker_available
 # 4. Garantir que GIT_URL está configurada
 resolve_git_url "${SCRIPT_DIR}/.env"
 
-# 5. Executar docker compose up -d --build (modo detached para produção)
-msg_action "Iniciando containers Docker de produção..."
-docker compose -f "${SCRIPT_DIR}/docker/prod/docker-compose.prod.yml" up -d --build
+# 5. Executar docker compose build + up -d (passando versão do Python do .env)
+msg_action "Iniciando containers Docker de produção (Python ${PYTHON_VERSION:-3.12})..."
+docker compose -f "${SCRIPT_DIR}/docker/prod/docker-compose.prod.yml" build \
+  --build-arg PYTHON_VERSION="${PYTHON_VERSION:-3.12}"
+docker compose -f "${SCRIPT_DIR}/docker/prod/docker-compose.prod.yml" up -d
 
 # 6. Exibir status dos serviços
 echo ""

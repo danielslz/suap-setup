@@ -1,13 +1,17 @@
 # docker/prod/Dockerfile - Imagem de produção do SUAP (multi-stage build com UV)
 # Referência: https://github.com/astral-sh/uv-docker-example/blob/main/multistage.Dockerfile
 #
+# A versão do Python é configurável via --build-arg PYTHON_VERSION=3.12
+#
 # Stage 1 (builder): instala dependências com UV
 # Stage 2 (runtime): imagem mínima sem UV, apenas o venv e runtime libs
+
+ARG PYTHON_VERSION=3.12
 
 # ============================================================
 # Stage 1: Builder
 # ============================================================
-FROM ghcr.io/astral-sh/uv:python3.12-trixie-slim AS builder
+FROM ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-trixie-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
@@ -59,7 +63,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ============================================================
 # Stage 2: Runtime
 # ============================================================
-FROM python:3.12-slim-trixie AS runtime
+ARG PYTHON_VERSION
+FROM python:${PYTHON_VERSION}-slim-trixie AS runtime
 
 # IMPORTANTE: a imagem runtime deve ter a mesma versão de Python que o builder
 # para que os paths do executável coincidam.

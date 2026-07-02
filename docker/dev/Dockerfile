@@ -1,8 +1,11 @@
 # docker/dev/Dockerfile - Imagem de desenvolvimento do SUAP
-# Usa imagem oficial do UV com Python 3.12 pré-instalado
+# Usa imagem oficial do UV com Python pré-instalado
 # Referência: https://docs.astral.sh/uv/guides/integration/docker/
+#
+# A versão do Python é configurável via --build-arg PYTHON_VERSION=3.12
 
-FROM ghcr.io/astral-sh/uv:python3.12-trixie-slim
+ARG PYTHON_VERSION=3.12
+FROM ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-trixie-slim
 
 # Evitar prompts interativos durante instalação de pacotes
 ENV DEBIAN_FRONTEND=noninteractive

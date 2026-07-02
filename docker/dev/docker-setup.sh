@@ -22,9 +22,11 @@ check_docker_available
 # 4. Garantir que GIT_URL está configurada
 resolve_git_url "${SCRIPT_DIR}/.env"
 
-# 5. Executar docker compose up --build
-msg_action "Iniciando containers Docker de desenvolvimento..."
-docker compose -f "${SCRIPT_DIR}/docker/dev/docker-compose.yml" up --build
+# 5. Executar docker compose up --build (passando versão do Python do .env)
+msg_action "Iniciando containers Docker de desenvolvimento (Python ${PYTHON_VERSION:-3.12})..."
+docker compose -f "${SCRIPT_DIR}/docker/dev/docker-compose.yml" build \
+  --build-arg PYTHON_VERSION="${PYTHON_VERSION:-3.12}"
+docker compose -f "${SCRIPT_DIR}/docker/dev/docker-compose.yml" up
 
 # 6. Exibir mensagem com URL de acesso e comandos úteis
 echo ""
