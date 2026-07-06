@@ -153,8 +153,10 @@ fi
 # --- 12. Instalar/atualizar dependências via UV ---
 msg_action "Instalando/atualizando libs SUAP"
 cd "${SUAP_DIR}"
+# UV_PROJECT_ENVIRONMENT indica ao uv sync onde instalar (em vez do .venv local)
+export UV_PROJECT_ENVIRONMENT="${VENV_DIR}"
 if [ -f "${SUAP_DIR}/pyproject.toml" ]; then
-  if ! uv sync --python "${VENV_DIR}/bin/python" --group prod; then
+  if ! uv sync --group prod; then
     msg_error "Falha na instalação de dependências Python."
     exit 1
   fi
