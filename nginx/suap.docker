@@ -30,14 +30,14 @@ server {
 
     # Static files
     location /static/ {
-        alias /opt/suap/deploy/static/;
+        alias /opt/suap/static/;
         expires 30d;
         access_log off;
     }
 
     # Media files
     location /media/ {
-        alias /opt/suap/deploy/media/;
+        alias /opt/suap/media/;
         expires 30d;
         access_log off;
     }
@@ -54,16 +54,16 @@ server {
     }
 
     # Custom error pages
-    error_page 500 502 503 504 /50x.html;
+    error_page 500 502 503 504 /500.html;
     error_page 413 /413.html;
 
-    location = /50x.html {
-        root /opt/suap/deploy/static;
+    location = /500.html {
+        root /opt/suap/deploy/templates;
         internal;
     }
 
     location = /413.html {
-        root /opt/suap/deploy/static;
+        root /opt/suap/deploy/templates;
         internal;
     }
 }
