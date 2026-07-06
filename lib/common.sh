@@ -270,50 +270,52 @@ ensure_env_for_option() {
 _write_env() {
   local env_path="${1}"
 
-  cat > "${env_path}" << EOF
-# =============================================================
-# Configuração centralizada do suap-setup
-# Edite este arquivo conforme seu ambiente
-# =============================================================
-
-# Versão do Python a ser utilizada
-PYTHON_VERSION=${PYTHON_VERSION:-3.12}
-
-# Diretório base para instalação
-BASE_DIR=${BASE_DIR:-/opt}
-
-# Diretório onde o código SUAP será clonado
-SUAP_DIR=${SUAP_DIR:-\${BASE_DIR}/suap}
-
-# Diretório do virtualenv
-VENV_DIR=${VENV_DIR:-\${SUAP_DIR}/.venv}
-
-# URL do repositório Git do SUAP
-GIT_URL=${GIT_URL:-}
-
-# --- Gunicorn (produção) ---
-# Número de workers (recomendado: 2n + 1, onde n = nº de CPUs)
-GUNICORN_WORKERS=${GUNICORN_WORKERS:-5}
-
-# Número de threads por worker
-GUNICORN_THREADS=${GUNICORN_THREADS:-1}
-
-# --- Celery (produção) ---
-# URL do broker Redis
-CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://127.0.0.1:6379/3}
-
-# Autenticação do Celery Flower (usuario:senha)
-CELERY_FLOWER_AUTH=${CELERY_FLOWER_AUTH:-admin:admin}
-
-# Máximo de workers (autoscale)
-CELERY_MAX_WORKERS=${CELERY_MAX_WORKERS:-5}
-
-# Mínimo de workers (autoscale)
-CELERY_MIN_WORKERS=${CELERY_MIN_WORKERS:-2}
-
-# Filas do Celery (separadas por vírgula)
-CELERY_QUEUE=${CELERY_QUEUE:-geral,celery_beat}
-EOF
+  # Usar heredoc SEM expansão ('ENVEOF') e substituir via printf
+  # para preservar strings como ${BASE_DIR}/suap literalmente
+  {
+    echo "# ============================================================="
+    echo "# Configuração centralizada do suap-setup"
+    echo "# Edite este arquivo conforme seu ambiente"
+    echo "# ============================================================="
+    echo ""
+    echo "# Versão do Python a ser utilizada"
+    printf 'PYTHON_VERSION=%s\n' "${PYTHON_VERSION:-3.12}"
+    echo ""
+    echo "# Diretório base para instalação"
+    printf 'BASE_DIR=%s\n' "${BASE_DIR:-/opt}"
+    echo ""
+    echo "# Diretório onde o código SUAP será clonado"
+    printf 'SUAP_DIR=%s\n' "${SUAP_DIR:-\${BASE_DIR}/suap}"
+    echo ""
+    echo "# Diretório do virtualenv"
+    printf 'VENV_DIR=%s\n' "${VENV_DIR:-\${SUAP_DIR}/.venv}"
+    echo ""
+    echo "# URL do repositório Git do SUAP"
+    printf 'GIT_URL=%s\n' "${GIT_URL:-}"
+    echo ""
+    echo "# --- Gunicorn (produção) ---"
+    echo "# Número de workers (recomendado: 2n + 1, onde n = nº de CPUs)"
+    printf 'GUNICORN_WORKERS=%s\n' "${GUNICORN_WORKERS:-5}"
+    echo ""
+    echo "# Número de threads por worker"
+    printf 'GUNICORN_THREADS=%s\n' "${GUNICORN_THREADS:-1}"
+    echo ""
+    echo "# --- Celery (produção) ---"
+    echo "# URL do broker Redis"
+    printf 'CELERY_BROKER_URL=%s\n' "${CELERY_BROKER_URL:-redis://127.0.0.1:6379/3}"
+    echo ""
+    echo "# Autenticação do Celery Flower (usuario:senha)"
+    printf 'CELERY_FLOWER_AUTH=%s\n' "${CELERY_FLOWER_AUTH:-admin:admin}"
+    echo ""
+    echo "# Máximo de workers (autoscale)"
+    printf 'CELERY_MAX_WORKERS=%s\n' "${CELERY_MAX_WORKERS:-5}"
+    echo ""
+    echo "# Mínimo de workers (autoscale)"
+    printf 'CELERY_MIN_WORKERS=%s\n' "${CELERY_MIN_WORKERS:-2}"
+    echo ""
+    echo "# Filas do Celery (separadas por vírgula)"
+    printf 'CELERY_QUEUE=%s\n' "${CELERY_QUEUE:-geral,celery_beat}"
+  } > "${env_path}"
 
   echo ""
   echo "${GREEN}=== Arquivo .env salvo ===${NO_COLOR}"
