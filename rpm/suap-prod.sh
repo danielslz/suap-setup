@@ -162,6 +162,10 @@ else
     exit 1
 fi
 
+# --- Coletar arquivos estáticos ---
+msg_action "Coletando arquivos estáticos (collectstatic)"
+"$VENV_DIR/bin/python" manage.py collectstatic --noinput
+
 # --- Configurar Supervisor (RPM-specific: supervisord) ---
 msg_action "Configurando o Supervisor"
 systemctl enable --now supervisord

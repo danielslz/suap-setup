@@ -170,6 +170,10 @@ else
   exit 1
 fi
 
+# --- 12.1. Coletar arquivos estáticos ---
+msg_action "Coletando arquivos estáticos (collectstatic)"
+"${VENV_DIR}/bin/python" manage.py collectstatic --noinput
+
 # --- 13. Configurar Supervisor ---
 msg_action "Configurando o Supervisor"
 mkdir -p "${BASE_DIR}/logs"
