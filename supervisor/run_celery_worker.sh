@@ -3,9 +3,12 @@
 # Carregar variáveis centralizadas do .env de produção
 ENV_FILE="/opt/.env"
 if [ -f "$ENV_FILE" ]; then
-  set -a
-  source "$ENV_FILE"
-  set +a
+  while IFS='=' read -r key value; do
+    [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+    key=$(echo "$key" | xargs)
+    value=$(eval echo "$value")
+    export "$key=$value"
+  done < <(grep -v '^\s*#' "$ENV_FILE" | grep -v '^\s*$')
 fi
 
 # Defaults caso variáveis não estejam definidas
@@ -18,8 +21,7 @@ MAX_WORKERS=${CELERY_MAX_WORKERS:-5}
 MIN_WORKERS=${CELERY_MIN_WORKERS:-2}
 CELERY_QUEUE=${CELERY_QUEUE:-geral,celery_beat}
 
-# Execução
-echo "### Iniciando Celery Worker"
-source "${VENV_DIR}/bin/activate"
+# Execução — usar caminho absoluto do celery no venv
+echo "### Iniciando Celery Worker (${MIN_WORKERS}-${MAX_WORKERS} workers)"
 cd "${SUAP_DIR}"
-celery -A suap worker --autoscale=$MAX_WORKERS,$MIN_WORKERS -l INFO -Q $CELERY_QUEUE
+exec "${VENV_DIR}/bin/celery" -A suap worker --autoscale=$MAX_WORKERS,$MIN_WORKERS -l INFO -Q $CELERY_QUEUE
