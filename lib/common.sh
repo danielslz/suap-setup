@@ -159,12 +159,12 @@ ensure_env_for_option() {
   if [ -z "${BASE_DIR:-}" ]; then
     _show_header
     local _default_base
-    if [ "${option}" = "1" ]; then _default_base="\$HOME/Projetos"; else _default_base="/opt"; fi
+    if [ "${option}" = "1" ]; then _default_base='$HOME/Projetos'; else _default_base="/opt"; fi
     echo "${GREEN}BASE_DIR${NO_COLOR}"
     echo "  ${YELLOW}Descrição:${NO_COLOR} Diretório base para instalação do projeto."
     echo "  ${YELLOW}Exemplos:${NO_COLOR} \$HOME/Projetos (dev), /opt (prod)"
     read -rp "  Valor [${GREEN}${_default_base}${NO_COLOR}]: " _input
-    BASE_DIR="${_input:-${_default_base}}"
+    BASE_DIR="${_input:-$_default_base}"
     needs_update=true
     echo ""
   fi
@@ -174,8 +174,9 @@ ensure_env_for_option() {
     echo "${GREEN}SUAP_DIR${NO_COLOR}"
     echo "  ${YELLOW}Descrição:${NO_COLOR} Diretório onde o código SUAP será clonado."
     echo "  ${YELLOW}Exemplos:${NO_COLOR} \${BASE_DIR}/suap, /opt/suap"
+    local _suap_default='${BASE_DIR}/suap'
     read -rp "  Valor [${GREEN}\${BASE_DIR}/suap${NO_COLOR}]: " _input
-    SUAP_DIR="${_input:-\${BASE_DIR}/suap}"
+    SUAP_DIR="${_input:-$_suap_default}"
     needs_update=true
     echo ""
   fi
@@ -183,12 +184,12 @@ ensure_env_for_option() {
   if [ -z "${VENV_DIR:-}" ]; then
     _show_header
     local _default_venv
-    if [ "${option}" = "1" ]; then _default_venv="\${SUAP_DIR}/.venv"; else _default_venv="/opt/venv"; fi
+    if [ "${option}" = "1" ]; then _default_venv='${SUAP_DIR}/.venv'; else _default_venv="/opt/venv"; fi
     echo "${GREEN}VENV_DIR${NO_COLOR}"
     echo "  ${YELLOW}Descrição:${NO_COLOR} Diretório do virtualenv Python."
     echo "  ${YELLOW}Exemplos:${NO_COLOR} \${SUAP_DIR}/.venv (dev), /opt/venv (prod)"
     read -rp "  Valor [${GREEN}${_default_venv}${NO_COLOR}]: " _input
-    VENV_DIR="${_input:-${_default_venv}}"
+    VENV_DIR="${_input:-$_default_venv}"
     needs_update=true
     echo ""
   fi
@@ -285,10 +286,12 @@ _write_env() {
     printf 'BASE_DIR=%s\n' "${BASE_DIR:-/opt}"
     echo ""
     echo "# Diretório onde o código SUAP será clonado"
-    printf 'SUAP_DIR=%s\n' "${SUAP_DIR:-\${BASE_DIR}/suap}"
+    local _suap_default='${BASE_DIR}/suap'
+    printf 'SUAP_DIR=%s\n' "${SUAP_DIR:-$_suap_default}"
     echo ""
     echo "# Diretório do virtualenv"
-    printf 'VENV_DIR=%s\n' "${VENV_DIR:-\${SUAP_DIR}/.venv}"
+    local _venv_default='${SUAP_DIR}/.venv'
+    printf 'VENV_DIR=%s\n' "${VENV_DIR:-$_venv_default}"
     echo ""
     echo "# URL do repositório Git do SUAP"
     printf 'GIT_URL=%s\n' "${GIT_URL:-}"
