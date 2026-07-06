@@ -74,74 +74,202 @@ EOF
 }
 
 # interactive_env_wizard(env_path)
-# Assistente interativo para criação do .env na primeira execução pelo wrapper.
-# Solicita ao usuário: PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL.
-# Para cada variável:
-#   - Exibe nome, descrição do propósito, exemplos e valor padrão (dev)
-#   - Se o usuário pressiona Enter sem digitar → usa valor padrão
-# Exceção: GIT_URL não possui valor padrão → exit 1 se vazia
-# Após coleta, grava o .env com comentários descritivos e exibe confirmação.
-# Parâmetros: caminho absoluto onde criar o .env
-# Exit 1 se GIT_URL vazia
-interactive_env_wizard() {
+# ensure_env_for_option(env_path, menu_option)
+# Verifica e coleta apenas as variáveis necessárias para a opção escolhida.
+# Se o .env já existe e contém as variáveis necessárias, não pergunta nada.
+# Se falta alguma variável, pergunta somente as que faltam.
+#
+# Mapeamento de variáveis por opção:
+#   1 (dev):         PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL
+#   2 (prod):        PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL, GUNICORN_WORKERS, GUNICORN_THREADS, CELERY_MAX_WORKERS, CELERY_MIN_WORKERS, CELERY_BROKER_URL, CELERY_FLOWER_AUTH
+#   3 (redis):       nenhuma
+#   4 (nginx):       nenhuma
+#   5 (docker dev):  PYTHON_VERSION, GIT_URL
+#   6 (docker prod): PYTHON_VERSION, GIT_URL
+#   7 (dockhand):    nenhuma
+ensure_env_for_option() {
   local env_path="${1}"
+  local option="${2}"
 
-  echo ""
-  echo "${GREEN}=== Assistente de Configuração do suap-setup ===${NO_COLOR}"
-  echo "Responda às perguntas abaixo para criar o arquivo .env."
-  echo "Pressione Enter para aceitar o valor padrão entre colchetes."
-  echo ""
+  # Opções que não precisam de variáveis
+  case "${option}" in
+    3|4|7) return 0 ;;
+  esac
 
-  # --- PYTHON_VERSION ---
-  echo "${GREEN}PYTHON_VERSION${NO_COLOR}"
-  echo "  ${YELLOW}Descrição:${NO_COLOR} Versão do Python a ser utilizada na instalação."
-  echo "  ${YELLOW}Exemplos:${NO_COLOR} 3.11, 3.12, 3.13"
-  local default_python="3.12"
-  read -rp "  Valor [${GREEN}${default_python}${NO_COLOR}]: " input_python
-  local python_version="${input_python:-${default_python}}"
-  echo ""
-
-  # --- BASE_DIR ---
-  echo "${GREEN}BASE_DIR${NO_COLOR}"
-  echo "  ${YELLOW}Descrição:${NO_COLOR} Diretório base para instalação do projeto."
-  echo "  ${YELLOW}Exemplos:${NO_COLOR} \$HOME/Projetos (dev), /opt (prod)"
-  local default_basedir="\$HOME/Projetos"
-  read -rp "  Valor [${GREEN}${default_basedir}${NO_COLOR}]: " input_basedir
-  local base_dir="${input_basedir:-${default_basedir}}"
-  echo ""
-
-  # --- SUAP_DIR ---
-  echo "${GREEN}SUAP_DIR${NO_COLOR}"
-  echo "  ${YELLOW}Descrição:${NO_COLOR} Diretório onde o código SUAP será clonado."
-  echo "  ${YELLOW}Exemplos:${NO_COLOR} \${BASE_DIR}/suap, /opt/suap"
-  local default_suapdir="\${BASE_DIR}/suap"
-  read -rp "  Valor [${GREEN}${default_suapdir}${NO_COLOR}]: " input_suapdir
-  local suap_dir="${input_suapdir:-${default_suapdir}}"
-  echo ""
-
-  # --- VENV_DIR ---
-  echo "${GREEN}VENV_DIR${NO_COLOR}"
-  echo "  ${YELLOW}Descrição:${NO_COLOR} Diretório do virtualenv Python."
-  echo "  ${YELLOW}Exemplos:${NO_COLOR} \${SUAP_DIR}/.venv (dev), /opt/venv/suap (prod)"
-  local default_venvdir="\${SUAP_DIR}/.venv"
-  read -rp "  Valor [${GREEN}${default_venvdir}${NO_COLOR}]: " input_venvdir
-  local venv_dir="${input_venvdir:-${default_venvdir}}"
-  echo ""
-
-  # --- GIT_URL ---
-  echo "${GREEN}GIT_URL${NO_COLOR}"
-  echo "  ${YELLOW}Descrição:${NO_COLOR} URL do repositório Git do SUAP (${RED}obrigatório${NO_COLOR})."
-  echo "  ${YELLOW}Exemplos:${NO_COLOR} https://github.com/org/suap.git, git@github.com:org/suap.git"
-  read -rp "  Valor (${RED}obrigatório${NO_COLOR}): " input_giturl
-  local git_url="${input_giturl}"
-  echo ""
-
-  if [ -z "${git_url}" ]; then
-    msg_error "GIT_URL é obrigatória. Não é possível continuar sem a URL do repositório."
-    exit 1
+  # Carregar variáveis existentes (se .env já existe)
+  if [ -f "${env_path}" ]; then
+    set -a
+    source "${env_path}" 2>/dev/null || true
+    set +a
   fi
 
-  # --- Gravar .env ---
+  local needs_update=false
+  local header_shown=false
+
+  _show_header() {
+    if [ "$header_shown" = "false" ]; then
+      echo ""
+      echo "${GREEN}=== Configuração do ambiente ===${NO_COLOR}"
+      echo "Pressione Enter para aceitar o valor padrão entre colchetes."
+      echo ""
+      header_shown=true
+    fi
+  }
+
+  # --- Variáveis comuns (opções 1, 2, 5, 6) ---
+
+  # PYTHON_VERSION
+  if [ -z "${PYTHON_VERSION:-}" ]; then
+    _show_header
+    echo "${GREEN}PYTHON_VERSION${NO_COLOR}"
+    echo "  ${YELLOW}Descrição:${NO_COLOR} Versão do Python a ser utilizada."
+    echo "  ${YELLOW}Exemplos:${NO_COLOR} 3.11, 3.12, 3.13"
+    read -rp "  Valor [${GREEN}3.12${NO_COLOR}]: " _input
+    PYTHON_VERSION="${_input:-3.12}"
+    needs_update=true
+    echo ""
+  fi
+
+  # GIT_URL (necessária para 1, 2, 5, 6)
+  if [ -z "${GIT_URL:-}" ]; then
+    _show_header
+    echo "${GREEN}GIT_URL${NO_COLOR}"
+    echo "  ${YELLOW}Descrição:${NO_COLOR} URL do repositório Git do SUAP (${RED}obrigatório${NO_COLOR})."
+    echo "  ${YELLOW}Exemplos:${NO_COLOR} https://github.com/org/suap.git, git@github.com:org/suap.git"
+    read -rp "  Valor (${RED}obrigatório${NO_COLOR}): " _input
+    if [ -z "${_input}" ]; then
+      msg_error "GIT_URL é obrigatória. Não é possível continuar sem a URL do repositório."
+      exit 1
+    fi
+    GIT_URL="${_input}"
+    needs_update=true
+    echo ""
+  fi
+
+  # Para Docker (5, 6) só precisa de PYTHON_VERSION e GIT_URL
+  if [ "${option}" = "5" ] || [ "${option}" = "6" ]; then
+    if [ "$needs_update" = "true" ]; then
+      _write_env "${env_path}"
+    fi
+    return 0
+  fi
+
+  # --- Variáveis de diretórios (opções 1, 2) ---
+
+  if [ -z "${BASE_DIR:-}" ]; then
+    _show_header
+    local _default_base
+    if [ "${option}" = "1" ]; then _default_base="\$HOME/Projetos"; else _default_base="/opt"; fi
+    echo "${GREEN}BASE_DIR${NO_COLOR}"
+    echo "  ${YELLOW}Descrição:${NO_COLOR} Diretório base para instalação do projeto."
+    echo "  ${YELLOW}Exemplos:${NO_COLOR} \$HOME/Projetos (dev), /opt (prod)"
+    read -rp "  Valor [${GREEN}${_default_base}${NO_COLOR}]: " _input
+    BASE_DIR="${_input:-${_default_base}}"
+    needs_update=true
+    echo ""
+  fi
+
+  if [ -z "${SUAP_DIR:-}" ]; then
+    _show_header
+    echo "${GREEN}SUAP_DIR${NO_COLOR}"
+    echo "  ${YELLOW}Descrição:${NO_COLOR} Diretório onde o código SUAP será clonado."
+    echo "  ${YELLOW}Exemplos:${NO_COLOR} \${BASE_DIR}/suap, /opt/suap"
+    read -rp "  Valor [${GREEN}\${BASE_DIR}/suap${NO_COLOR}]: " _input
+    SUAP_DIR="${_input:-\${BASE_DIR}/suap}"
+    needs_update=true
+    echo ""
+  fi
+
+  if [ -z "${VENV_DIR:-}" ]; then
+    _show_header
+    local _default_venv
+    if [ "${option}" = "1" ]; then _default_venv="\${SUAP_DIR}/.venv"; else _default_venv="/opt/venv"; fi
+    echo "${GREEN}VENV_DIR${NO_COLOR}"
+    echo "  ${YELLOW}Descrição:${NO_COLOR} Diretório do virtualenv Python."
+    echo "  ${YELLOW}Exemplos:${NO_COLOR} \${SUAP_DIR}/.venv (dev), /opt/venv (prod)"
+    read -rp "  Valor [${GREEN}${_default_venv}${NO_COLOR}]: " _input
+    VENV_DIR="${_input:-${_default_venv}}"
+    needs_update=true
+    echo ""
+  fi
+
+  # --- Variáveis de produção (opção 2) ---
+
+  if [ "${option}" = "2" ]; then
+    if [ -z "${GUNICORN_WORKERS:-}" ]; then
+      _show_header
+      echo "${GREEN}GUNICORN_WORKERS${NO_COLOR}"
+      echo "  ${YELLOW}Descrição:${NO_COLOR} Número de workers do Gunicorn (recomendado: 2n+1, n = nº CPUs)."
+      read -rp "  Valor [${GREEN}5${NO_COLOR}]: " _input
+      GUNICORN_WORKERS="${_input:-5}"
+      needs_update=true
+      echo ""
+    fi
+
+    if [ -z "${GUNICORN_THREADS:-}" ]; then
+      _show_header
+      echo "${GREEN}GUNICORN_THREADS${NO_COLOR}"
+      echo "  ${YELLOW}Descrição:${NO_COLOR} Número de threads por worker do Gunicorn."
+      read -rp "  Valor [${GREEN}1${NO_COLOR}]: " _input
+      GUNICORN_THREADS="${_input:-1}"
+      needs_update=true
+      echo ""
+    fi
+
+    if [ -z "${CELERY_MAX_WORKERS:-}" ]; then
+      _show_header
+      echo "${GREEN}CELERY_MAX_WORKERS${NO_COLOR}"
+      echo "  ${YELLOW}Descrição:${NO_COLOR} Máximo de workers do Celery (autoscale)."
+      read -rp "  Valor [${GREEN}5${NO_COLOR}]: " _input
+      CELERY_MAX_WORKERS="${_input:-5}"
+      needs_update=true
+      echo ""
+    fi
+
+    if [ -z "${CELERY_MIN_WORKERS:-}" ]; then
+      _show_header
+      echo "${GREEN}CELERY_MIN_WORKERS${NO_COLOR}"
+      echo "  ${YELLOW}Descrição:${NO_COLOR} Mínimo de workers do Celery (autoscale)."
+      read -rp "  Valor [${GREEN}2${NO_COLOR}]: " _input
+      CELERY_MIN_WORKERS="${_input:-2}"
+      needs_update=true
+      echo ""
+    fi
+
+    if [ -z "${CELERY_BROKER_URL:-}" ]; then
+      _show_header
+      echo "${GREEN}CELERY_BROKER_URL${NO_COLOR}"
+      echo "  ${YELLOW}Descrição:${NO_COLOR} URL do broker Redis usado pelo Celery."
+      echo "  ${YELLOW}Formato:${NO_COLOR} redis://HOST:PORTA/DB"
+      read -rp "  Valor [${GREEN}redis://127.0.0.1:6379/3${NO_COLOR}]: " _input
+      CELERY_BROKER_URL="${_input:-redis://127.0.0.1:6379/3}"
+      needs_update=true
+      echo ""
+    fi
+
+    if [ -z "${CELERY_FLOWER_AUTH:-}" ]; then
+      _show_header
+      echo "${GREEN}CELERY_FLOWER_AUTH${NO_COLOR}"
+      echo "  ${YELLOW}Descrição:${NO_COLOR} Autenticação do Celery Flower (interface web)."
+      echo "  ${YELLOW}Formato:${NO_COLOR} usuario:senha"
+      read -rp "  Valor [${GREEN}admin:admin${NO_COLOR}]: " _input
+      CELERY_FLOWER_AUTH="${_input:-admin:admin}"
+      needs_update=true
+      echo ""
+    fi
+  fi
+
+  # --- Gravar .env se houve atualização ---
+  if [ "$needs_update" = "true" ]; then
+    _write_env "${env_path}"
+  fi
+}
+
+# _write_env(env_path)
+# Grava o arquivo .env com todas as variáveis coletadas
+_write_env() {
+  local env_path="${1}"
+
   cat > "${env_path}" << EOF
 # =============================================================
 # Configuração centralizada do suap-setup
@@ -149,63 +277,55 @@ interactive_env_wizard() {
 # =============================================================
 
 # Versão do Python a ser utilizada
-PYTHON_VERSION=${python_version}
+PYTHON_VERSION=${PYTHON_VERSION:-3.12}
 
 # Diretório base para instalação
-# Desenvolvimento: \$HOME/Projetos
-# Produção: /opt
-BASE_DIR=${base_dir}
+BASE_DIR=${BASE_DIR:-/opt}
 
 # Diretório onde o código SUAP será clonado
-SUAP_DIR=${suap_dir}
+SUAP_DIR=${SUAP_DIR:-\${BASE_DIR}/suap}
 
 # Diretório do virtualenv
-# Desenvolvimento: \${SUAP_DIR}/.venv
-# Produção: /opt/venv/suap
-VENV_DIR=${venv_dir}
+VENV_DIR=${VENV_DIR:-\${SUAP_DIR}/.venv}
 
 # URL do repositório Git do SUAP
-GIT_URL=${git_url}
-
-# --- Celery (produção) ---
-# URL do broker Redis usado pelo Celery
-# Formato: redis://HOST:PORTA/DB
-#CELERY_BROKER_URL=redis://127.0.0.1:6379/3
-
-# Autenticação do Celery Flower (interface web de monitoramento)
-# Formato: usuario:senha
-#CELERY_FLOWER_AUTH=admin:secret
-
-# Máximo de workers do Celery (autoscale)
-#CELERY_MAX_WORKERS=5
-
-# Mínimo de workers do Celery (autoscale)
-#CELERY_MIN_WORKERS=2
-
-# Filas do Celery (separadas por vírgula)
-#CELERY_QUEUE=geral,celery_beat
+GIT_URL=${GIT_URL:-}
 
 # --- Gunicorn (produção) ---
-# Número de workers do Gunicorn (recomendado: 2n + 1, onde n = nº de CPUs)
-#GUNICORN_WORKERS=5
+# Número de workers (recomendado: 2n + 1, onde n = nº de CPUs)
+GUNICORN_WORKERS=${GUNICORN_WORKERS:-5}
 
-# Número de threads por worker do Gunicorn
-#GUNICORN_THREADS=1
+# Número de threads por worker
+GUNICORN_THREADS=${GUNICORN_THREADS:-1}
+
+# --- Celery (produção) ---
+# URL do broker Redis
+CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://127.0.0.1:6379/3}
+
+# Autenticação do Celery Flower (usuario:senha)
+CELERY_FLOWER_AUTH=${CELERY_FLOWER_AUTH:-admin:admin}
+
+# Máximo de workers (autoscale)
+CELERY_MAX_WORKERS=${CELERY_MAX_WORKERS:-5}
+
+# Mínimo de workers (autoscale)
+CELERY_MIN_WORKERS=${CELERY_MIN_WORKERS:-2}
+
+# Filas do Celery (separadas por vírgula)
+CELERY_QUEUE=${CELERY_QUEUE:-geral,celery_beat}
 EOF
 
-  # --- Confirmação ---
   echo ""
-  echo "${GREEN}=== Arquivo .env criado com sucesso ===${NO_COLOR}"
+  echo "${GREEN}=== Arquivo .env salvo ===${NO_COLOR}"
   echo "  Caminho: ${GREEN}${env_path}${NO_COLOR}"
   echo ""
-  echo "  Valores configurados:"
-  echo "    ${YELLOW}PYTHON_VERSION${NO_COLOR} = ${python_version}"
-  echo "    ${YELLOW}BASE_DIR${NO_COLOR}       = ${base_dir}"
-  echo "    ${YELLOW}SUAP_DIR${NO_COLOR}       = ${suap_dir}"
-  echo "    ${YELLOW}VENV_DIR${NO_COLOR}       = ${venv_dir}"
-  echo "    ${YELLOW}GIT_URL${NO_COLOR}        = ${git_url}"
-  echo ""
-  msg_action "Configuração salva. Prosseguindo com a execução..."
+  msg_action "Configuração salva. Prosseguindo..."
+}
+
+# interactive_env_wizard(env_path)
+# Mantida para compatibilidade — chama ensure_env_for_option com opção 2 (todas as variáveis)
+interactive_env_wizard() {
+  ensure_env_for_option "${1}" "2"
 }
 
 # load_env_file(env_path)

@@ -2,7 +2,7 @@
 set -u
 
 # setup.sh - Ponto de entrada principal do suap-setup
-# Detecta a distribuição, exibe menu interativo e roteia para o script apropriado.
+# Exibe menu, coleta variáveis conforme a opção escolhida e executa o script.
 
 # Determinar diretório raiz do repositório (onde este script está)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,23 +10,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Carregar biblioteca compartilhada
 source "${SCRIPT_DIR}/lib/common.sh"
 
-# Verificar se .env existe:
-#   - Se não: executar interactive_env_wizard() para guiar o usuário
-#   - Se sim: carregar com load_env_file() normalmente
 ENV_FILE="${SCRIPT_DIR}/.env"
-
-if [ ! -f "${ENV_FILE}" ]; then
-  interactive_env_wizard "${ENV_FILE}"
-fi
-
-load_env_file "${ENV_FILE}"
 
 # Detectar distribuição Linux (define DISTRO_TYPE e DISTRO_NAME)
 detect_distro
 
 # Exibir menu interativo
 echo ""
-echo "=== SUAP Setup ==="
+echo "${GREEN}=== SUAP Setup ===${NO_COLOR}"
 echo "1) Configurar ambiente de desenvolvimento"
 echo "2) Configurar ambiente de produção"
 echo "3) Instalar Redis"
@@ -38,37 +29,48 @@ echo "0) Sair"
 echo ""
 read -rp "Escolha uma opção [0-7]: " CHOICE
 
-# Determinar script a executar baseado na opção
+# Sair imediatamente se opção 0
+if [ "${CHOICE}" = "0" ]; then
+  echo "Saindo..."
+  exit 0
+fi
+
+# Validar opção
 case "${CHOICE}" in
-  0)
-    echo "Saindo..."
-    exit 0
-    ;;
-  1)
-    TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/suap-dev.sh"
-    ;;
-  2)
-    TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/suap-prod.sh"
-    ;;
-  3)
-    TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/install-redis.sh"
-    ;;
-  4)
-    TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/install-nginx.sh"
-    ;;
-  5)
-    TARGET_SCRIPT="${SCRIPT_DIR}/docker/dev/docker-setup.sh"
-    ;;
-  6)
-    TARGET_SCRIPT="${SCRIPT_DIR}/docker/prod/docker-setup.sh"
-    ;;
-  7)
-    TARGET_SCRIPT="${SCRIPT_DIR}/docker/dockhand-setup.sh"
-    ;;
+  1|2|3|4|5|6|7) ;;
   *)
     msg_error "Opção inválida: use 0, 1, 2, 3, 4, 5, 6 ou 7."
     exit 1
     ;;
+esac
+
+# --- Coletar variáveis de ambiente conforme a opção escolhida ---
+# Mapeamento de variáveis necessárias por opção:
+#   0: nenhuma
+#   1 (dev):        PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL
+#   2 (prod):       PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL, GUNICORN_WORKERS, CELERY_MAX_WORKERS, CELERY_BROKER_URL, CELERY_FLOWER_AUTH
+#   3 (redis):      nenhuma
+#   4 (nginx):      nenhuma
+#   5 (docker dev): PYTHON_VERSION, GIT_URL
+#   6 (docker prod):PYTHON_VERSION, GIT_URL
+#   7 (dockhand):   nenhuma
+
+ensure_env_for_option "${ENV_FILE}" "${CHOICE}"
+
+# Carregar variáveis
+if [ -f "${ENV_FILE}" ]; then
+  load_env_file "${ENV_FILE}"
+fi
+
+# Determinar script a executar
+case "${CHOICE}" in
+  1) TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/suap-dev.sh" ;;
+  2) TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/suap-prod.sh" ;;
+  3) TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/install-redis.sh" ;;
+  4) TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/install-nginx.sh" ;;
+  5) TARGET_SCRIPT="${SCRIPT_DIR}/docker/dev/docker-setup.sh" ;;
+  6) TARGET_SCRIPT="${SCRIPT_DIR}/docker/prod/docker-setup.sh" ;;
+  7) TARGET_SCRIPT="${SCRIPT_DIR}/docker/dockhand-setup.sh" ;;
 esac
 
 # Verificar existência do script antes de executar
