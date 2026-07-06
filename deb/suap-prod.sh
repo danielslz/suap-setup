@@ -168,7 +168,7 @@ else
   exit 1
 fi
 
-# --- 11. Configurar Supervisor ---
+# --- 13. Configurar Supervisor ---
 msg_action "Configurando o Supervisor"
 mkdir -p "${BASE_DIR}/logs"
 mkdir -p "${BASE_DIR}/scripts"
@@ -249,6 +249,10 @@ esac
 
 # --- 12. Aplicar configurações do Supervisor ---
 if [ "${FILES_COPIED}" = "true" ]; then
+  # Ajustar paths nos .conf para usar BASE_DIR correto
+  sed -i "s|/opt/scripts|${BASE_DIR}/scripts|g" "${SUPERVISOR_CONF_DIR}"/*.conf 2>/dev/null || true
+  sed -i "s|/opt/suap|${SUAP_DIR}|g" "${SUPERVISOR_CONF_DIR}"/*.conf 2>/dev/null || true
+  sed -i "s|/opt/logs|${BASE_DIR}/logs|g" "${SUPERVISOR_CONF_DIR}"/*.conf 2>/dev/null || true
   supervisorctl reread
   supervisorctl update
 else

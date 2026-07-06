@@ -249,6 +249,10 @@ esac
 if [ "$FILES_COPIED" = "true" ]; then
     # Ajustar usuário nos .ini do Supervisor (www-data → nginx para RPM)
     sed -i 's/www-data/nginx/g' "$SUPERVISOR_CONF_DIR"/*.ini 2>/dev/null || true
+    # Ajustar paths nos .ini para usar BASE_DIR correto
+    sed -i "s|/opt/scripts|${BASE_DIR}/scripts|g" "$SUPERVISOR_CONF_DIR"/*.ini 2>/dev/null || true
+    sed -i "s|/opt/suap|${SUAP_DIR}|g" "$SUPERVISOR_CONF_DIR"/*.ini 2>/dev/null || true
+    sed -i "s|/opt/logs|${BASE_DIR}/logs|g" "$SUPERVISOR_CONF_DIR"/*.ini 2>/dev/null || true
     supervisorctl reread
     supervisorctl update
 else

@@ -1,7 +1,11 @@
 #!/bin/bash
 
-# Carregar variáveis centralizadas do .env de produção
-ENV_FILE="/opt/.env"
+# Determinar BASE_DIR a partir do local deste script
+RUNNER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(dirname "$RUNNER_DIR")"
+
+# Carregar variáveis centralizadas do .env
+ENV_FILE="${BASE_DIR}/.env"
 if [ -f "$ENV_FILE" ]; then
   while IFS='=' read -r key value; do
     [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
@@ -11,12 +15,11 @@ if [ -f "$ENV_FILE" ]; then
   done < <(grep -v '^\s*#' "$ENV_FILE" | grep -v '^\s*$')
 fi
 
-# Defaults caso variáveis não estejam definidas
-: "${BASE_DIR:=/opt}"
+# Defaults
 : "${SUAP_DIR:=$BASE_DIR/suap}"
 : "${VENV_DIR:=$BASE_DIR/venv}"
 
-# Execução — usar caminho absoluto do celery no venv
+# Execução
 echo "### Iniciando Celery Beat"
 cd "${SUAP_DIR}"
 exec "${VENV_DIR}/bin/celery" -A suap beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
