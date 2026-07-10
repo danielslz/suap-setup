@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Este documento define os requisitos para o projeto **suap-setup**, uma coleção de scripts shell que automatizam a configuração do ambiente da aplicação SUAP em sistemas Linux. Os scripts suportam distribuições Debian-like (Debian/Ubuntu) e RPM-like (Fedora/RHEL/CentOS), cobrindo ambientes de desenvolvimento, produção, instalação de serviços de infraestrutura (Redis e Nginx) e ambientes containerizados com Docker.
+Este documento define os requisitos para o projeto **suap-setup**, uma coleção de scripts shell que automatizam a configuração do ambiente da aplicação SUAP em sistemas Linux e macOS. Os scripts suportam distribuições Debian-like (Debian/Ubuntu), RPM-like (Fedora/RHEL/CentOS), Arch Linux (Arch/Manjaro/EndeavourOS) e macOS (via Homebrew), cobrindo ambientes de desenvolvimento, produção, instalação de serviços de infraestrutura (Redis e Nginx) e ambientes containerizados com Docker.
 
 ## Glossary
 
@@ -15,6 +15,11 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 - **Script_Docker_Prod**: Script para construção e execução do ambiente SUAP em container Docker para produção.
 - **Distribuição_Debian**: Família de distribuições baseadas em Debian (Debian, Ubuntu e derivados).
 - **Distribuição_RPM**: Família de distribuições baseadas em RPM (Fedora, RHEL, CentOS e derivados).
+- **Distribuição_Arch**: Família de distribuições baseadas em Arch Linux (Arch, Manjaro, EndeavourOS e derivados).
+- **Distribuição_macOS**: Sistema operacional macOS da Apple, utilizando Homebrew como gerenciador de pacotes.
+- **Script_Dev_Arch**: Script de configuração de ambiente de desenvolvimento para Arch Linux (`arch/suap-dev.sh`).
+- **Script_Prod_Arch**: Script de configuração de ambiente de produção para Arch Linux (`arch/suap-prod.sh`).
+- **Script_Dev_macOS**: Script de configuração de ambiente de desenvolvimento para macOS (`macos/suap-dev.sh`).
 - **UV**: Gerenciador de pacotes Python moderno (astral.sh/uv) utilizado no ambiente de desenvolvimento.
 - **Supervisor**: Sistema de controle de processos utilizado para gerenciar serviços SUAP em produção.
 - **Virtualenv**: Ambiente virtual Python isolado para dependências do projeto.
@@ -23,6 +28,7 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 - **Docker_Compose**: Ferramenta para definir e executar aplicações multi-container Docker usando arquivo `docker-compose.yml`.
 - **Dockhand**: Interface web para gerenciamento de containers Docker (https://dockhand.pro/), executada como container Docker.
 - **Wizard_Env**: Assistente interativo executado pelo Wrapper para criação do Arquivo_Env_Central quando este não existe, solicitando ao usuário os valores de cada variável via prompts no terminal.
+- **Script_Install_Docker**: Script de instalação automatizada do Docker (`docker/install-docker.sh`) que suporta Distribuição_Debian e Distribuição_RPM, adicionando o repositório oficial Docker e instalando o Docker Engine e Docker Compose plugin.
 
 ## Requirements
 
@@ -43,15 +49,17 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 9. WHEN uma variável é definida no Arquivo_Env_Central, THE Script_Dev SHALL utilizar o valor centralizado em vez de definir a variável localmente no corpo do script.
 10. WHEN uma variável é definida no Arquivo_Env_Central, THE Script_Prod SHALL utilizar o valor centralizado em vez de definir a variável localmente no corpo do script.
 
-### Requirement 2: Detecção automática da distribuição Linux
+### Requirement 2: Detecção automática da distribuição ou sistema operacional
 
-**User Story:** Como administrador de sistemas, eu quero que o wrapper detecte automaticamente a família da distribuição Linux, para que o script correto seja executado sem intervenção manual.
+**User Story:** Como administrador de sistemas, eu quero que o wrapper detecte automaticamente a família da distribuição Linux ou o sistema operacional macOS, para que o script correto seja executado sem intervenção manual.
 
 #### Acceptance Criteria
 
-1. WHEN o arquivo `/etc/os-release` está presente, THE Wrapper SHALL identificar a família da distribuição como Distribuição_Debian ou Distribuição_RPM com base nos campos `ID` e `ID_LIKE`.
-2. IF o arquivo `/etc/os-release` não está presente, THEN THE Wrapper SHALL exibir uma mensagem de erro e encerrar a execução com código de saída 3.
-3. IF a distribuição identificada não pertence à família Distribuição_Debian nem à família Distribuição_RPM, THEN THE Wrapper SHALL exibir uma mensagem informando a distribuição não suportada e encerrar com código de saída 3.
+1. WHEN o arquivo `/etc/os-release` está presente, THE Wrapper SHALL identificar a família da distribuição como Distribuição_Debian, Distribuição_RPM ou Distribuição_Arch com base nos campos `ID` e `ID_LIKE`.
+2. WHEN o campo `ID` é "arch" ou o campo `ID_LIKE` contém "arch" no `/etc/os-release`, THE Wrapper SHALL classificar a distribuição como Distribuição_Arch.
+3. WHEN o comando `uname -s` retorna "Darwin", THE Wrapper SHALL classificar o sistema operacional como Distribuição_macOS independentemente da presença do `/etc/os-release`.
+4. IF o arquivo `/etc/os-release` não está presente e o sistema não é Distribuição_macOS, THEN THE Wrapper SHALL exibir uma mensagem de erro e encerrar a execução com código de saída 3.
+5. IF a distribuição identificada não pertence à família Distribuição_Debian, Distribuição_RPM, Distribuição_Arch nem é Distribuição_macOS, THEN THE Wrapper SHALL exibir uma mensagem informando a distribuição não suportada e encerrar com código de saída 3.
 
 ### Requirement 3: Menu interativo do wrapper
 
@@ -60,9 +68,10 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 #### Acceptance Criteria
 
 1. WHEN a detecção da distribuição é concluída com sucesso, THE Wrapper SHALL exibir um menu com as opções: (1) Configurar ambiente dev, (2) Configurar ambiente prod, (3) Instalar Redis, (4) Instalar Nginx, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker, (7) Iniciar Dockhand.
-2. WHEN o usuário seleciona uma opção válida (1 a 7), THE Wrapper SHALL executar o script correspondente à distribuição detectada, ao ambiente Docker ou ao Dockhand.
-3. IF o usuário informa uma opção inválida, THEN THE Wrapper SHALL exibir uma mensagem de erro e encerrar com código de saída 1.
-4. IF o arquivo do script correspondente não é encontrado no diretório, THEN THE Wrapper SHALL exibir uma mensagem de erro e encerrar com código de saída 2.
+2. WHILE executando em Distribuição_macOS, THE Wrapper SHALL exibir apenas as opções (1) Configurar ambiente dev, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker e (7) Iniciar Dockhand, ocultando as opções 2, 3 e 4 com uma mensagem "não suportado no macOS".
+3. WHEN o usuário seleciona uma opção válida (1 a 7), THE Wrapper SHALL executar o script correspondente à distribuição detectada, ao ambiente Docker ou ao Dockhand.
+4. IF o usuário informa uma opção inválida, THEN THE Wrapper SHALL exibir uma mensagem de erro e encerrar com código de saída 1.
+5. IF o arquivo do script correspondente não é encontrado no diretório, THEN THE Wrapper SHALL exibir uma mensagem de erro e encerrar com código de saída 2.
 
 ### Requirement 4: Gerenciamento da URL do repositório Git
 
@@ -220,6 +229,7 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 
 1. WHILE executando em uma Distribuição_Debian, THE Script_Prod SHALL copiar arquivos de configuração do Supervisor para `/etc/supervisor/conf.d/`.
 2. WHILE executando em uma Distribuição_RPM, THE Script_Prod SHALL copiar arquivos de configuração do Supervisor para `/etc/supervisord.d/`.
+3. WHILE executando em uma Distribuição_Arch, THE Script_Prod SHALL copiar arquivos de configuração do Supervisor para `/etc/supervisor.d/` ou configurar serviços via systemd user services.
 
 ### Requirement 18: Instalação do Redis
 
@@ -253,6 +263,7 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 1. WHILE executando em uma Distribuição_Debian, THE Script_Nginx SHALL copiar a configuração para `/etc/nginx/sites-available/suap` e criar um link simbólico em `/etc/nginx/sites-enabled/suap`.
 2. WHILE executando em uma Distribuição_Debian, THE Script_Nginx SHALL remover o link simbólico da configuração padrão em `/etc/nginx/sites-enabled/default` somente após a configuração do SUAP ser copiada e o link simbólico em `sites-enabled/suap` ser criado com sucesso.
 3. WHILE executando em uma Distribuição_RPM, THE Script_Nginx SHALL copiar a configuração para `/etc/nginx/conf.d/suap.conf`.
+4. WHILE executando em uma Distribuição_Arch, THE Script_Nginx SHALL copiar a configuração para `/etc/nginx/conf.d/suap.conf`.
 
 ### Requirement 21: Configuração do Nginx como proxy reverso
 
@@ -278,7 +289,7 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 1. THE Script_Docker_Dev SHALL fornecer um arquivo `Dockerfile` para construção da imagem de desenvolvimento do SUAP com todas as dependências necessárias.
 2. THE Script_Docker_Dev SHALL fornecer um arquivo `docker-compose.yml` que defina os serviços necessários para o ambiente de desenvolvimento (aplicação SUAP, banco de dados PostgreSQL e Redis).
 3. WHEN o Script_Docker_Dev é executado, THE Script_Docker_Dev SHALL verificar se o Docker e o Docker_Compose estão instalados no sistema.
-4. IF o Docker ou o Docker_Compose não estão instalados, THEN THE Script_Docker_Dev SHALL exibir uma mensagem de erro informando os pré-requisitos, bloquear todas as operações de container e encerrar com código de saída 1.
+4. IF o Docker ou o Docker_Compose não estão instalados, THEN THE Script_Docker_Dev SHALL oferecer ao usuário a opção de instalar o Docker automaticamente usando o Script_Install_Docker conforme definido no Requirement 29, e caso o usuário recuse, exibir uma mensagem de erro informando os pré-requisitos e encerrar com código de saída 1.
 5. WHEN o Docker e o Docker_Compose estão disponíveis, THE Script_Docker_Dev SHALL construir as imagens e iniciar os containers usando `docker compose up`.
 6. THE Script_Docker_Dev SHALL montar o código-fonte do SUAP como volume no container para permitir edição em tempo real no host.
 7. THE Script_Docker_Dev SHALL expor a porta 8000 do container de desenvolvimento para acesso local à aplicação.
@@ -294,7 +305,7 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 1. THE Script_Docker_Prod SHALL fornecer um arquivo `Dockerfile` otimizado para produção com imagem base mínima e multi-stage build.
 2. THE Script_Docker_Prod SHALL fornecer um arquivo `docker-compose.prod.yml` que defina os serviços necessários para o ambiente de produção (aplicação SUAP, Celery Worker, Celery Beat, Celery Flower, Redis e Nginx como proxy reverso).
 3. WHEN o Script_Docker_Prod é executado, THE Script_Docker_Prod SHALL verificar se o Docker e o Docker_Compose estão instalados no sistema.
-4. IF o Docker ou o Docker_Compose não estão instalados, THEN THE Script_Docker_Prod SHALL exibir uma mensagem de erro informando os pré-requisitos, bloquear todas as operações de container e encerrar com código de saída 1.
+4. IF o Docker ou o Docker_Compose não estão instalados, THEN THE Script_Docker_Prod SHALL oferecer ao usuário a opção de instalar o Docker automaticamente usando o Script_Install_Docker conforme definido no Requirement 29, e caso o usuário recuse, exibir uma mensagem de erro informando os pré-requisitos e encerrar com código de saída 1.
 5. WHEN o Docker e o Docker_Compose estão disponíveis, THE Script_Docker_Prod SHALL construir as imagens e iniciar os containers usando `docker compose -f docker-compose.prod.yml up -d`.
 6. THE Script_Docker_Prod SHALL configurar o container Nginx como proxy reverso para o container da aplicação SUAP.
 7. THE Script_Docker_Prod SHALL configurar volumes persistentes para dados do banco de dados, arquivos de mídia e logs.
@@ -345,7 +356,7 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 #### Acceptance Criteria
 
 1. WHEN o usuário seleciona a opção 7 no menu, THE Wrapper SHALL verificar se o Docker está disponível no sistema antes de prosseguir.
-2. IF o Docker não está instalado ou o daemon não está em execução, THEN THE Wrapper SHALL exibir uma mensagem de erro informando que o Docker é pré-requisito para o Dockhand e encerrar com código de saída 1.
+2. IF o Docker não está instalado ou o daemon não está em execução, THEN THE Wrapper SHALL oferecer ao usuário a opção de instalar o Docker automaticamente usando o Script_Install_Docker conforme definido no Requirement 29, e caso o usuário recuse ou a instalação falhe, exibir uma mensagem de erro informando que o Docker é pré-requisito para o Dockhand e encerrar com código de saída 1.
 3. WHEN o Docker está disponível, THE Wrapper SHALL executar `docker pull lscr.io/linuxserver/dockhand:latest` para obter a imagem mais recente do Dockhand.
 4. WHEN a imagem é obtida, THE Wrapper SHALL iniciar o container Dockhand expondo a interface web na porta 9093 do host.
 5. WHEN o container Dockhand é iniciado, THE Wrapper SHALL montar o socket do Docker (`/var/run/docker.sock`) como volume para permitir o gerenciamento dos containers do host.
@@ -369,3 +380,63 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 8. WHEN o usuário informa qualquer valor não vazio para GIT_URL, THE Wizard_Env SHALL aceitar a string fornecida e utilizá-la sem validação adicional de formato.
 9. WHEN todos os valores são coletados, THE Wizard_Env SHALL gravar o Arquivo_Env_Central com comentários descritivos acima de cada variável.
 10. WHEN o Arquivo_Env_Central é gravado com sucesso, THE Wizard_Env SHALL exibir uma mensagem de confirmação mostrando o caminho do arquivo criado e um resumo dos valores configurados.
+
+### Requirement 29: Instalação interativa do Docker
+
+**User Story:** Como administrador de sistemas, eu quero que o script ofereça instalar o Docker automaticamente quando ele não está presente, para que eu possa configurar o ambiente Docker sem precisar instalar manualmente os pré-requisitos.
+
+#### Acceptance Criteria
+
+1. WHEN a função `check_docker_available()` detecta que o Docker não está instalado, THE Script_Install_Docker SHALL exibir um prompt perguntando ao usuário se deseja instalar o Docker automaticamente.
+2. WHEN o usuário responde afirmativamente ao prompt de instalação, THE Script_Install_Docker SHALL executar o script de instalação localizado em `docker/install-docker.sh`.
+3. IF o usuário responde negativamente ao prompt de instalação, THEN THE Script_Install_Docker SHALL exibir uma mensagem de erro informando os pré-requisitos e encerrar com código de saída 1.
+4. WHILE executando em uma Distribuição_Debian, THE Script_Install_Docker SHALL adicionar o repositório oficial Docker para apt conforme documentação oficial (https://docs.docker.com/engine/install/debian/) e instalar os pacotes `docker-ce`, `docker-ce-cli`, `containerd.io` e `docker-compose-plugin`.
+5. WHILE executando em uma Distribuição_RPM, THE Script_Install_Docker SHALL adicionar o repositório oficial Docker para dnf conforme documentação oficial (https://docs.docker.com/engine/install/fedora/) e instalar os pacotes `docker-ce`, `docker-ce-cli`, `containerd.io` e `docker-compose-plugin`.
+6. WHILE executando em uma Distribuição_Arch, THE Script_Install_Docker SHALL instalar os pacotes `docker` e `docker-compose` usando `pacman -S --needed --noconfirm`.
+7. WHILE executando em uma Distribuição_macOS, THE Script_Install_Docker SHALL informar que o Docker Desktop é obrigatório, exibir a URL de download (https://docs.docker.com/desktop/install/mac-install/) e encerrar sem realizar instalação automatizada.
+8. WHEN a instalação dos pacotes Docker é concluída, THE Script_Install_Docker SHALL iniciar o serviço Docker via `systemctl start docker`.
+9. WHEN o serviço Docker é iniciado, THE Script_Install_Docker SHALL habilitar o serviço Docker para iniciar automaticamente no boot via `systemctl enable docker`.
+10. WHEN a instalação dos pacotes Docker é concluída, THE Script_Install_Docker SHALL adicionar o usuário atual ao grupo `docker` para permitir execução sem privilégios de root.
+11. WHEN a instalação e configuração são concluídas, THE Script_Install_Docker SHALL verificar que o Docker funciona corretamente executando `docker --version` e `docker compose version`.
+12. IF a verificação pós-instalação falha (o comando `docker --version` ou `docker compose version` retorna erro), THEN THE Script_Install_Docker SHALL exibir uma mensagem de erro informando que a instalação não foi concluída com sucesso e encerrar com código de saída 1.
+13. WHEN a verificação pós-instalação é bem-sucedida, THE Script_Install_Docker SHALL exibir uma mensagem de sucesso com as versões instaladas e informar ao usuário que pode ser necessário fazer logout e login novamente para que a adição ao grupo `docker` tenha efeito.
+14. IF a instalação dos pacotes Docker falha (erro no gerenciador de pacotes), THEN THE Script_Install_Docker SHALL exibir uma mensagem de erro com detalhes da falha e encerrar com código de saída 1.
+15. IF o sistema operacional não é uma Distribuição_Debian, Distribuição_RPM, Distribuição_Arch nem Distribuição_macOS, THEN THE Script_Install_Docker SHALL exibir uma mensagem informando que a instalação automática não é suportada para a distribuição detectada e encerrar com código de saída 1.
+
+### Requirement 30: Suporte a Arch Linux
+
+**User Story:** Como desenvolvedor usando Arch Linux, eu quero que os scripts suportem minha distribuição, para que eu possa configurar o ambiente SUAP sem adaptações manuais.
+
+#### Acceptance Criteria
+
+1. WHEN o campo `ID` no `/etc/os-release` é "arch" ou o campo `ID_LIKE` contém "arch", THE Wrapper SHALL classificar a distribuição como Distribuição_Arch e rotear para os scripts no diretório `arch/`.
+2. WHEN a distribuição detectada é Distribuição_Arch, THE Script_Dev_Arch SHALL instalar dependências do sistema usando `pacman -S --needed --noconfirm`.
+3. WHEN a distribuição detectada é Distribuição_Arch, THE Script_Prod_Arch SHALL instalar dependências de produção usando `pacman -S --needed --noconfirm`.
+4. THE Script_Dev_Arch SHALL utilizar nomes de pacotes adaptados ao ecossistema Arch (ex: `base-devel`, `python`, `redis`, `nginx`).
+5. THE Script_Prod_Arch SHALL utilizar nomes de pacotes adaptados ao ecossistema Arch incluindo pacotes do AUR ou repositório community quando necessário (ex: `supervisor`).
+6. WHEN o locale precisa ser configurado em Distribuição_Arch, THE Script_Dev_Arch SHALL utilizar `localectl set-locale LANG=pt_BR.UTF-8` para configuração do locale.
+7. WHEN a função `is_pkg_installed()` é chamada em Distribuição_Arch, THE Script_Dev_Arch SHALL verificar a instalação do pacote usando `pacman -Q`.
+8. WHEN a função `is_pkg_installed()` é chamada em Distribuição_Arch, THE Script_Prod_Arch SHALL verificar a instalação do pacote usando `pacman -Q`.
+9. WHILE executando em uma Distribuição_Arch, THE Script_Prod_Arch SHALL copiar arquivos de configuração do Supervisor para `/etc/supervisor.d/` ou configurar serviços via systemd user services.
+10. WHILE executando em uma Distribuição_Arch, THE Script_Nginx SHALL copiar a configuração do Nginx para `/etc/nginx/conf.d/suap.conf` seguindo o mesmo padrão da Distribuição_RPM.
+11. WHEN o usuário seleciona as opções 1 a 4 no menu e a distribuição detectada é Distribuição_Arch, THE Wrapper SHALL rotear a execução para os scripts correspondentes no diretório `arch/`.
+12. WHILE executando em uma Distribuição_Arch, THE Script_Install_Docker SHALL instalar os pacotes `docker` e `docker-compose` usando `pacman -S --needed --noconfirm`.
+
+### Requirement 31: Suporte a macOS
+
+**User Story:** Como desenvolvedor usando macOS, eu quero configurar o ambiente de desenvolvimento SUAP no meu Mac, para que eu possa desenvolver sem precisar de uma VM Linux.
+
+#### Acceptance Criteria
+
+1. WHEN o comando `uname -s` retorna "Darwin", THE Wrapper SHALL classificar o sistema operacional como Distribuição_macOS e rotear para os scripts no diretório `macos/`.
+2. THE Distribuição_macOS SHALL suportar apenas o ambiente de desenvolvimento (Script_Dev_macOS); scripts de produção não são fornecidos para macOS.
+3. WHEN a distribuição detectada é Distribuição_macOS, THE Script_Dev_macOS SHALL verificar se o Homebrew está instalado no sistema.
+4. IF o Homebrew não está instalado, THEN THE Script_Dev_macOS SHALL exibir uma mensagem de erro com instruções de instalação (https://brew.sh) e encerrar com código de saída 1.
+5. WHEN o Homebrew está disponível, THE Script_Dev_macOS SHALL instalar dependências do sistema usando `brew install`.
+6. THE Script_Dev_macOS SHALL utilizar nomes de pacotes adaptados ao Homebrew (ex: `openldap`, `libpq`, `freetype`, `libxml2`).
+7. WHEN a configuração de locale é solicitada em Distribuição_macOS, THE Script_Dev_macOS SHALL pular a etapa com uma mensagem informativa (msg_skip) indicando que a configuração de locale não é necessária no macOS.
+8. WHEN a configuração de timezone é solicitada em Distribuição_macOS, THE Script_Dev_macOS SHALL configurar o timezone usando `sudo systemsetup -settimezone America/Fortaleza`.
+9. WHEN a função `is_pkg_installed()` é chamada em Distribuição_macOS, THE Script_Dev_macOS SHALL verificar a instalação do pacote usando `brew list --formula | grep -q`.
+10. WHILE executando em Distribuição_macOS, THE Wrapper SHALL exibir no menu apenas as opções (1) Configurar ambiente dev, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker e (7) Iniciar Dockhand; as opções 2, 3 e 4 SHALL ser ocultadas com mensagem "não suportado no macOS".
+11. WHEN a função `check_docker_available()` é executada em Distribuição_macOS, THE Script_Install_Docker SHALL verificar se o Docker Desktop está instalado no sistema.
+12. IF o Docker Desktop não está instalado em Distribuição_macOS, THEN THE Script_Install_Docker SHALL exibir a URL de download (https://docs.docker.com/desktop/install/mac-install/) e informar que o Docker Desktop é obrigatório, sem realizar instalação automatizada via brew.

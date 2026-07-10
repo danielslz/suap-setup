@@ -395,6 +395,154 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
 - [x] 16. Checkpoint final - Verificar melhorias de robustez
   - Garantir que todos os testes passem, perguntar ao usuário se houver dúvidas.
 
+- [ ] 17. Atualizar detecção de distribuição e funções utilitárias para Arch Linux e macOS
+  - [ ] 17.1 Atualizar `detect_distro()` em `lib/common.sh` para suporte a Arch e macOS
+    - Adicionar verificação `uname -s` para Darwin → definir `DISTRO_TYPE="macos"` antes de ler `/etc/os-release`
+    - Adicionar verificação de ID/ID_LIKE contendo "arch" → definir `DISTRO_TYPE="arch"`
+    - Manter compatibilidade com "deb" e "rpm" existentes
+    - Atualizar exit 3 para listar as 4 famílias suportadas na mensagem de erro
+    - _Requisitos: 2.1, 2.2, 2.3, 2.4, 2.5, 30.1, 31.1_
+
+  - [ ] 17.2 Atualizar `is_pkg_installed()` em `lib/common.sh` para Arch e macOS
+    - Adicionar case "arch" → usar `pacman -Q "$pkg_name" &>/dev/null`
+    - Adicionar case "macos" → usar `brew list --formula 2>/dev/null | grep -q "^${pkg_name}$"`
+    - Manter cases existentes para "deb" (dpkg) e "rpm" (rpm -q)
+    - _Requisitos: 30.7, 30.8, 31.9_
+
+  - [ ] 17.3 Atualizar `get_supervisor_conf_dir()` em `lib/common.sh`
+    - Adicionar case "arch" → retornar `/etc/supervisor.d/`
+    - Manter cases existentes para "deb" e "rpm"
+    - _Requisitos: 17.3, 30.9_
+
+  - [ ] 17.4 Atualizar `get_nginx_conf_path()` em `lib/common.sh`
+    - Adicionar case "arch" → retornar `/etc/nginx/conf.d/suap.conf` (mesmo padrão RPM)
+    - _Requisitos: 20.4, 30.10_
+
+  - [ ] 17.5 Atualizar `check_docker_available()` em `lib/common.sh`
+    - Adicionar suporte a Arch: oferecer instalar via `pacman -S --needed --noconfirm docker docker-compose`
+    - Adicionar suporte a macOS: verificar Docker Desktop, exibir URL advisory se ausente
+    - _Requisitos: 29.6, 29.7, 31.11, 31.12_
+
+  - [ ]* 17.6 Atualizar teste de propriedade `tests/property/test_distro_paths.bats`
+    - Adicionar cenários de teste para `ID=arch` e `ID_LIKE=arch` → DISTRO_TYPE="arch"
+    - Adicionar cenário de teste para `uname -s` == "Darwin" → DISTRO_TYPE="macos"
+    - Verificar que `get_supervisor_conf_dir()` retorna `/etc/supervisor.d/` para Arch
+    - Verificar que `get_nginx_conf_path()` retorna `/etc/nginx/conf.d/suap.conf` para Arch
+    - **Property 2: Classificação de distribuição/OS determina caminhos corretos**
+    - **Valida: Requisitos 2.2, 2.3, 17.3, 20.4, 30.1, 31.1**
+
+- [ ] 18. Implementar scripts Arch Linux
+  - [ ] 18.1 Criar `arch/suap-dev.sh`
+    - Criar diretório `arch/` e arquivo `suap-dev.sh`
+    - Fazer source de `lib/common.sh` e chamar `require_env_file()` + `load_env_file()`
+    - Chamar `resolve_git_url()`
+    - Instalar dependências via `pacman -S --needed --noconfirm` (base-devel, python, openldap, etc.)
+    - Halt com exit 1 se `pacman` falha
+    - Configurar locale via `localectl set-locale LANG=pt_BR.UTF-8` (se necessário)
+    - Configurar timezone via `timedatectl set-timezone America/Fortaleza` (se necessário)
+    - Verificar pacotes com `pacman -Q`
+    - Instalar UV, clone/pull SUAP, gerar configs, criar venv, instalar deps (mesma lógica dev)
+    - Garantir idempotência e mensagens `msg_action()`/`msg_skip()`
+    - _Requisitos: 1.2, 1.7, 1.8, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 8.1, 8.2, 9.1, 9.2, 9.3, 9.4, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 24.1, 24.3, 25.1, 25.2, 26.1, 30.2, 30.4, 30.6, 30.7_
+
+  - [ ] 18.2 Criar `arch/suap-prod.sh`
+    - Criar arquivo `arch/suap-prod.sh`
+    - Fazer source de `lib/common.sh` e chamar `require_env_file()` + `load_env_file()`
+    - Validar execução como root (exit 1 se EUID != 0)
+    - Instalar dependências de produção via `pacman -S --needed --noconfirm` (python, supervisor, cronie, chrony, etc.)
+    - Halt com exit 1 se `pacman` falha
+    - Configurar locale via `localectl` e timezone via `timedatectl`
+    - Clone com `git clone --depth 1` ou pull
+    - Criar virtualenv com `python3 -m venv`, instalar deps via pip
+    - Halt com exit 1 se `pip install` falha
+    - Menu do Supervisor (SUAP / Celery / Ambos)
+    - Copiar configs para `/etc/supervisor.d/`
+    - Executar supervisorctl reread/update condicionalmente (flag FILES_COPIED)
+    - Ajustar permissões
+    - _Requisitos: 1.3, 1.7, 1.9, 11.1, 11.2, 11.3, 12.1, 12.2, 13.1, 13.2, 14.1, 14.2, 14.3, 14.4, 14.5, 14.6, 15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.7, 15.8, 15.9, 16.1, 17.3, 24.2, 24.4, 25.3, 25.4, 26.2, 30.3, 30.5, 30.8, 30.9_
+
+  - [ ] 18.3 Criar `arch/install-redis.sh`
+    - Criar arquivo `arch/install-redis.sh`
+    - Fazer source de `lib/common.sh`
+    - Instalar pacote Redis via `pacman -S --needed --noconfirm redis`
+    - Iniciar e habilitar serviço via `systemctl start redis` + `systemctl enable redis`
+    - Exibir status com `msg_action()`
+    - _Requisitos: 18.1, 18.2, 18.3, 25.5, 30.4_
+
+  - [ ] 18.4 Criar `arch/install-nginx.sh`
+    - Criar arquivo `arch/install-nginx.sh`
+    - Fazer source de `lib/common.sh`
+    - Instalar pacote Nginx via `pacman -S --needed --noconfirm nginx`
+    - Iniciar e habilitar serviço via systemctl
+    - Copiar configuração para `/etc/nginx/conf.d/suap.conf`
+    - Testar com `nginx -t` e recarregar com `systemctl reload nginx`
+    - Exibir mensagens com `msg_action()`
+    - _Requisitos: 19.1, 19.2, 19.3, 19.4, 19.5, 19.6, 20.4, 25.6, 30.10_
+
+- [ ] 19. Implementar script macOS
+  - [ ] 19.1 Criar `macos/suap-dev.sh`
+    - Criar diretório `macos/` e arquivo `suap-dev.sh`
+    - Fazer source de `lib/common.sh` e chamar `require_env_file()` + `load_env_file()`
+    - Verificar Homebrew instalado (exit 1 com `msg_error` + URL https://brew.sh se ausente)
+    - Chamar `resolve_git_url()`
+    - Instalar dependências via `brew install` (openldap, libpq, freetype, libxml2, etc.)
+    - Halt com exit 1 se `brew install` falha
+    - Pular configuração de locale com `msg_skip` ("Locale não necessário no macOS")
+    - Configurar timezone via `sudo systemsetup -settimezone America/Fortaleza` (se necessário)
+    - Verificar pacotes com `brew list --formula | grep -q`
+    - Instalar UV, clone/pull SUAP, gerar configs, criar venv, instalar deps (mesma lógica dev)
+    - Garantir idempotência e mensagens `msg_action()`/`msg_skip()`
+    - _Requisitos: 1.2, 1.7, 1.8, 5.1, 5.4, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 8.1, 8.2, 9.1, 9.2, 9.3, 9.4, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 24.1, 24.3, 25.1, 25.2, 26.1, 31.1, 31.3, 31.4, 31.5, 31.6, 31.7, 31.8, 31.9_
+
+- [ ] 20. Criar script de instalação do Docker (`docker/install-docker.sh`)
+  - [ ] 20.1 Implementar `docker/install-docker.sh`
+    - Criar arquivo `docker/install-docker.sh`
+    - Fazer source de `lib/common.sh`
+    - Detectar distribuição/OS via `detect_distro()`
+    - Implementar case Debian: adicionar repositório oficial Docker (gpg key + sources.list) + `apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin`
+    - Implementar case RPM: adicionar repositório oficial Docker (dnf config-manager) + `dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin`
+    - Implementar case Arch: `pacman -S --needed --noconfirm docker docker-compose`
+    - Implementar case macOS: exibir URL advisory (https://docs.docker.com/desktop/install/mac-install/) + exit 0 sem instalação automatizada
+    - Caso distro não suportada: `msg_error` + exit 1
+    - Após instalação: `systemctl start docker` + `systemctl enable docker`
+    - Adicionar usuário atual ao grupo docker: `usermod -aG docker $USER`
+    - Verificação pós-instalação: `docker --version` + `docker compose version`
+    - Se verificação falha: `msg_error` + exit 1
+    - Exibir mensagem de sucesso com versões e aviso sobre logout/login
+    - _Requisitos: 29.1, 29.2, 29.3, 29.4, 29.5, 29.6, 29.7, 29.8, 29.9, 29.10, 29.11, 29.12, 29.13, 29.14, 29.15_
+
+  - [ ]* 20.2 Escrever testes de fumaça para `docker/install-docker.sh`
+    - Validar que o script faz source de `lib/common.sh`
+    - Validar presença de cases para deb, rpm, arch, macos
+    - Validar que instala pacotes docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin (deb/rpm)
+    - Validar que Arch usa `pacman -S --needed --noconfirm docker docker-compose`
+    - Validar presença de `systemctl start docker` e `systemctl enable docker`
+    - Validar presença de `usermod -aG docker`
+    - Validar verificação pós-instalação (`docker --version`, `docker compose version`)
+    - _Requisitos: 29.4, 29.5, 29.6, 29.8, 29.9, 29.10, 29.11_
+
+- [ ] 21. Atualizar `setup.sh` para roteamento Arch e macOS
+  - [ ] 21.1 Atualizar menu e roteamento em `setup.sh`
+    - Adicionar roteamento de opções 1-4 para diretório `arch/` quando `DISTRO_TYPE="arch"`
+    - Adicionar roteamento de opção 1 para `macos/suap-dev.sh` quando `DISTRO_TYPE="macos"`
+    - Implementar menu restrito para macOS: exibir opções 1, 5, 6, 7; ocultar 2, 3, 4 com mensagem "não suportado no macOS"
+    - Manter roteamento existente para deb/rpm intacto
+    - Manter opções Docker (5, 6, 7) independentes de distro
+    - _Requisitos: 3.1, 3.2, 3.3, 3.4, 30.11, 31.10_
+
+  - [ ]* 21.2 Atualizar teste de propriedade `tests/property/test_routing.bats`
+    - Adicionar distro "arch" ao gerador de distros no test de roteamento
+    - Adicionar combinações: opção 1-4 + arch → `arch/suap-dev.sh`, `arch/suap-prod.sh`, `arch/install-redis.sh`, `arch/install-nginx.sh`
+    - Adicionar distro "macos" ao gerador de distros
+    - Adicionar combinação: opção 1 + macos → `macos/suap-dev.sh`
+    - Adicionar testes para opções 2, 3, 4 rejeitadas em macOS (exit 1 ou mensagem de não suportado)
+    - Atualizar `_resolve_target_script()` para incluir "arch" e "macos"
+    - **Property 3: Roteamento do menu produz caminho de script correto**
+    - **Valida: Requisitos 3.2, 3.3, 30.11, 31.10**
+
+- [ ] 22. Checkpoint - Verificar suporte Arch/macOS/Docker install
+  - Garantir que todos os testes passem, perguntar ao usuário se houver dúvidas.
+
 ## Notes
 
 - Tasks marcadas com `*` são opcionais e podem ser puladas para um MVP mais rápido
@@ -427,7 +575,11 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     { "id": 14, "tasks": ["15.1", "15.2"] },
     { "id": 15, "tasks": ["15.3", "15.4", "15.5", "15.6", "15.7"] },
     { "id": 16, "tasks": ["15.8", "15.9", "15.10"] },
-    { "id": 17, "tasks": ["15.11", "15.12", "15.13"] }
+    { "id": 17, "tasks": ["15.11", "15.12", "15.13"] },
+    { "id": 18, "tasks": ["17.1", "17.2", "17.3", "17.4", "17.5"] },
+    { "id": 19, "tasks": ["17.6", "18.1", "18.3", "18.4", "19.1", "20.1"] },
+    { "id": 20, "tasks": ["18.2", "20.2", "21.1"] },
+    { "id": 21, "tasks": ["21.2"] }
   ]
 }
 ```
