@@ -20,13 +20,12 @@ echo ""
 echo "${GREEN}=== SUAP Setup ===${NO_COLOR}"
 if [ "${DISTRO_TYPE}" = "macos" ]; then
   echo "1) Configurar ambiente de desenvolvimento"
-  echo "2) Configurar ambiente de produção (não suportado no macOS)"
-  echo "3) Instalar Redis (não suportado no macOS)"
-  echo "4) Instalar Nginx (não suportado no macOS)"
-  echo "5) Configurar ambiente dev via Docker"
-  echo "6) Configurar ambiente prod via Docker"
-  echo "7) Iniciar Dockhand (via Docker)"
+  echo "2) Configurar ambiente dev via Docker"
+  echo "3) Configurar ambiente prod via Docker"
+  echo "4) Iniciar Dockhand (via Docker)"
   echo "0) Sair"
+  echo ""
+  read -rp "Escolha uma opção [0-4]: " CHOICE
 else
   echo "1) Configurar ambiente de desenvolvimento"
   echo "2) Configurar ambiente de produção"
@@ -36,9 +35,9 @@ else
   echo "6) Configurar ambiente prod via Docker"
   echo "7) Iniciar Dockhand (via Docker)"
   echo "0) Sair"
+  echo ""
+  read -rp "Escolha uma opção [0-7]: " CHOICE
 fi
-echo ""
-read -rp "Escolha uma opção [0-7]: " CHOICE
 
 # Sair imediatamente se opção 0
 if [ "${CHOICE}" = "0" ]; then
@@ -46,20 +45,23 @@ if [ "${CHOICE}" = "0" ]; then
   exit 0
 fi
 
-# Validar opção
-case "${CHOICE}" in
-  1|2|3|4|5|6|7) ;;
-  *)
-    msg_error "Opção inválida: use 0, 1, 2, 3, 4, 5, 6 ou 7."
-    exit 1
-    ;;
-esac
-
-# Rejeitar opções não suportadas no macOS
+# Remapear opções do macOS para o mapeamento interno
 if [ "${DISTRO_TYPE}" = "macos" ]; then
   case "${CHOICE}" in
-    2|3|4)
-      msg_error "Opção ${CHOICE} não suportada no macOS."
+    1) INTERNAL_CHOICE="1" ;;  # dev
+    2) INTERNAL_CHOICE="5" ;;  # docker dev
+    3) INTERNAL_CHOICE="6" ;;  # docker prod
+    4) INTERNAL_CHOICE="7" ;;  # dockhand
+    *)
+      msg_error "Opção inválida: use 0, 1, 2, 3 ou 4."
+      exit 1
+      ;;
+  esac
+else
+  case "${CHOICE}" in
+    1|2|3|4|5|6|7) INTERNAL_CHOICE="${CHOICE}" ;;
+    *)
+      msg_error "Opção inválida: use 0, 1, 2, 3, 4, 5, 6 ou 7."
       exit 1
       ;;
   esac
@@ -76,7 +78,7 @@ fi
 #   6 (docker prod):PYTHON_VERSION, GIT_URL
 #   7 (dockhand):   nenhuma
 
-ensure_env_for_option "${ENV_FILE}" "${CHOICE}"
+ensure_env_for_option "${ENV_FILE}" "${INTERNAL_CHOICE}"
 
 # Carregar variáveis
 if [ -f "${ENV_FILE}" ]; then
@@ -84,7 +86,7 @@ if [ -f "${ENV_FILE}" ]; then
 fi
 
 # Determinar script a executar
-case "${CHOICE}" in
+case "${INTERNAL_CHOICE}" in
   1) TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/suap-dev.sh" ;;
   2) TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/suap-prod.sh" ;;
   3) TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/install-redis.sh" ;;
