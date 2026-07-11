@@ -1,13 +1,14 @@
 #!/usr/bin/env bats
-# Feature: suap-setup, Property 2: Classificação de distribuição determina caminhos corretos
+# Feature: suap-setup, Property 2: Classificação de distribuição/OS determina caminhos corretos
 #
 # Para qualquer conteúdo válido de /etc/os-release onde ID ou ID_LIKE contenha
-# identificadores de família Debian (debian, ubuntu) ou RPM (rhel, fedora, centos),
-# a função detect_distro() deve classificar corretamente como "deb" ou "rpm", e as
-# funções get_supervisor_conf_dir() e get_nginx_conf_path() devem retornar os
-# caminhos correspondentes à família detectada.
+# identificadores de família Debian (debian, ubuntu), RPM (rhel, fedora, centos)
+# ou Arch (arch), a função detect_distro() deve classificar corretamente como
+# "deb", "rpm" ou "arch", e as funções get_supervisor_conf_dir() e
+# get_nginx_conf_path() devem retornar os caminhos correspondentes à família
+# detectada. Para macOS (uname -s == "Darwin"), classifica como "macos".
 #
-# **Validates: Requirements 2.1, 17.1, 17.2, 20.1, 20.3**
+# **Validates: Requirements 2.2, 2.3, 17.1, 17.2, 17.3, 20.1, 20.3, 20.4, 30.1, 31.1**
 
 setup() {
     load '../test_helper/common-setup'
@@ -49,6 +50,12 @@ random_rpm_id() {
     random_choice "${rpm_ids[@]}"
 }
 
+# Generate a random Arch-family ID
+random_arch_id() {
+    local -a arch_ids=("arch" "manjaro" "endeavouros" "garuda" "artix" "arcolinux" "cachyos")
+    random_choice "${arch_ids[@]}"
+}
+
 # Generate a random Debian-family ID_LIKE value
 random_deb_id_like() {
     local -a deb_likes=("debian" "ubuntu" "debian ubuntu" "ubuntu debian")
@@ -59,6 +66,12 @@ random_deb_id_like() {
 random_rpm_id_like() {
     local -a rpm_likes=("rhel" "fedora" "rhel fedora" "fedora rhel" "centos rhel fedora" "rhel centos")
     random_choice "${rpm_likes[@]}"
+}
+
+# Generate a random Arch-family ID_LIKE value
+random_arch_id_like() {
+    local -a arch_likes=("arch" "arch linux" "arch linux lts")
+    random_choice "${arch_likes[@]}"
 }
 
 # Create a fake os-release file with given ID and ID_LIKE
@@ -90,7 +103,7 @@ create_os_release() {
 }
 
 # Testable version of detect_distro that reads from a custom path
-# This replicates the logic from lib/common.sh but uses OS_RELEASE_PATH
+# This replicates the logic from lib/common.sh but uses a file path parameter
 _detect_distro_from_file() {
     local os_release_file="$1"
 
@@ -112,6 +125,9 @@ _detect_distro_from_file() {
     elif echo "${id} ${id_like}" | grep -qiE '(rhel|fedora|centos)'; then
         DISTRO_TYPE="rpm"
         DISTRO_NAME="${id}"
+    elif echo "${id} ${id_like}" | grep -qiE '(arch)'; then
+        DISTRO_TYPE="arch"
+        DISTRO_NAME="${id}"
     else
         return 3
     fi
@@ -119,6 +135,22 @@ _detect_distro_from_file() {
     export DISTRO_TYPE
     export DISTRO_NAME
     return 0
+}
+
+# Testable version of detect_distro that accepts uname output as parameter
+# Used to test macOS detection without actually mocking uname
+_detect_distro_with_uname() {
+    local uname_output="$1"
+
+    if [ "$uname_output" = "Darwin" ]; then
+        DISTRO_TYPE="macos"
+        DISTRO_NAME="macos"
+        export DISTRO_TYPE
+        export DISTRO_NAME
+        return 0
+    fi
+
+    return 1
 }
 
 # --- Property Tests ---
@@ -235,13 +267,13 @@ _detect_distro_from_file() {
     for ((i = 1; i <= iterations; i++)); do
         local os_release_file="${TEST_TEMP_DIR}/os-release_unsupported_${i}"
 
-        # Generate an ID that does NOT match debian/ubuntu/rhel/fedora/centos
-        local -a unsupported_ids=("arch" "gentoo" "slackware" "void" "alpine" "suse" "opensuse" "nixos" "solus" "clear")
+        # Generate an ID that does NOT match debian/ubuntu/rhel/fedora/centos/arch
+        local -a unsupported_ids=("gentoo" "slackware" "void" "alpine" "suse" "opensuse" "nixos" "solus" "clear" "mageia")
         local id
         id=$(random_choice "${unsupported_ids[@]}")
 
         # ID_LIKE also should not match any supported family
-        local -a unsupported_likes=("" "arch" "gentoo" "suse opensuse" "independent" "")
+        local -a unsupported_likes=("" "gentoo" "suse opensuse" "independent" "")
         local id_like
         id_like=$(random_choice "${unsupported_likes[@]}")
 
@@ -280,10 +312,11 @@ _detect_distro_from_file() {
     for ((i = 1; i <= iterations; i++)); do
         local os_release_file="${TEST_TEMP_DIR}/os-release_name_${i}"
 
-        # Randomly choose deb or rpm family
+        # Randomly choose deb, rpm, or arch family
         local family
         local id
-        if (( RANDOM % 2 == 0 )); then
+        local selector=$(( RANDOM % 3 ))
+        if [ "$selector" -eq 0 ]; then
             family="deb"
             id="$(random_deb_id)"
             # Ensure it classifies correctly by adding proper ID_LIKE
@@ -292,12 +325,21 @@ _detect_distro_from_file() {
             else
                 create_os_release "$os_release_file" "$id" ""
             fi
-        else
+        elif [ "$selector" -eq 1 ]; then
             family="rpm"
             id="$(random_rpm_id)"
             # Ensure it classifies correctly by adding proper ID_LIKE
             if ! echo "$id" | grep -qiE '(rhel|fedora|centos)'; then
                 create_os_release "$os_release_file" "$id" "$(random_rpm_id_like)"
+            else
+                create_os_release "$os_release_file" "$id" ""
+            fi
+        else
+            family="arch"
+            id="$(random_arch_id)"
+            # Ensure it classifies correctly by adding proper ID_LIKE
+            if ! echo "$id" | grep -qiE '(arch)'; then
+                create_os_release "$os_release_file" "$id" "$(random_arch_id_like)"
             else
                 create_os_release "$os_release_file" "$id" ""
             fi
@@ -310,5 +352,81 @@ _detect_distro_from_file() {
 
         [ "$result" -eq 0 ] || fail "Iteration $i: detect_distro failed (exit $result) for file: $(cat "$os_release_file")"
         [ "$DISTRO_NAME" = "$id" ] || fail "Iteration $i: Expected DISTRO_NAME='${id}', got '${DISTRO_NAME}'"
+    done
+}
+
+@test "Property 2.6: Arch-family distros classify as 'arch' with correct paths (100 iterations)" {
+    local iterations=100
+    local i
+
+    for ((i = 1; i <= iterations; i++)); do
+        local os_release_file="${TEST_TEMP_DIR}/os-release_arch_${i}"
+        local id
+        id="$(random_arch_id)"
+
+        # Randomly decide whether to put the family marker in ID or ID_LIKE
+        local strategy=$(( RANDOM % 3 ))
+        case $strategy in
+            0)
+                # ID itself is "arch"
+                id="arch"
+                create_os_release "$os_release_file" "$id" ""
+                ;;
+            1)
+                # ID is derivative (e.g., manjaro), ID_LIKE contains arch
+                create_os_release "$os_release_file" "$id" "$(random_arch_id_like)"
+                ;;
+            2)
+                # ID is derivative, ID_LIKE contains "arch" with extra content
+                local id_like
+                id_like="$(random_arch_id_like)"
+                create_os_release "$os_release_file" "$id" "$id_like"
+                ;;
+        esac
+
+        # Test classification directly (not via run, to keep exports)
+        unset DISTRO_TYPE DISTRO_NAME
+        _detect_distro_from_file "$os_release_file"
+        local result=$?
+
+        [ "$result" -eq 0 ] || fail "Iteration $i: detect_distro failed (exit $result) for file: $(cat "$os_release_file")"
+        [ "$DISTRO_TYPE" = "arch" ] || fail "Iteration $i: Expected DISTRO_TYPE='arch', got '${DISTRO_TYPE}' for file: $(cat "$os_release_file")"
+
+        # Verify get_supervisor_conf_dir returns Arch path
+        local supervisor_dir
+        supervisor_dir="$(get_supervisor_conf_dir)"
+        [ "$supervisor_dir" = "/etc/supervisor.d/" ] || fail "Iteration $i: Expected supervisor dir '/etc/supervisor.d/', got '${supervisor_dir}'"
+
+        # Verify get_nginx_conf_path returns Arch path
+        local nginx_path
+        nginx_path="$(get_nginx_conf_path)"
+        [ "$nginx_path" = "/etc/nginx/conf.d/suap.conf" ] || fail "Iteration $i: Expected nginx path '/etc/nginx/conf.d/suap.conf', got '${nginx_path}'"
+    done
+}
+
+@test "Property 2.7: macOS detection via uname returns 'macos' (100 iterations)" {
+    local iterations=100
+    local i
+
+    for ((i = 1; i <= iterations; i++)); do
+        # Test that "Darwin" uname output correctly classifies as macOS
+        unset DISTRO_TYPE DISTRO_NAME
+        _detect_distro_with_uname "Darwin"
+        local result=$?
+
+        [ "$result" -eq 0 ] || fail "Iteration $i: _detect_distro_with_uname 'Darwin' failed (exit $result)"
+        [ "$DISTRO_TYPE" = "macos" ] || fail "Iteration $i: Expected DISTRO_TYPE='macos', got '${DISTRO_TYPE}'"
+        [ "$DISTRO_NAME" = "macos" ] || fail "Iteration $i: Expected DISTRO_NAME='macos', got '${DISTRO_NAME}'"
+
+        # Test that non-Darwin uname output does NOT classify as macOS
+        unset DISTRO_TYPE DISTRO_NAME
+        local -a non_darwin_unames=("Linux" "FreeBSD" "OpenBSD" "NetBSD" "SunOS" "CYGWIN_NT" "MINGW64_NT" "GNU")
+        local uname_val
+        uname_val=$(random_choice "${non_darwin_unames[@]}")
+
+        local non_result=0
+        _detect_distro_with_uname "$uname_val" || non_result=$?
+
+        [ "$non_result" -eq 1 ] || fail "Iteration $i: Expected exit 1 for non-Darwin uname '${uname_val}', got exit $non_result"
     done
 }

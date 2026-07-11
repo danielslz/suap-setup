@@ -386,10 +386,22 @@ resolve_git_url() {
 # --- Detecção de Distribuição ---
 
 # detect_distro()
-# Lê /etc/os-release e classifica em "deb" ou "rpm".
-# Retorno: define DISTRO_TYPE ("deb"|"rpm") e DISTRO_NAME
-# Exit 3 se /etc/os-release não existe ou distro não suportada
+# Primeiro verifica uname -s: se "Darwin" → classifica como "macos".
+# Caso contrário, lê /etc/os-release e classifica em "deb", "rpm" ou "arch".
+# Retorno: define DISTRO_TYPE ("deb"|"rpm"|"arch"|"macos") e DISTRO_NAME
+# Exit 3 se:
+#   - não é macOS E /etc/os-release não existe
+#   - distro não suportada (não é Debian, RPM nem Arch)
 detect_distro() {
+  # Verificar macOS antes de ler /etc/os-release
+  if [ "$(uname -s)" = "Darwin" ]; then
+    DISTRO_TYPE="macos"
+    DISTRO_NAME="macos"
+    export DISTRO_TYPE
+    export DISTRO_NAME
+    return 0
+  fi
+
   if [ ! -f /etc/os-release ]; then
     msg_error "Arquivo /etc/os-release não encontrado. Não é possível detectar a distribuição."
     exit 3
@@ -409,8 +421,11 @@ detect_distro() {
   elif echo "${id} ${id_like}" | grep -qiE '(rhel|fedora|centos)'; then
     DISTRO_TYPE="rpm"
     DISTRO_NAME="${id}"
+  elif echo "${id} ${id_like}" | grep -qiE '(arch)'; then
+    DISTRO_TYPE="arch"
+    DISTRO_NAME="${id}"
   else
-    msg_error "Distribuição não suportada: ${id}. Somente distribuições Debian-like e RPM-like são suportadas."
+    msg_error "Distribuição não suportada: ${id}. Somente distribuições Debian-like, RPM-like, Arch-like e macOS são suportadas."
     exit 3
   fi
 
@@ -420,41 +435,59 @@ detect_distro() {
 
 # get_supervisor_conf_dir()
 # Retorna o diretório de configuração do Supervisor baseado na distro.
-# "/etc/supervisor/conf.d" (Debian) ou "/etc/supervisord.d" (RPM)
+# Debian: "/etc/supervisor/conf.d"
+# RPM:    "/etc/supervisord.d"
+# Arch:   "/etc/supervisor.d/"
+# macOS:  N/A (não suporta produção)
 get_supervisor_conf_dir() {
-  if [ "${DISTRO_TYPE}" = "deb" ]; then
-    echo "/etc/supervisor/conf.d"
-  else
-    echo "/etc/supervisord.d"
-  fi
+  case "${DISTRO_TYPE}" in
+    deb)  echo "/etc/supervisor/conf.d" ;;
+    rpm)  echo "/etc/supervisord.d" ;;
+    arch) echo "/etc/supervisor.d/" ;;
+  esac
 }
 
 # get_nginx_conf_path()
 # Retorna o caminho de destino da configuração do Nginx.
 # Debian: "/etc/nginx/sites-available/suap"
-# RPM: "/etc/nginx/conf.d/suap.conf"
+# RPM:    "/etc/nginx/conf.d/suap.conf"
+# Arch:   "/etc/nginx/conf.d/suap.conf"
+# macOS:  N/A
 get_nginx_conf_path() {
-  if [ "${DISTRO_TYPE}" = "deb" ]; then
-    echo "/etc/nginx/sites-available/suap"
-  else
-    echo "/etc/nginx/conf.d/suap.conf"
-  fi
+  case "${DISTRO_TYPE}" in
+    deb)  echo "/etc/nginx/sites-available/suap" ;;
+    rpm)  echo "/etc/nginx/conf.d/suap.conf" ;;
+    arch) echo "/etc/nginx/conf.d/suap.conf" ;;
+    *)    echo "/etc/nginx/conf.d/suap.conf" ;;
+  esac
 }
 
 # --- Verificações Idempotentes ---
 
 # is_pkg_installed(pkg_name)
 # Verifica se um pacote está instalado.
-# Usa dpkg (Debian) ou rpm -q (RPM) conforme DISTRO_TYPE.
+# Usa dpkg (Debian), rpm -q (RPM), pacman (Arch) ou brew (macOS) conforme DISTRO_TYPE.
 # Retorno: 0 se instalado, 1 caso contrário
 is_pkg_installed() {
   local pkg_name="${1}"
 
-  if [ "${DISTRO_TYPE}" = "deb" ]; then
-    dpkg -l | grep -q "^ii  ${pkg_name} " 2>/dev/null
-  else
-    rpm -q "${pkg_name}" &>/dev/null
-  fi
+  case "${DISTRO_TYPE}" in
+    deb)
+      dpkg -l | grep -q "^ii  ${pkg_name} " 2>/dev/null
+      ;;
+    rpm)
+      rpm -q "${pkg_name}" &>/dev/null
+      ;;
+    arch)
+      pacman -Q "${pkg_name}" &>/dev/null
+      ;;
+    macos)
+      brew list --formula 2>/dev/null | grep -q "^${pkg_name}$"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 # check_all_packages_installed(pkg_list...)
@@ -474,12 +507,68 @@ check_all_packages_installed() {
 
 # check_docker_available()
 # Verifica se Docker e Docker Compose estão instalados.
-# Exit 1 com mensagem de erro se não disponíveis
+# Comportamento por DISTRO_TYPE quando Docker não está presente:
+#   deb/rpm: oferece instalar via docker/install-docker.sh (se existir). Se o
+#            script não existir ou o usuário recusar, exibe URL e faz exit 1.
+#   arch:    oferece instalar via pacman -S --needed --noconfirm docker docker-compose.
+#            Se o usuário recusar, faz exit 1.
+#   macos:   exibe mensagem advisory com URL do Docker Desktop e faz exit 1.
+# Após Docker presente, verifica Docker Compose (docker compose version).
+# Requer: DISTRO_TYPE definida (via detect_distro)
+# Exit 1 se Docker ou Docker Compose não estiverem disponíveis
 check_docker_available() {
+  local install_script
+  install_script="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/docker/install-docker.sh"
+
   if ! command -v docker &>/dev/null; then
-    msg_error "Docker não está instalado. Instale o Docker antes de prosseguir."
-    msg_error "Instruções: https://docs.docker.com/engine/install/"
-    exit 1
+    case "${DISTRO_TYPE}" in
+      deb|rpm)
+        if [ -x "${install_script}" ]; then
+          msg_action "Docker não está instalado."
+          read -rp "Deseja instalar o Docker agora? [s/N]: " _resposta
+          if [[ "${_resposta}" =~ ^[sS]$ ]]; then
+            bash "${install_script}"
+            if ! command -v docker &>/dev/null; then
+              msg_error "Falha ao instalar Docker. Verifique os erros acima."
+              exit 1
+            fi
+          else
+            msg_error "Docker é necessário para prosseguir."
+            msg_error "Instruções: https://docs.docker.com/engine/install/"
+            exit 1
+          fi
+        else
+          msg_error "Docker não está instalado."
+          msg_error "Instruções: https://docs.docker.com/engine/install/"
+          exit 1
+        fi
+        ;;
+      arch)
+        msg_action "Docker não está instalado."
+        read -rp "Deseja instalar Docker e Docker Compose via pacman? [s/N]: " _resposta
+        if [[ "${_resposta}" =~ ^[sS]$ ]]; then
+          sudo pacman -S --needed --noconfirm docker docker-compose
+          if ! command -v docker &>/dev/null; then
+            msg_error "Falha ao instalar Docker. Verifique os erros acima."
+            exit 1
+          fi
+        else
+          msg_error "Docker é necessário para prosseguir."
+          exit 1
+        fi
+        ;;
+      macos)
+        msg_error "Docker não está instalado."
+        msg_error "No macOS, o Docker Desktop é obrigatório."
+        msg_error "Download: https://docs.docker.com/desktop/install/mac-install/"
+        exit 1
+        ;;
+      *)
+        msg_error "Docker não está instalado. Instale o Docker antes de prosseguir."
+        msg_error "Instruções: https://docs.docker.com/engine/install/"
+        exit 1
+        ;;
+    esac
   fi
 
   if ! docker compose version &>/dev/null; then

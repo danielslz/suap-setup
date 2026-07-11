@@ -395,35 +395,35 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
 - [x] 16. Checkpoint final - Verificar melhorias de robustez
   - Garantir que todos os testes passem, perguntar ao usuário se houver dúvidas.
 
-- [ ] 17. Atualizar detecção de distribuição e funções utilitárias para Arch Linux e macOS
-  - [ ] 17.1 Atualizar `detect_distro()` em `lib/common.sh` para suporte a Arch e macOS
+- [x] 17. Atualizar detecção de distribuição e funções utilitárias para Arch Linux e macOS
+  - [x] 17.1 Atualizar `detect_distro()` em `lib/common.sh` para suporte a Arch e macOS
     - Adicionar verificação `uname -s` para Darwin → definir `DISTRO_TYPE="macos"` antes de ler `/etc/os-release`
     - Adicionar verificação de ID/ID_LIKE contendo "arch" → definir `DISTRO_TYPE="arch"`
     - Manter compatibilidade com "deb" e "rpm" existentes
     - Atualizar exit 3 para listar as 4 famílias suportadas na mensagem de erro
     - _Requisitos: 2.1, 2.2, 2.3, 2.4, 2.5, 30.1, 31.1_
 
-  - [ ] 17.2 Atualizar `is_pkg_installed()` em `lib/common.sh` para Arch e macOS
+  - [x] 17.2 Atualizar `is_pkg_installed()` em `lib/common.sh` para Arch e macOS
     - Adicionar case "arch" → usar `pacman -Q "$pkg_name" &>/dev/null`
     - Adicionar case "macos" → usar `brew list --formula 2>/dev/null | grep -q "^${pkg_name}$"`
     - Manter cases existentes para "deb" (dpkg) e "rpm" (rpm -q)
     - _Requisitos: 30.7, 30.8, 31.9_
 
-  - [ ] 17.3 Atualizar `get_supervisor_conf_dir()` em `lib/common.sh`
+  - [x] 17.3 Atualizar `get_supervisor_conf_dir()` em `lib/common.sh`
     - Adicionar case "arch" → retornar `/etc/supervisor.d/`
     - Manter cases existentes para "deb" e "rpm"
     - _Requisitos: 17.3, 30.9_
 
-  - [ ] 17.4 Atualizar `get_nginx_conf_path()` em `lib/common.sh`
+  - [x] 17.4 Atualizar `get_nginx_conf_path()` em `lib/common.sh`
     - Adicionar case "arch" → retornar `/etc/nginx/conf.d/suap.conf` (mesmo padrão RPM)
     - _Requisitos: 20.4, 30.10_
 
-  - [ ] 17.5 Atualizar `check_docker_available()` em `lib/common.sh`
+  - [x] 17.5 Atualizar `check_docker_available()` em `lib/common.sh`
     - Adicionar suporte a Arch: oferecer instalar via `pacman -S --needed --noconfirm docker docker-compose`
     - Adicionar suporte a macOS: verificar Docker Desktop, exibir URL advisory se ausente
     - _Requisitos: 29.6, 29.7, 31.11, 31.12_
 
-  - [ ]* 17.6 Atualizar teste de propriedade `tests/property/test_distro_paths.bats`
+  - [x] 17.6 Atualizar teste de propriedade `tests/property/test_distro_paths.bats`
     - Adicionar cenários de teste para `ID=arch` e `ID_LIKE=arch` → DISTRO_TYPE="arch"
     - Adicionar cenário de teste para `uname -s` == "Darwin" → DISTRO_TYPE="macos"
     - Verificar que `get_supervisor_conf_dir()` retorna `/etc/supervisor.d/` para Arch
