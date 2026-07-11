@@ -49,6 +49,19 @@ if [ ! -f "${SUAP_DIR}/.env" ]; then
   fi
 fi
 
+# 7.1. Garantir que settings.py existe (necessário para Django/Celery)
+if [ ! -f "${SUAP_DIR}/suap/settings.py" ]; then
+  if [ -f "${SUAP_DIR}/suap/settings_sample.py" ]; then
+    msg_action "Gerando ${SUAP_DIR}/suap/settings.py a partir do sample..."
+    cp "${SUAP_DIR}/suap/settings_sample.py" "${SUAP_DIR}/suap/settings.py"
+  fi
+fi
+
+# 7.2. Garantir permissão de execução nos scripts bin/
+if [ -d "${SUAP_DIR}/bin" ]; then
+  chmod +x "${SUAP_DIR}/bin/"*.sh 2>/dev/null || true
+fi
+
 # 8. Exportar variáveis necessárias para o compose
 export SUAP_DIR
 export PYTHON_VERSION="${PYTHON_VERSION:-3.12}"

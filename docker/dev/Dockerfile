@@ -25,7 +25,7 @@ RUN set -eux; \
     apt-get update -qy; \
     apt-get install -y --no-install-recommends \
       # Base e utilitários
-      locales vim git build-essential cron ntpdate openssl curl wget \
+      locales vim git build-essential cron ntpsec-ntpdate openssl curl wget \
       qpdf tmpreaper swig libpq-dev \
       # LDAP
       libldap2-dev libsasl2-dev \
