@@ -431,8 +431,8 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - **Property 2: Classificação de distribuição/OS determina caminhos corretos**
     - **Valida: Requisitos 2.2, 2.3, 17.3, 20.4, 30.1, 31.1**
 
-- [ ] 18. Implementar scripts Arch Linux
-  - [ ] 18.1 Criar `arch/suap-dev.sh`
+- [x] 18. Implementar scripts Arch Linux
+  - [x] 18.1 Criar `arch/suap-dev.sh`
     - Criar diretório `arch/` e arquivo `suap-dev.sh`
     - Fazer source de `lib/common.sh` e chamar `require_env_file()` + `load_env_file()`
     - Chamar `resolve_git_url()`
@@ -445,7 +445,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Garantir idempotência e mensagens `msg_action()`/`msg_skip()`
     - _Requisitos: 1.2, 1.7, 1.8, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 8.1, 8.2, 9.1, 9.2, 9.3, 9.4, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 24.1, 24.3, 25.1, 25.2, 26.1, 30.2, 30.4, 30.6, 30.7_
 
-  - [ ] 18.2 Criar `arch/suap-prod.sh`
+  - [x] 18.2 Criar `arch/suap-prod.sh`
     - Criar arquivo `arch/suap-prod.sh`
     - Fazer source de `lib/common.sh` e chamar `require_env_file()` + `load_env_file()`
     - Validar execução como root (exit 1 se EUID != 0)
@@ -461,7 +461,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Ajustar permissões
     - _Requisitos: 1.3, 1.7, 1.9, 11.1, 11.2, 11.3, 12.1, 12.2, 13.1, 13.2, 14.1, 14.2, 14.3, 14.4, 14.5, 14.6, 15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.7, 15.8, 15.9, 16.1, 17.3, 24.2, 24.4, 25.3, 25.4, 26.2, 30.3, 30.5, 30.8, 30.9_
 
-  - [ ] 18.3 Criar `arch/install-redis.sh`
+  - [x] 18.3 Criar `arch/install-redis.sh`
     - Criar arquivo `arch/install-redis.sh`
     - Fazer source de `lib/common.sh`
     - Instalar pacote Redis via `pacman -S --needed --noconfirm redis`
@@ -469,7 +469,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Exibir status com `msg_action()`
     - _Requisitos: 18.1, 18.2, 18.3, 25.5, 30.4_
 
-  - [ ] 18.4 Criar `arch/install-nginx.sh`
+  - [x] 18.4 Criar `arch/install-nginx.sh`
     - Criar arquivo `arch/install-nginx.sh`
     - Fazer source de `lib/common.sh`
     - Instalar pacote Nginx via `pacman -S --needed --noconfirm nginx`
