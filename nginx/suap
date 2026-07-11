@@ -27,7 +27,7 @@ server {
 
     # Static files
     location /static/ {
-        alias /opt/suap/deploy/static/;
+        alias /opt/suap/static/;
         expires 30d;
         access_log off;
     }

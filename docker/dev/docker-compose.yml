@@ -1,37 +1,199 @@
 # docker/dev/docker-compose.yml - Ambiente de desenvolvimento SUAP
-# Serviços: aplicação SUAP, banco de dados PostgreSQL 16 e Redis
+# Alinhado com docker-compose.dev.yml oficial do SUAP
+#
+# Context de build: raiz do repositório SUAP (dois níveis acima)
+# Serviços: web, celery, celery-beat, celery-flower, cron, db, redis
 
 services:
-  suap:
+  web:
+    restart: always
+    stdin_open: true
+    tty: true
+    user: "0:0"
+    env_file:
+      - ../../.env
     build:
       context: ../..
       dockerfile: docker/dev/Dockerfile
+      args:
+        - PYTHON_VERSION=${PYTHON_VERSION:-3.12}
+    command: python manage.py runserver 0.0.0.0:8000
     ports:
-      - "8000:8000"
+      - "${APP_PORT:-8000}:8000"
+    ulimits:
+      memlock: -1
+      nofile:
+        soft: 65536
+        hard: 65536
     volumes:
-      - ../../:/app  # Código-fonte montado para edição em tempo real (hot-reload)
+      - type: bind
+        source: ../../
+        target: /opt/suap
+    healthcheck:
+      test: curl --fail -s http://web:8000/accounts/login/ || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - suap
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  celery:
+    restart: always
+    stdin_open: true
+    tty: true
+    user: "0:0"
     env_file:
       - ../../.env
-    depends_on:
-      - db
-      - redis
-    command: uv run python manage.py runserver 0.0.0.0:8000
+    build:
+      context: ../..
+      dockerfile: docker/dev/Dockerfile
+    command: ./bin/celery.sh ${CELERY_QUEUE:-geral,celery_beat} --autoreload
+    ulimits:
+      memlock: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - type: bind
+        source: ../../
+        target: /opt/suap
+    networks:
+      - suap
+    healthcheck:
+      test: celery -A suap inspect ping || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  celery-beat:
+    restart: always
+    stdin_open: true
+    tty: true
+    user: "0:0"
+    env_file:
+      - ../../.env
+    build:
+      context: ../..
+      dockerfile: docker/dev/Dockerfile
+    command: ./bin/celery-beat.sh ${CELERY_QUEUE:-geral,celery_beat}
+    ulimits:
+      memlock: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - type: bind
+        source: ../../
+        target: /opt/suap
+    networks:
+      - suap
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  celery-flower:
+    restart: always
+    stdin_open: true
+    tty: true
+    env_file:
+      - ../../.env
+    build:
+      context: ../..
+      dockerfile: docker/dev/Dockerfile
+    command: ./bin/celery-flower.sh ${CELERY_BROKER_URL:-redis://redis:6379/1} ${CELERY_FLOWER_AUTH:-admin:admin}
+    ulimits:
+      memlock: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "5555:5555"
+    networks:
+      - suap
+    healthcheck:
+      test: celery -A suap inspect ping || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  cron:
+    restart: always
+    stdin_open: true
+    tty: true
+    user: "0:0"
+    env_file:
+      - ../../.env
+    build:
+      context: ../..
+      dockerfile: docker/dev/Dockerfile
+    command: cron -f
+    ulimits:
+      memlock: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - type: bind
+        source: ../../
+        target: /opt/suap
+      - type: bind
+        source: ../../.env
+        target: /etc/environment
+        read_only: true
+    networks:
+      - suap
 
   db:
-    image: postgres:16
+    restart: always
+    env_file:
+      - ../../.env
+    image: postgres:${POSTGRES_VERSION:-16}
     environment:
-      POSTGRES_DB: suap
-      POSTGRES_USER: suap
-      POSTGRES_PASSWORD: suap
+      POSTGRES_DB: ${DATABASE_NAME:-suap}
+      POSTGRES_USER: ${DATABASE_USER:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "${DATABASE_EXTERNAL_PORT:-5432}:5432"
+    shm_size: 512mb
+    ulimits:
+      memlock: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    networks:
+      - suap
+    healthcheck:
+      test: pg_isready -U ${DATABASE_USER:-postgres} -d ${DATABASE_NAME:-suap}
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
-    image: redis:7-alpine
+    restart: always
+    image: redis:latest
     ports:
-      - "6379:6379"
+      - "${REDIS_EXTERNAL_PORT:-6379}:6379"
+    networks:
+      - suap
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+networks:
+  suap:
+    driver: bridge
 
 volumes:
   pgdata:

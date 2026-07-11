@@ -1,66 +1,69 @@
 # docker/dev/Dockerfile - Imagem de desenvolvimento do SUAP
-# Usa imagem oficial do UV com Python pré-instalado
-# Referência: https://docs.astral.sh/uv/guides/integration/docker/
+# Baseado na estrutura oficial do SUAP (Dockerfile.base + suap-dev)
 #
-# A versão do Python é configurável via --build-arg PYTHON_VERSION=3.12
+# Build context: raiz do repositório SUAP (onde ficam pyproject.toml e uv.lock)
+# Build arg: PYTHON_VERSION (padrão: 3.12)
 
 ARG PYTHON_VERSION=3.12
 FROM ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-trixie-slim
 
-# Evitar prompts interativos durante instalação de pacotes
-ENV DEBIAN_FRONTEND=noninteractive
+# --- Variáveis de ambiente ---
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_PYTHON=python${PYTHON_VERSION} \
+    UV_PROJECT_ENVIRONMENT=/venv \
+    LANG=pt_BR.UTF-8 \
+    LANGUAGE=pt_BR:pt \
+    LC_ALL=pt_BR.UTF-8 \
+    TZ="America/Fortaleza" \
+    PATH="/venv/bin:$PATH"
 
-# Configurações do UV
-ENV UV_COMPILE_BYTECODE=1
-ENV UV_LINK_MODE=copy
-ENV UV_PYTHON_DOWNLOADS=0
+# --- Dependências do sistema (camada única) ---
+ARG DEBIAN_FRONTEND=noninteractive
+RUN set -eux; \
+    apt-get update -qy; \
+    apt-get install -y --no-install-recommends \
+      # Base e utilitários
+      locales vim git build-essential cron ntpdate openssl curl wget \
+      qpdf tmpreaper swig libpq-dev \
+      # LDAP
+      libldap2-dev libsasl2-dev \
+      # Pillow
+      libjpeg-dev libfreetype6-dev zlib1g-dev \
+      # PyMSSQL
+      freetds-dev \
+      # lxml / xmlsec
+      libxmlsec1-dev libxml2-dev libxslt1-dev \
+      # WeasyPrint (runtime libs)
+      libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 \
+      # Magic
+      libmagic1 \
+    ; \
+    # Locale
+    echo "pt_BR.UTF-8 UTF-8" >> /etc/locale.gen; \
+    locale-gen pt_BR.UTF-8; \
+    # Limpeza
+    rm -rf /var/lib/apt/lists/*
 
-# Instalar dependências do sistema necessárias para compilação de pacotes Python
-RUN apt-get update -qy && apt-get install -y --no-install-recommends \
-    # Ferramentas de compilação e utilitários
-    locales vim git build-essential openssl curl wget libpq-dev swig \
-    # LDAP
-    libldap2-dev libsasl2-dev \
-    # Pillow
-    libjpeg-dev libpng-dev zlib1g-dev libfreetype6-dev \
-    # PyMSSQL
-    freetds-dev \
-    # lxml
-    libxml2-dev libxslt1-dev libxmlsec1-dev \
-    # WeasyPrint
-    libcairo2-dev libpango1.0-dev libgdk-pixbuf2.0-dev libffi-dev \
-    # PDF
-    poppler-utils \
-    # Python dev headers
-    python3-dev \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt/suap
 
-# Configurar locale pt_BR.UTF-8
-RUN sed -i '/pt_BR.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
-ENV LANG=pt_BR.UTF-8
-ENV LC_ALL=pt_BR.UTF-8
-
-# Definir diretório de trabalho
-WORKDIR /app
-
-# Instalar dependências (camada separada do código - melhor cache)
+# --- Dependências Python (cache separado do código-fonte) ---
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
-    uv sync --locked --group dev --no-install-project
+    uv sync --locked --all-groups --no-install-project
 
-# Copiar o código da aplicação
-COPY . /app
+# --- Dados NLTK ---
+RUN python -m nltk.downloader -d /usr/local/share/nltk_data \
+    punkt_tab punkt stopwords
 
-# Sync final incluindo o projeto
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --group dev
+# --- Crontab ---
+COPY docker/crontab/tasks /etc/crontab
 
-# Colocar o virtualenv no PATH
-ENV PATH="/app/.venv/bin:$PATH"
+# --- Permissões e usuário ---
+RUN chown www-data:www-data /opt/suap
+USER www-data
 
-# Expor porta do servidor de desenvolvimento
 EXPOSE 8000
-
-# Comando padrão: rodar servidor de desenvolvimento
-CMD ["uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+CMD ["/bin/sh", "-c", "echo 'Starting dev container'; sleep infinity"]

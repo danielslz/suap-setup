@@ -31,7 +31,7 @@ setup() {
 }
 
 # ============================================================
-# Requisito 21.3: location para arquivos estáticos em /opt/suap/deploy/static
+# Requisito 21.3: location para arquivos estáticos em /opt/suap/static
 # ============================================================
 
 @test "nginx/suap contém location para /static/" {
@@ -39,8 +39,8 @@ setup() {
     [ "$status" -eq 0 ]
 }
 
-@test "nginx/suap aponta static para /opt/suap/deploy/static/" {
-    run grep -q "/opt/suap/deploy/static/" "$NGINX_CONF"
+@test "nginx/suap aponta static para /opt/suap/static/" {
+    run grep -q "/opt/suap/static/" "$NGINX_CONF"
     [ "$status" -eq 0 ]
 }
 

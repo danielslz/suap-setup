@@ -1,94 +1,99 @@
-# Nginx configuration for Docker production environment
-# Uses container service name 'suap' instead of 127.0.0.1
+# Configuração Nginx para ambiente Docker SUAP (template)
+# Variáveis substituídas pelo Nginx container: ${NGINX_SERVER_NAME}
+# Alinhado com docker/nginx/suap.conf.template oficial
 
-# Custom log format with request time and upstream response time
-log_format suap_log '$remote_addr - $remote_user [$time_local] '
-                    '"$request" $status $body_bytes_sent '
-                    '"$http_referer" "$http_user_agent" '
-                    'rt=$request_time uct=$upstream_connect_time uht=$upstream_header_time urt=$upstream_response_time';
+log_format timed_combined '$remote_addr $sent_http_user $remote_user [$time_local] '
+                          '"$request" $status $body_bytes_sent '
+                          '"$http_referer" "$http_user_agent" $request_time $upstream_response_time';
 
-# Upstream with least_conn strategy (Docker service name)
-upstream suap_server {
-    least_conn;
-    server suap:8000;
-}
-
-# Main server block (port 80)
 server {
     listen 80;
-    server_name _;
+    server_name ${NGINX_SERVER_NAME};
 
-    access_log /opt/logs/nginx/suap_access.log suap_log;
-    error_log /opt/logs/nginx/suap_error.log;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Host $http_host;
 
-    client_max_body_size 100m;
-
-    # Proxy buffers (for large headers)
-    proxy_buffer_size 128k;
-    proxy_buffers 4 256k;
-    proxy_busy_buffers_size 256k;
-
-    # Static files
-    location /static/ {
-        alias /opt/suap/static/;
-        expires 30d;
-        access_log off;
-    }
-
-    # Media files
-    location /media/ {
-        alias /opt/suap/media/;
-        expires 30d;
-        access_log off;
-    }
-
-    # Proxy to SUAP container
-    location / {
-        proxy_pass http://suap_server;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 300s;
-        proxy_connect_timeout 75s;
-    }
-
-    # Custom error pages
     error_page 500 502 503 504 /500.html;
     error_page 413 /413.html;
 
     location = /500.html {
-        root /opt/suap/deploy/templates;
+        root /opt/suap/docker/nginx;
         internal;
     }
 
     location = /413.html {
-        root /opt/suap/deploy/templates;
+        root /opt/suap/docker/nginx;
         internal;
+    }
+
+    access_log /opt/suap/deploy/logs/nginx/access.log timed_combined;
+    error_log /opt/suap/deploy/logs/nginx/error.log;
+
+    client_max_body_size 101M;
+
+    # Arquivos estáticos (servidos diretamente pelo Nginx)
+    location /static {
+        alias /opt/suap/static;
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public";
+    }
+
+    # Mídia privada (acesso negado)
+    location /media/private-media {
+        deny all;
+        return 403;
+    }
+
+    # Arquivos de mídia
+    location /media {
+        alias /opt/suap/deploy/media;
+    }
+
+    # Proxy reverso para o Gunicorn
+    location / {
+        proxy_pass_header Server;
+        proxy_set_header Host $http_host;
+        proxy_redirect off;
+        proxy_set_header X-Real_IP $remote_addr;
+        proxy_set_header X-Scheme $scheme;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_connect_timeout 1200s;
+        proxy_send_timeout 1200s;
+        proxy_read_timeout 1200s;
+
+        # Buffers para cabeçalhos grandes (ex: Google Classroom IDP)
+        proxy_buffer_size 128k;
+        proxy_buffers 4 256k;
+        proxy_busy_buffers_size 256k;
+
+        proxy_pass http://web:8000/;
     }
 }
 
-# Secondary server block (port 8001)
+# Servidor secundário na porta 8001 (terminais e APIs sem SSL)
 server {
     listen 8001;
-    server_name _;
+    server_name ${NGINX_SERVER_NAME};
 
-    access_log /opt/logs/nginx/suap_8001_access.log suap_log;
-    error_log /opt/logs/nginx/suap_8001_error.log;
+    access_log /opt/suap/deploy/logs/nginx/access.log timed_combined;
+    error_log /opt/suap/deploy/logs/nginx/error.log;
 
-    client_max_body_size 100m;
+    client_max_body_size 101M;
 
-    proxy_buffer_size 128k;
-    proxy_buffers 4 256k;
-    proxy_busy_buffers_size 256k;
+    location /static {
+        alias /opt/suap/static;
+    }
 
     location / {
-        proxy_pass http://suap_server;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 300s;
-        proxy_connect_timeout 75s;
+        proxy_pass_header Server;
+        proxy_set_header Host $http_host;
+        proxy_redirect off;
+        proxy_set_header X-Real_IP $remote_addr;
+        proxy_set_header X-Scheme $scheme;
+        proxy_connect_timeout 600s;
+        proxy_send_timeout 600s;
+        proxy_read_timeout 600s;
+        proxy_pass http://web:8000;
     }
 }

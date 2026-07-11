@@ -41,12 +41,12 @@ print('OK')
 # Requisito 22.2: serviços suap, db (PostgreSQL) e redis
 # ============================================================
 
-@test "docker-compose dev contém serviço 'suap'" {
+@test "docker-compose dev contém serviço 'web'" {
     run python3 -c "
 import yaml
 with open('$DEV_COMPOSE', 'r') as f:
     data = yaml.safe_load(f)
-assert 'suap' in data.get('services', {}), 'serviço suap não encontrado'
+assert 'web' in data.get('services', {}), 'serviço web não encontrado'
 print('OK')
 "
     [ "$status" -eq 0 ]
@@ -83,12 +83,12 @@ print('OK')
 #                  celery-flower, redis e nginx
 # ============================================================
 
-@test "docker-compose prod contém serviço 'suap'" {
+@test "docker-compose prod contém serviço 'web'" {
     run python3 -c "
 import yaml
 with open('$PROD_COMPOSE', 'r') as f:
     data = yaml.safe_load(f)
-assert 'suap' in data.get('services', {}), 'serviço suap não encontrado'
+assert 'web' in data.get('services', {}), 'serviço web não encontrado'
 print('OK')
 "
     [ "$status" -eq 0 ]

@@ -1,10 +1,11 @@
-# docker/prod/Dockerfile - Imagem de produção do SUAP (multi-stage build com UV)
-# Referência: https://github.com/astral-sh/uv-docker-example/blob/main/multistage.Dockerfile
+# docker/prod/Dockerfile - Imagem de produção do SUAP (multi-stage)
+# Alinhado com Dockerfile oficial do SUAP + melhores práticas Docker
 #
-# A versão do Python é configurável via --build-arg PYTHON_VERSION=3.12
+# Build context: raiz do repositório SUAP (onde ficam pyproject.toml e uv.lock)
+# Build arg: PYTHON_VERSION (padrão: 3.12)
 #
-# Stage 1 (builder): instala dependências com UV
-# Stage 2 (runtime): imagem mínima sem UV, apenas o venv e runtime libs
+# Stage 1 (builder): compila e instala dependências Python com UV
+# Stage 2 (runtime): imagem mínima com apenas runtime libs + /venv copiado
 
 ARG PYTHON_VERSION=3.12
 
@@ -13,126 +14,111 @@ ARG PYTHON_VERSION=3.12
 # ============================================================
 FROM ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-trixie-slim AS builder
 
-ENV UV_COMPILE_BYTECODE=1
-ENV UV_LINK_MODE=copy
-ENV UV_NO_DEV=1
-ENV UV_PYTHON_DOWNLOADS=0
-ENV DEBIAN_FRONTEND=noninteractive
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_PYTHON=python${PYTHON_VERSION} \
+    UV_PROJECT_ENVIRONMENT=/venv
 
-# Instalar dependências de compilação necessárias para build de pacotes Python
-RUN apt-get update -qy && apt-get install -y --no-install-recommends \
-    build-essential \
-    git \
-    libpq-dev \
-    libldap2-dev \
-    libsasl2-dev \
-    libjpeg-dev \
-    libpng-dev \
-    zlib1g-dev \
-    libfreetype6-dev \
-    freetds-dev \
-    libxml2-dev \
-    libxslt1-dev \
-    libxmlsec1-dev \
-    libcairo2-dev \
-    libpango1.0-dev \
-    libgdk-pixbuf2.0-dev \
-    libffi-dev \
-    swig \
-    && rm -rf /var/lib/apt/lists/*
+ARG DEBIAN_FRONTEND=noninteractive
 
-WORKDIR /app
+# Apenas headers de compilação (não ficam na imagem final)
+RUN set -eux; \
+    apt-get update -qy; \
+    apt-get install -y --no-install-recommends \
+      build-essential git swig \
+      libpq-dev libldap2-dev libsasl2-dev \
+      libjpeg-dev libfreetype6-dev zlib1g-dev \
+      freetds-dev \
+      libxml2-dev libxslt1-dev libxmlsec1-dev \
+      libffi-dev \
+    ; \
+    rm -rf /var/lib/apt/lists/*
 
-# Instalar dependências primeiro (sem o projeto — melhor cache de camadas)
+WORKDIR /opt/suap
+
+# 1. Instalar deps sem o projeto (melhor cache — só invalida se lock mudar)
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
-    uv sync --locked --no-install-project
+    uv sync --locked --group prod --no-dev --no-install-project
 
-# Copiar código da aplicação
-COPY . /app
-
-# Sync final incluindo o projeto (non-editable para produção)
+# 2. Copiar código + instalar projeto + gunicorn
+COPY . /opt/suap
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-editable
-
-# Instalar gunicorn no venv
-RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --group prod --no-dev --no-editable && \
     uv pip install gunicorn
 
 # ============================================================
 # Stage 2: Runtime
 # ============================================================
-ARG PYTHON_VERSION
 FROM python:${PYTHON_VERSION}-slim-trixie AS runtime
 
-# IMPORTANTE: a imagem runtime deve ter a mesma versão de Python que o builder
-# para que os paths do executável coincidam.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    LANG=pt_BR.UTF-8 \
+    LANGUAGE=pt_BR:pt \
+    LC_ALL=pt_BR.UTF-8 \
+    TZ="America/Fortaleza" \
+    PATH="/venv/bin:$PATH" \
+    GUNICORN_WORKERS=2 \
+    GUNICORN_THREADS=1 \
+    GUNICORN_LOGFILE=deploy/logs/supervisor/gunicorn.log
 
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ARG DEBIAN_FRONTEND=noninteractive
 
-# Instalar apenas dependências de runtime (bibliotecas compartilhadas)
-RUN apt-get update -qy && apt-get install -y --no-install-recommends \
-    locales \
-    curl \
-    libpq5 \
-    libldap-2.5-0 \
-    libsasl2-2 \
-    libjpeg62-turbo \
-    libpng16-16 \
-    zlib1g \
-    libfreetype6 \
-    libct4 \
-    libxml2 \
-    libxslt1.1 \
-    libxmlsec1 \
-    libcairo2 \
-    libpango-1.0-0 \
-    libpangoft2-1.0-0 \
-    libpangocairo-1.0-0 \
-    libgdk-pixbuf-2.0-0 \
-    libffi8 \
-    libharfbuzz0b \
-    libmagic1 \
-    poppler-utils \
-    qpdf \
-    ghostscript \
-    mupdf-tools \
-    && rm -rf /var/lib/apt/lists/*
+# Apenas runtime libs (sem -dev, sem compiladores)
+RUN set -eux; \
+    apt-get update -qy; \
+    apt-get install -y --no-install-recommends \
+      locales curl cron ntpdate tmpreaper \
+      libpq5 libldap-2.5-0 libsasl2-2 \
+      libjpeg62-turbo libfreetype6 zlib1g \
+      libct4 \
+      libxml2 libxslt1.1 libxmlsec1 \
+      libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 \
+      libgdk-pixbuf-2.0-0 libffi8 \
+      libmagic1 \
+      qpdf ghostscript poppler-utils \
+    ; \
+    echo "pt_BR.UTF-8 UTF-8" >> /etc/locale.gen; \
+    locale-gen pt_BR.UTF-8; \
+    rm -rf /var/lib/apt/lists/*
 
-# Configurar locale pt_BR.UTF-8
-RUN sed -i '/pt_BR.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
-ENV LANG=pt_BR.UTF-8
-ENV LC_ALL=pt_BR.UTF-8
+# Diretórios de deploy
+RUN mkdir -p \
+      /opt/suap/deploy/logs/supervisor \
+      /opt/suap/deploy/logs/cron \
+      /opt/suap/deploy/logs/history \
+      /opt/suap/deploy/logs/email \
+      /opt/suap/deploy/media \
+      /opt/suap/static \
+    && chown -R www-data:www-data /opt/suap
 
-# Criar usuário não-root com GID/UID fixos
-RUN groupadd --system --gid 999 suap \
-    && useradd --system --gid 999 --uid 999 --create-home suap
-
-# Criar diretórios necessários
-RUN mkdir -p /opt/suap/deploy/static /opt/suap/deploy/media /opt/logs \
-    && chown -R suap:suap /opt/suap /opt/logs
-
-# Copiar a aplicação do builder (inclui .venv)
-COPY --from=builder --chown=suap:suap /app /opt/suap
-
-# Colocar o virtualenv no PATH
-ENV PATH="/opt/suap/.venv/bin:$PATH"
+# Copiar artefatos do builder
+COPY --from=builder --chown=www-data:www-data /opt/suap /opt/suap
+COPY --from=builder --chown=www-data:www-data /venv /venv
 
 WORKDIR /opt/suap
 
-# Executar como usuário não-root
-USER suap
+# NLTK + collectstatic (executa como root, depois troca)
+RUN python -m nltk.downloader -d /usr/local/share/nltk_data \
+      punkt_tab punkt stopwords && \
+    cp suap/settings_sample.py suap/settings.py 2>/dev/null || true && \
+    python manage.py collectstatic -c --no-input -v 0 2>/dev/null || true && \
+    rm -f suap/settings.py && \
+    ./bin/clean_pyc.sh 2>/dev/null || true
 
-# Expor porta do Gunicorn
+USER www-data
+
 EXPOSE 8000
 
-# Comando padrão: Gunicorn servindo a aplicação SUAP
-CMD ["gunicorn", "suap.wsgi:application", \
-     "--bind", "0.0.0.0:8000", \
-     "--workers", "4", \
-     "--timeout", "300", \
-     "--access-logfile", "/opt/logs/gunicorn_access.log", \
-     "--error-logfile", "/opt/logs/gunicorn_error.log"]
+CMD ["sh", "-c", \
+     "gunicorn suap.wsgi:application \
+       -b 0.0.0.0:8000 \
+       -w ${GUNICORN_WORKERS} \
+       --threads ${GUNICORN_THREADS} \
+       -t 360 \
+       --max-requests 1000 \
+       --max-requests-jitter 30 \
+       2>&1 | tee -a ${GUNICORN_LOGFILE}"]
