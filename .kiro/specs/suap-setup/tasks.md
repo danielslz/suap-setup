@@ -479,8 +479,8 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Exibir mensagens com `msg_action()`
     - _Requisitos: 19.1, 19.2, 19.3, 19.4, 19.5, 19.6, 20.4, 25.6, 30.10_
 
-- [ ] 19. Implementar script macOS
-  - [ ] 19.1 Criar `macos/suap-dev.sh`
+- [x] 19. Implementar script macOS
+  - [x] 19.1 Criar `macos/suap-dev.sh`
     - Criar diretório `macos/` e arquivo `suap-dev.sh`
     - Fazer source de `lib/common.sh` e chamar `require_env_file()` + `load_env_file()`
     - Verificar Homebrew instalado (exit 1 com `msg_error` + URL https://brew.sh se ausente)
