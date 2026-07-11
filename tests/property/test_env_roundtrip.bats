@@ -272,6 +272,9 @@ random_value() {
         local rand_python_version
         rand_python_version="3.$(( (RANDOM % 5) + 10 ))"  # e.g., 3.10, 3.11, 3.12, 3.13, 3.14
 
+        local rand_git_url
+        rand_git_url="https://github.com/$(random_string 5)/$(random_string 8).git"
+
         local rand_base_dir
         rand_base_dir="/opt/$(random_string 6)"
 
@@ -281,11 +284,8 @@ random_value() {
         local rand_venv_dir
         rand_venv_dir="/var/venvs/$(random_string 7)"
 
-        local rand_git_url
-        rand_git_url="https://github.com/$(random_string 5)/$(random_string 8).git"
-
-        # Pipe 5 lines of input to interactive_env_wizard (one per read -rp prompt)
-        # Order: PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL
+        # ensure_env_for_option with option "1" (dev) asks in this order:
+        # 1. PYTHON_VERSION, 2. BASE_DIR, 3. SUAP_DIR, 4. VENV_DIR, 5. GIT_URL
         printf '%s\n%s\n%s\n%s\n%s\n' \
             "$rand_python_version" \
             "$rand_base_dir" \
@@ -308,6 +308,10 @@ random_value() {
             fail "Iteration $i: PYTHON_VERSION expected '$rand_python_version' but got '$PYTHON_VERSION'"
         fi
 
+        if [ "$GIT_URL" != "$rand_git_url" ]; then
+            fail "Iteration $i: GIT_URL expected '$rand_git_url' but got '$GIT_URL'"
+        fi
+
         if [ "$BASE_DIR" != "$rand_base_dir" ]; then
             fail "Iteration $i: BASE_DIR expected '$rand_base_dir' but got '$BASE_DIR'"
         fi
@@ -318,10 +322,6 @@ random_value() {
 
         if [ "$VENV_DIR" != "$rand_venv_dir" ]; then
             fail "Iteration $i: VENV_DIR expected '$rand_venv_dir' but got '$VENV_DIR'"
-        fi
-
-        if [ "$GIT_URL" != "$rand_git_url" ]; then
-            fail "Iteration $i: GIT_URL expected '$rand_git_url' but got '$GIT_URL'"
         fi
 
         # Clean up variables for next iteration

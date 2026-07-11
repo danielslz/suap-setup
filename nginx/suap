@@ -27,14 +27,14 @@ server {
 
     # Static files
     location /static/ {
-        alias /opt/suap/static/;
+        alias /opt/suap/deploy/static/;
         expires 30d;
         access_log off;
     }
 
     # Media files
     location /media/ {
-        alias /opt/suap/media/;
+        alias /opt/suap/deploy/media/;
         expires 30d;
         access_log off;
     }

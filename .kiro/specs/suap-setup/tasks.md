@@ -494,8 +494,8 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Garantir idempotência e mensagens `msg_action()`/`msg_skip()`
     - _Requisitos: 1.2, 1.7, 1.8, 5.1, 5.4, 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 8.1, 8.2, 9.1, 9.2, 9.3, 9.4, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 24.1, 24.3, 25.1, 25.2, 26.1, 31.1, 31.3, 31.4, 31.5, 31.6, 31.7, 31.8, 31.9_
 
-- [ ] 20. Criar script de instalação do Docker (`docker/install-docker.sh`)
-  - [ ] 20.1 Implementar `docker/install-docker.sh`
+- [x] 20. Criar script de instalação do Docker (`docker/install-docker.sh`)
+  - [x] 20.1 Implementar `docker/install-docker.sh`
     - Criar arquivo `docker/install-docker.sh`
     - Fazer source de `lib/common.sh`
     - Detectar distribuição/OS via `detect_distro()`
@@ -511,7 +511,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Exibir mensagem de sucesso com versões e aviso sobre logout/login
     - _Requisitos: 29.1, 29.2, 29.3, 29.4, 29.5, 29.6, 29.7, 29.8, 29.9, 29.10, 29.11, 29.12, 29.13, 29.14, 29.15_
 
-  - [ ]* 20.2 Escrever testes de fumaça para `docker/install-docker.sh`
+  - [x] 20.2 Escrever testes de fumaça para `docker/install-docker.sh`
     - Validar que o script faz source de `lib/common.sh`
     - Validar presença de cases para deb, rpm, arch, macos
     - Validar que instala pacotes docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin (deb/rpm)
@@ -521,8 +521,8 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Validar verificação pós-instalação (`docker --version`, `docker compose version`)
     - _Requisitos: 29.4, 29.5, 29.6, 29.8, 29.9, 29.10, 29.11_
 
-- [ ] 21. Atualizar `setup.sh` para roteamento Arch e macOS
-  - [ ] 21.1 Atualizar menu e roteamento em `setup.sh`
+- [x] 21. Atualizar `setup.sh` para roteamento Arch e macOS
+  - [x] 21.1 Atualizar menu e roteamento em `setup.sh`
     - Adicionar roteamento de opções 1-4 para diretório `arch/` quando `DISTRO_TYPE="arch"`
     - Adicionar roteamento de opção 1 para `macos/suap-dev.sh` quando `DISTRO_TYPE="macos"`
     - Implementar menu restrito para macOS: exibir opções 1, 5, 6, 7; ocultar 2, 3, 4 com mensagem "não suportado no macOS"
@@ -530,7 +530,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Manter opções Docker (5, 6, 7) independentes de distro
     - _Requisitos: 3.1, 3.2, 3.3, 3.4, 30.11, 31.10_
 
-  - [ ]* 21.2 Atualizar teste de propriedade `tests/property/test_routing.bats`
+  - [x] 21.2 Atualizar teste de propriedade `tests/property/test_routing.bats`
     - Adicionar distro "arch" ao gerador de distros no test de roteamento
     - Adicionar combinações: opção 1-4 + arch → `arch/suap-dev.sh`, `arch/suap-prod.sh`, `arch/install-redis.sh`, `arch/install-nginx.sh`
     - Adicionar distro "macos" ao gerador de distros
@@ -540,7 +540,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - **Property 3: Roteamento do menu produz caminho de script correto**
     - **Valida: Requisitos 3.2, 3.3, 30.11, 31.10**
 
-- [ ] 22. Checkpoint - Verificar suporte Arch/macOS/Docker install
+- [x] 22. Checkpoint - Verificar suporte Arch/macOS/Docker install
   - Garantir que todos os testes passem, perguntar ao usuário se houver dúvidas.
 
 ## Notes

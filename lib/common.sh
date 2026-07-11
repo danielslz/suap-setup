@@ -130,24 +130,23 @@ ensure_env_for_option() {
     echo ""
   fi
 
-  # GIT_URL (necessária para 1, 2, 5, 6)
-  if [ -z "${GIT_URL:-}" ]; then
-    _show_header
-    echo "${GREEN}GIT_URL${NO_COLOR}"
-    echo "  ${YELLOW}Descrição:${NO_COLOR} URL do repositório Git do SUAP (${RED}obrigatório${NO_COLOR})."
-    echo "  ${YELLOW}Exemplos:${NO_COLOR} https://github.com/org/suap.git, git@github.com:org/suap.git"
-    read -rp "  Valor (${RED}obrigatório${NO_COLOR}): " _input
-    if [ -z "${_input}" ]; then
-      msg_error "GIT_URL é obrigatória. Não é possível continuar sem a URL do repositório."
-      exit 1
-    fi
-    GIT_URL="${_input}"
-    needs_update=true
-    echo ""
-  fi
-
   # Para Docker (5, 6) só precisa de PYTHON_VERSION e GIT_URL
   if [ "${option}" = "5" ] || [ "${option}" = "6" ]; then
+    # GIT_URL (necessária para 5, 6)
+    if [ -z "${GIT_URL:-}" ]; then
+      _show_header
+      echo "${GREEN}GIT_URL${NO_COLOR}"
+      echo "  ${YELLOW}Descrição:${NO_COLOR} URL do repositório Git do SUAP (${RED}obrigatório${NO_COLOR})."
+      echo "  ${YELLOW}Exemplos:${NO_COLOR} https://github.com/org/suap.git, git@github.com:org/suap.git"
+      read -rp "  Valor (${RED}obrigatório${NO_COLOR}): " _input
+      if [ -z "${_input}" ]; then
+        msg_error "GIT_URL é obrigatória. Não é possível continuar sem a URL do repositório."
+        exit 1
+      fi
+      GIT_URL="${_input}"
+      needs_update=true
+      echo ""
+    fi
     if [ "$needs_update" = "true" ]; then
       _write_env "${env_path}"
     fi
@@ -190,6 +189,22 @@ ensure_env_for_option() {
     echo "  ${YELLOW}Exemplos:${NO_COLOR} \${SUAP_DIR}/.venv (dev), /opt/venv (prod)"
     read -rp "  Valor [${GREEN}${_default_venv}${NO_COLOR}]: " _input
     VENV_DIR="${_input:-$_default_venv}"
+    needs_update=true
+    echo ""
+  fi
+
+  # GIT_URL (necessária para opções 1, 2)
+  if [ -z "${GIT_URL:-}" ]; then
+    _show_header
+    echo "${GREEN}GIT_URL${NO_COLOR}"
+    echo "  ${YELLOW}Descrição:${NO_COLOR} URL do repositório Git do SUAP (${RED}obrigatório${NO_COLOR})."
+    echo "  ${YELLOW}Exemplos:${NO_COLOR} https://github.com/org/suap.git, git@github.com:org/suap.git"
+    read -rp "  Valor (${RED}obrigatório${NO_COLOR}): " _input
+    if [ -z "${_input}" ]; then
+      msg_error "GIT_URL é obrigatória. Não é possível continuar sem a URL do repositório."
+      exit 1
+    fi
+    GIT_URL="${_input}"
     needs_update=true
     echo ""
   fi
@@ -321,16 +336,22 @@ _write_env() {
   } > "${env_path}"
 
   echo ""
-  echo "${GREEN}=== Arquivo .env salvo ===${NO_COLOR}"
+  echo "${GREEN}=== Arquivo .env criado com sucesso ===${NO_COLOR}"
   echo "  Caminho: ${GREEN}${env_path}${NO_COLOR}"
+  echo ""
+  echo "  PYTHON_VERSION = ${PYTHON_VERSION:-3.12}"
+  echo "  BASE_DIR       = ${BASE_DIR:-/opt}"
+  echo "  SUAP_DIR       = ${SUAP_DIR:-\${BASE_DIR}/suap}"
+  echo "  VENV_DIR       = ${VENV_DIR:-\${SUAP_DIR}/.venv}"
+  echo "  GIT_URL        = ${GIT_URL:-}"
   echo ""
   msg_action "Configuração salva. Prosseguindo..."
 }
 
 # interactive_env_wizard(env_path)
-# Mantida para compatibilidade — chama ensure_env_for_option com opção 2 (todas as variáveis)
+# Mantida para compatibilidade — chama ensure_env_for_option com opção 1 (dev defaults)
 interactive_env_wizard() {
-  ensure_env_for_option "${1}" "2"
+  ensure_env_for_option "${1}" "1"
 }
 
 # load_env_file(env_path)

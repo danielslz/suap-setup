@@ -18,14 +18,25 @@ detect_distro
 # Exibir menu interativo
 echo ""
 echo "${GREEN}=== SUAP Setup ===${NO_COLOR}"
-echo "1) Configurar ambiente de desenvolvimento"
-echo "2) Configurar ambiente de produção"
-echo "3) Instalar Redis"
-echo "4) Instalar Nginx"
-echo "5) Configurar ambiente dev via Docker"
-echo "6) Configurar ambiente prod via Docker"
-echo "7) Iniciar Dockhand (via Docker)"
-echo "0) Sair"
+if [ "${DISTRO_TYPE}" = "macos" ]; then
+  echo "1) Configurar ambiente de desenvolvimento"
+  echo "2) Configurar ambiente de produção (não suportado no macOS)"
+  echo "3) Instalar Redis (não suportado no macOS)"
+  echo "4) Instalar Nginx (não suportado no macOS)"
+  echo "5) Configurar ambiente dev via Docker"
+  echo "6) Configurar ambiente prod via Docker"
+  echo "7) Iniciar Dockhand (via Docker)"
+  echo "0) Sair"
+else
+  echo "1) Configurar ambiente de desenvolvimento"
+  echo "2) Configurar ambiente de produção"
+  echo "3) Instalar Redis"
+  echo "4) Instalar Nginx"
+  echo "5) Configurar ambiente dev via Docker"
+  echo "6) Configurar ambiente prod via Docker"
+  echo "7) Iniciar Dockhand (via Docker)"
+  echo "0) Sair"
+fi
 echo ""
 read -rp "Escolha uma opção [0-7]: " CHOICE
 
@@ -43,6 +54,16 @@ case "${CHOICE}" in
     exit 1
     ;;
 esac
+
+# Rejeitar opções não suportadas no macOS
+if [ "${DISTRO_TYPE}" = "macos" ]; then
+  case "${CHOICE}" in
+    2|3|4)
+      msg_error "Opção ${CHOICE} não suportada no macOS."
+      exit 1
+      ;;
+  esac
+fi
 
 # --- Coletar variáveis de ambiente conforme a opção escolhida ---
 # Mapeamento de variáveis necessárias por opção:
