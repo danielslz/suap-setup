@@ -106,9 +106,14 @@ teardown() {
 
     # Verify confirmation output shows the values
     assert_output --partial "Arquivo .env criado com sucesso"
-    assert_output --partial "PYTHON_VERSION = 3.12"
-    assert_output --partial 'BASE_DIR       = $HOME/Projetos'
-    assert_output --partial 'SUAP_DIR       = ${BASE_DIR}/suap'
-    assert_output --partial 'VENV_DIR       = ${SUAP_DIR}/.venv'
-    assert_output --partial "GIT_URL        = https://git.example.com/suap.git"
+    assert_output --partial "PYTHON_VERSION"
+    assert_output --partial "= 3.12"
+    assert_output --partial "BASE_DIR"
+    assert_output --partial '= $HOME/Projetos'
+    assert_output --partial "SUAP_DIR"
+    assert_output --partial '= ${BASE_DIR}/suap'
+    assert_output --partial "VENV_DIR"
+    assert_output --partial '= ${SUAP_DIR}/.venv'
+    assert_output --partial "GIT_URL"
+    assert_output --partial "= https://git.example.com/suap.git"
 }

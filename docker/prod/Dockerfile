@@ -47,7 +47,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY . /opt/suap
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --group prod --no-dev --no-editable && \
-    uv pip install gunicorn
+    uv pip install --python /venv/bin/python gunicorn
 
 # ============================================================
 # Stage 2: Runtime
@@ -68,11 +68,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Apenas runtime libs (sem -dev, sem compiladores)
+# Nota: No Trixie, ntpdate → ntpsec-ntpdate, libldap-2.5-0 → libldap2
 RUN set -eux; \
     apt-get update -qy; \
     apt-get install -y --no-install-recommends \
-      locales curl cron ntpdate tmpreaper \
-      libpq5 libldap-2.5-0 libsasl2-2 \
+      locales curl cron ntpsec-ntpdate tmpreaper \
+      libpq5 libldap2 libsasl2-2 \
       libjpeg62-turbo libfreetype6 zlib1g \
       libct4 \
       libxml2 libxslt1.1 libxmlsec1 \

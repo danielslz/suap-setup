@@ -130,7 +130,7 @@ ensure_env_for_option() {
     echo ""
   fi
 
-  # Para Docker (5, 6) só precisa de PYTHON_VERSION e GIT_URL
+  # Para Docker (5, 6) precisa de PYTHON_VERSION, GIT_URL e SUAP_DIR
   if [ "${option}" = "5" ] || [ "${option}" = "6" ]; then
     # GIT_URL (necessária para 5, 6)
     if [ -z "${GIT_URL:-}" ]; then
@@ -144,6 +144,38 @@ ensure_env_for_option() {
         exit 1
       fi
       GIT_URL="${_input}"
+      needs_update=true
+      echo ""
+    fi
+    # SUAP_DIR (necessária para contexto de build Docker)
+    if [ -z "${SUAP_DIR:-}" ]; then
+      _show_header
+      echo "${GREEN}SUAP_DIR${NO_COLOR}"
+      echo "  ${YELLOW}Descrição:${NO_COLOR} Caminho absoluto para o diretório do código SUAP (onde está o pyproject.toml)."
+      echo "  ${YELLOW}Exemplos:${NO_COLOR} \$HOME/Projetos/suap, /opt/suap"
+      local _suap_default="\$HOME/Projetos/suap"
+      read -rp "  Valor [${GREEN}${_suap_default}${NO_COLOR}]: " _input
+      SUAP_DIR="${_input:-$_suap_default}"
+      # Expandir variáveis como $HOME no valor informado
+      local _expanded_suap
+      _expanded_suap=$(eval echo "${SUAP_DIR}")
+      # Se o diretório não existe ou não contém pyproject.toml, clonar o repositório
+      if [ ! -d "${_expanded_suap}" ] || [ ! -f "${_expanded_suap}/pyproject.toml" ]; then
+        echo ""
+        msg_action "Repositório SUAP não encontrado em ${_expanded_suap}. Clonando..."
+        mkdir -p "$(dirname "${_expanded_suap}")"
+        if ! git clone "${GIT_URL}" "${_expanded_suap}"; then
+          msg_error "Falha ao clonar o repositório SUAP."
+          exit 1
+        fi
+        # Verificar se o clone trouxe o pyproject.toml
+        if [ ! -f "${_expanded_suap}/pyproject.toml" ]; then
+          msg_error "Clone concluído, mas pyproject.toml não encontrado em ${_expanded_suap}."
+          msg_error "Verifique se a URL do repositório está correta."
+          exit 1
+        fi
+        msg_action "Repositório clonado com sucesso em ${_expanded_suap}"
+      fi
       needs_update=true
       echo ""
     fi
@@ -339,11 +371,12 @@ _write_env() {
   echo "${GREEN}=== Arquivo .env criado com sucesso ===${NO_COLOR}"
   echo "  Caminho: ${GREEN}${env_path}${NO_COLOR}"
   echo ""
-  echo "  PYTHON_VERSION = ${PYTHON_VERSION:-3.12}"
-  echo "  BASE_DIR       = ${BASE_DIR:-/opt}"
-  echo "  SUAP_DIR       = ${SUAP_DIR:-\${BASE_DIR}/suap}"
-  echo "  VENV_DIR       = ${VENV_DIR:-\${SUAP_DIR}/.venv}"
-  echo "  GIT_URL        = ${GIT_URL:-}"
+  # Exibir variáveis gravadas (lidas do arquivo para evitar problemas de interpolação)
+  while IFS='=' read -r _k _v; do
+    [[ -z "$_k" || "$_k" =~ ^[[:space:]]*# ]] && continue
+    _k=$(echo "$_k" | xargs)
+    printf '  %-18s = %s\n' "$_k" "$_v"
+  done < <(grep -v '^\s*#' "${env_path}" | grep -v '^\s*$')
   echo ""
   msg_action "Configuração salva. Prosseguindo..."
 }

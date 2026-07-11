@@ -1,8 +1,9 @@
 # docker/dev/docker-compose.yml - Ambiente de desenvolvimento SUAP
-# Alinhado com docker-compose.dev.yml oficial do SUAP
 #
-# Context de build: raiz do repositório SUAP (dois níveis acima)
-# Serviços: web, celery, celery-beat, celery-flower, cron, db, redis
+# Requer variáveis de ambiente (definidas pelo docker-setup.sh):
+#   SUAP_DIR        - Caminho absoluto para a raiz do código SUAP
+#   DOCKERFILE_DEV  - Caminho absoluto para o Dockerfile de desenvolvimento
+#   PYTHON_VERSION  - Versão do Python (padrão: 3.12)
 
 services:
   web:
@@ -11,10 +12,10 @@ services:
     tty: true
     user: "0:0"
     env_file:
-      - ../../.env
+      - ${SUAP_DIR}/.env
     build:
-      context: ../..
-      dockerfile: docker/dev/Dockerfile
+      context: ${SUAP_DIR}
+      dockerfile: ${DOCKERFILE_DEV}
       args:
         - PYTHON_VERSION=${PYTHON_VERSION:-3.12}
     command: python manage.py runserver 0.0.0.0:8000
@@ -27,7 +28,7 @@ services:
         hard: 65536
     volumes:
       - type: bind
-        source: ../../
+        source: ${SUAP_DIR}
         target: /opt/suap
     healthcheck:
       test: curl --fail -s http://web:8000/accounts/login/ || exit 1
@@ -50,10 +51,10 @@ services:
     tty: true
     user: "0:0"
     env_file:
-      - ../../.env
+      - ${SUAP_DIR}/.env
     build:
-      context: ../..
-      dockerfile: docker/dev/Dockerfile
+      context: ${SUAP_DIR}
+      dockerfile: ${DOCKERFILE_DEV}
     command: ./bin/celery.sh ${CELERY_QUEUE:-geral,celery_beat} --autoreload
     ulimits:
       memlock: -1
@@ -62,7 +63,7 @@ services:
         hard: 65536
     volumes:
       - type: bind
-        source: ../../
+        source: ${SUAP_DIR}
         target: /opt/suap
     networks:
       - suap
@@ -80,10 +81,10 @@ services:
     tty: true
     user: "0:0"
     env_file:
-      - ../../.env
+      - ${SUAP_DIR}/.env
     build:
-      context: ../..
-      dockerfile: docker/dev/Dockerfile
+      context: ${SUAP_DIR}
+      dockerfile: ${DOCKERFILE_DEV}
     command: ./bin/celery-beat.sh ${CELERY_QUEUE:-geral,celery_beat}
     ulimits:
       memlock: -1
@@ -92,7 +93,7 @@ services:
         hard: 65536
     volumes:
       - type: bind
-        source: ../../
+        source: ${SUAP_DIR}
         target: /opt/suap
     networks:
       - suap
@@ -104,10 +105,10 @@ services:
     stdin_open: true
     tty: true
     env_file:
-      - ../../.env
+      - ${SUAP_DIR}/.env
     build:
-      context: ../..
-      dockerfile: docker/dev/Dockerfile
+      context: ${SUAP_DIR}
+      dockerfile: ${DOCKERFILE_DEV}
     command: ./bin/celery-flower.sh ${CELERY_BROKER_URL:-redis://redis:6379/1} ${CELERY_FLOWER_AUTH:-admin:admin}
     ulimits:
       memlock: -1
@@ -130,10 +131,10 @@ services:
     tty: true
     user: "0:0"
     env_file:
-      - ../../.env
+      - ${SUAP_DIR}/.env
     build:
-      context: ../..
-      dockerfile: docker/dev/Dockerfile
+      context: ${SUAP_DIR}
+      dockerfile: ${DOCKERFILE_DEV}
     command: cron -f
     ulimits:
       memlock: -1
@@ -142,10 +143,10 @@ services:
         hard: 65536
     volumes:
       - type: bind
-        source: ../../
+        source: ${SUAP_DIR}
         target: /opt/suap
       - type: bind
-        source: ../../.env
+        source: ${SUAP_DIR}/.env
         target: /etc/environment
         read_only: true
     networks:
@@ -154,7 +155,7 @@ services:
   db:
     restart: always
     env_file:
-      - ../../.env
+      - ${SUAP_DIR}/.env
     image: postgres:${POSTGRES_VERSION:-16}
     environment:
       POSTGRES_DB: ${DATABASE_NAME:-suap}

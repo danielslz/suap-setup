@@ -1,18 +1,19 @@
 # docker/prod/docker-compose.prod.yml - Ambiente de produção SUAP
-# Alinhado com estrutura oficial do SUAP
 #
-# Context de build: raiz do repositório SUAP (dois níveis acima)
-# Serviços: web, celery-worker, celery-beat, celery-flower, cron, redis, nginx
+# Requer variáveis de ambiente (definidas pelo docker-setup.sh):
+#   SUAP_DIR         - Caminho absoluto para a raiz do código SUAP
+#   DOCKERFILE_PROD  - Caminho absoluto para o Dockerfile de produção
+#   PYTHON_VERSION   - Versão do Python (padrão: 3.12)
 
 services:
   web:
     build:
-      context: ../..
-      dockerfile: docker/prod/Dockerfile
+      context: ${SUAP_DIR}
+      dockerfile: ${DOCKERFILE_PROD}
       args:
         - PYTHON_VERSION=${PYTHON_VERSION:-3.12}
     env_file:
-      - ../../.env
+      - ${SUAP_DIR}/.env
     depends_on:
       redis:
         condition: service_healthy
@@ -38,13 +39,13 @@ services:
 
   celery-worker:
     build:
-      context: ../..
-      dockerfile: docker/prod/Dockerfile
+      context: ${SUAP_DIR}
+      dockerfile: ${DOCKERFILE_PROD}
       args:
         - PYTHON_VERSION=${PYTHON_VERSION:-3.12}
     command: ./bin/celery.sh ${CELERY_QUEUE:-geral,celery_beat}
     env_file:
-      - ../../.env
+      - ${SUAP_DIR}/.env
     depends_on:
       redis:
         condition: service_healthy
@@ -68,13 +69,13 @@ services:
 
   celery-beat:
     build:
-      context: ../..
-      dockerfile: docker/prod/Dockerfile
+      context: ${SUAP_DIR}
+      dockerfile: ${DOCKERFILE_PROD}
       args:
         - PYTHON_VERSION=${PYTHON_VERSION:-3.12}
     command: ./bin/celery-beat.sh ${CELERY_QUEUE:-geral,celery_beat}
     env_file:
-      - ../../.env
+      - ${SUAP_DIR}/.env
     depends_on:
       redis:
         condition: service_healthy
@@ -93,13 +94,13 @@ services:
 
   celery-flower:
     build:
-      context: ../..
-      dockerfile: docker/prod/Dockerfile
+      context: ${SUAP_DIR}
+      dockerfile: ${DOCKERFILE_PROD}
       args:
         - PYTHON_VERSION=${PYTHON_VERSION:-3.12}
     command: ./bin/celery-flower.sh ${CELERY_BROKER_URL:-redis://redis:6379/1} ${CELERY_FLOWER_AUTH:-admin:admin}
     env_file:
-      - ../../.env
+      - ${SUAP_DIR}/.env
     depends_on:
       redis:
         condition: service_healthy
@@ -121,14 +122,14 @@ services:
 
   cron:
     build:
-      context: ../..
-      dockerfile: docker/prod/Dockerfile
+      context: ${SUAP_DIR}
+      dockerfile: ${DOCKERFILE_PROD}
       args:
         - PYTHON_VERSION=${PYTHON_VERSION:-3.12}
     command: cron -f
     user: "0:0"
     env_file:
-      - ../../.env
+      - ${SUAP_DIR}/.env
     restart: unless-stopped
     ulimits:
       memlock: -1
@@ -138,10 +139,6 @@ services:
     volumes:
       - media:/opt/suap/deploy/media
       - logs:/opt/suap/deploy/logs
-      - type: bind
-        source: ../../.env
-        target: /etc/environment
-        read_only: true
     networks:
       - suap
 
@@ -162,7 +159,7 @@ services:
       - "80:80"
       - "8001:8001"
     volumes:
-      - ../../nginx/suap.docker:/etc/nginx/templates/suap.conf.template:ro
+      - ${SUAP_DIR}/docker/nginx/suap.conf.template:/etc/nginx/templates/suap.conf.template:ro
       - static:/opt/suap/static:ro
       - media:/opt/suap/deploy/media:ro
       - logs:/opt/suap/deploy/logs/nginx
