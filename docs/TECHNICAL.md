@@ -30,14 +30,14 @@ de separação de responsabilidades:
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        setup.sh (Wrapper)                           │
 │  ┌───────────────────────────────────────────────────────────────┐  │
-│  │ 1. Carrega lib/common.sh                                     │  │
-│  │ 2. Detecta OS/distribuição                                   │  │
-│  │ 3. Exibe menu adaptativo                                     │  │
-│  │ 4. Coleta variáveis via wizard interativo                    │  │
-│  │ 5. Roteia para o script correto                              │  │
+│  │ 1. Carrega lib/common.sh                                      │  │
+│  │ 2. Detecta OS/distribuição                                    │  │
+│  │ 3. Exibe menu adaptativo                                      │  │
+│  │ 4. Coleta variáveis via wizard interativo                     │  │
+│  │ 5. Roteia para o script correto                               │  │
 │  └───────────────────────────────────────────────────────────────┘  │
-└───────────┬──────────┬──────────┬───────────┬───────────┬───────────┘
-            │          │          │           │           │
+└───────────┬─────────┬─────────┬───────────┬──────────┬──────────────┘
+            │         │         │           │          │
       ┌─────▼───┐ ┌───▼───┐ ┌───▼───┐  ┌────▼────┐ ┌───▼──────┐
       │  deb/   │ │ rpm/  │ │ arch/ │  │ macos/  │ │ docker/  │
       │(Debian) │ │(RHEL) │ │(Arch) │  │(macOS)  │ │(Docker)  │
