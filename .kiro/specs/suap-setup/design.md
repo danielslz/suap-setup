@@ -233,8 +233,8 @@ set -u
 #    a. Verificar uname -s == "Darwin" → DISTRO_TYPE="macos"
 #    b. Caso contrário, ler /etc/os-release → "deb", "rpm" ou "arch"
 # 5. Exibir menu:
-#    - macOS: menu restrito (opções 1, 5, 6, 7 — ocultar 2, 3, 4 com msg "não suportado no macOS")
-#    - Linux: menu completo com 7 opções
+#    - macOS: menu restrito (opções 1, 5, 6, 7 — ocultar 2, 3, 4, 8 com msg "não suportado no macOS")
+#    - Linux: menu completo com 8 opções
 # 6. Validar entrada do usuário
 # 7. Coletar variáveis via ensure_env_for_option(env_path, opção)
 #    - Coleta apenas variáveis necessárias para a opção selecionada
@@ -250,6 +250,7 @@ set -u
 # 5 → docker/dev/docker-setup.sh (delega para SUAP_Repo)
 # 6 → docker/prod/docker-setup.sh (delega para Deploy_Repo)
 # 7 → docker/dockhand-setup.sh
+# 8 → ${DISTRO_TYPE}/suap-update.sh (com sudo) [Linux only]
 ```
 
 ### 3. Scripts de Desenvolvimento (`deb/suap-dev.sh`, `rpm/suap-dev.sh`, `arch/suap-dev.sh`, `macos/suap-dev.sh`)
@@ -340,6 +341,54 @@ set -u
 # - Verificação (dpkg vs rpm -q vs pacman -Q)
 #
 # Nota: macOS NÃO suporta ambiente de produção (sem script prod para macOS)
+```
+
+### 4.1. Scripts de Atualização de Produção (`deb/suap-update.sh`, `rpm/suap-update.sh`, `arch/suap-update.sh`)
+
+```bash
+#!/bin/bash
+set -u
+# Algoritmo sequencial do script de atualização de produção:
+#
+# 1. Source lib/common.sh
+# 2. require_env_file() - falha com exit 1 se .env não existe (fallback individual)
+# 3. load_env_file() - carregar variáveis centralizadas
+# 4. Validar execução como root (exit 1 se EUID != 0)
+# 5. Parar todos os serviços do Supervisor:
+#    - supervisorctl stop all
+#    - Exibir confirmação de parada
+# 6. Atualizar código-fonte SUAP:
+#    - cd ${SUAP_DIR}
+#    - git pull
+#    - Se git pull falha → msg_error, supervisorctl start all, exit 1
+# 7. Instalar/atualizar dependências Python:
+#    - UV_PROJECT_ENVIRONMENT="${VENV_DIR}"
+#    - Se pyproject.toml existe: uv sync --group prod
+#    - Se requirements/ existe: uv pip install --python "${VENV_DIR}/bin/python" -r requirements/production.txt
+#    - Se falha → msg_error, supervisorctl start all, exit 1
+# 8. Perguntar ao usuário: executar migrate? [S/n]
+#    - Se sim: ${VENV_DIR}/bin/python manage.py migrate
+#    - Se migrate falha → aviso, perguntar se deseja continuar ou abortar
+#    - Se abortar → supervisorctl start all, exit 1
+# 9. Perguntar ao usuário: executar collectstatic? [S/n]
+#    - Se sim: ${VENV_DIR}/bin/python manage.py collectstatic --noinput
+# 10. Perguntar ao usuário: executar sync_permissions? [s/N]
+#     - Se sim: ${VENV_DIR}/bin/python manage.py sync_permissions
+# 11. Corrigir permissões:
+#     - chown -R www-data:www-data ${SUAP_DIR}
+#     - chown -R www-data:www-data ${BASE_DIR}/logs
+#     - chown -R www-data:www-data ${VENV_DIR}
+# 12. Reiniciar serviços do Supervisor:
+#     - supervisorctl start all
+# 13. Exibir status:
+#     - supervisorctl status
+#     - Mensagem de sucesso com resumo das ações realizadas
+
+# Diferenças entre deb, rpm e arch:
+# - Serviço supervisor (supervisor vs supervisord vs supervisord)
+# - Restante do fluxo é idêntico entre distros
+#
+# Nota: macOS NÃO suporta ambiente de produção (sem script update para macOS)
 ```
 
 ### 5. Scripts Docker — Arquitetura de Delegação
@@ -559,6 +608,7 @@ O wizard coleta apenas as variáveis necessárias para a opção escolhida:
 | 5 | `docker/dev/docker-setup.sh` | SUAP_DIR, GIT_URL, SUAP_IMAGE |
 | 6 | `docker/prod/docker-setup.sh` | DEPLOY_DIR, DEPLOY_GIT_URL |
 | 7 | `docker/dockhand-setup.sh` | Nenhuma |
+| 8 | `{distro}/suap-update.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR |
 
 ### Estrutura de Diretórios do Projeto (após refatoração)
 
@@ -571,16 +621,19 @@ suap-setup/
 ├── deb/
 │   ├── suap-dev.sh              # Dev - Debian
 │   ├── suap-prod.sh             # Prod - Debian
+│   ├── suap-update.sh           # Atualização prod - Debian
 │   ├── install-redis.sh         # Redis - Debian
 │   └── install-nginx.sh         # Nginx - Debian
 ├── rpm/
 │   ├── suap-dev.sh              # Dev - RPM
 │   ├── suap-prod.sh             # Prod - RPM
+│   ├── suap-update.sh           # Atualização prod - RPM
 │   ├── install-redis.sh         # Redis - RPM
 │   └── install-nginx.sh         # Nginx - RPM
 ├── arch/
 │   ├── suap-dev.sh              # Dev - Arch Linux
 │   ├── suap-prod.sh             # Prod - Arch Linux
+│   ├── suap-update.sh           # Atualização prod - Arch Linux
 │   ├── install-redis.sh         # Redis - Arch Linux
 │   └── install-nginx.sh         # Nginx - Arch Linux
 ├── macos/
@@ -668,6 +721,10 @@ O Script_Docker_Prod **não mantém** docker-compose nem Dockerfiles. Ele delega
 | 5     | *      | `docker/dev/docker-setup.sh`        | Não  | Delega para SUAP_Repo            |
 | 6     | *      | `docker/prod/docker-setup.sh`       | Não  | Delega para Deploy_Repo          |
 | 7     | *      | `docker/dockhand-setup.sh`          | Não  |                                |
+| 8     | deb    | `deb/suap-update.sh`                | Sim  | Atualização de produção          |
+| 8     | rpm    | `rpm/suap-update.sh`                | Sim  | Atualização de produção          |
+| 8     | arch   | `arch/suap-update.sh`               | Sim  | Atualização de produção          |
+| 8     | macos  | —                                   | —    | Não suportado (oculto no menu) |
 
 ### Tabela de Caminhos por Distribuição/OS
 

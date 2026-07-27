@@ -87,13 +87,14 @@ EOF
 #   5 (docker dev):  PYTHON_VERSION, GIT_URL, SUAP_DIR, SUAP_IMAGE
 #   6 (docker prod): DEPLOY_DIR, DEPLOY_GIT_URL
 #   7 (dockhand):    nenhuma
+#   8 (update):      nenhuma (requer .env já existente do setup de produção)
 ensure_env_for_option() {
   local env_path="${1}"
   local option="${2}"
 
   # Opções que não precisam de variáveis
   case "${option}" in
-    3|4|7) return 0 ;;
+    3|4|7|8) return 0 ;;
   esac
 
   # Carregar variáveis existentes (se .env já existe)

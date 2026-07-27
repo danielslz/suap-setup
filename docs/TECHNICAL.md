@@ -167,6 +167,7 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 | 5 | `docker/dev/docker-setup.sh` | SUAP_DIR, GIT_URL, SUAP_IMAGE, SUAP_PDF_IMAGE, SUAP_AI_IMAGE |
 | 6 | `docker/prod/docker-setup.sh` | DEPLOY_DIR, DEPLOY_GIT_URL |
 | 7 | `docker/dockhand-setup.sh` | Nenhuma |
+| 8 | `{distro}/suap-update.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR |
 
 **macOS (com remapeamento):**
 
@@ -520,6 +521,153 @@ supervisorctl start celery-worker celery-beat celery-flower
 # Todos
 supervisorctl start all
 ```
+
+---
+
+## Atualização de Produção Nativa
+
+**Arquivos:** `deb/suap-update.sh`, `rpm/suap-update.sh`, `arch/suap-update.sh`
+
+Automatiza o processo de atualização do SUAP em servidores de produção, incluindo
+parada de serviços, atualização de código e dependências, execução opcional de
+comandos Django e reinício dos serviços.
+
+> **macOS não suporta ambiente de produção.** Scripts de atualização existem
+> apenas para Debian, RPM e Arch.
+
+### Pré-requisitos
+
+- Acesso root (o script usa `exec sudo` se necessário)
+- `.env` configurado com variáveis de produção (BASE_DIR, SUAP_DIR, VENV_DIR)
+- Ambiente de produção já instalado via `suap-prod.sh`
+- UV instalado (detecta em `~/.cargo/bin`, `~/.local/bin`, `/root/.cargo/bin`, `/root/.local/bin`)
+
+### Etapas Passo a Passo
+
+#### Etapa 1 — Carregamento de Configuração
+
+```
+1. Source lib/common.sh
+2. require_env_file() → verifica se .env existe (exit 1 se não)
+3. load_env_file() → carrega variáveis centralizadas
+4. Define valores padrão de produção:
+   - BASE_DIR = /opt
+   - SUAP_DIR = $BASE_DIR/suap
+   - VENV_DIR = $BASE_DIR/venv
+5. Define DISTRO_TYPE="deb" (ou "rpm"/"arch" conforme o script)
+```
+
+#### Etapa 2 — Validação de Root
+
+```bash
+if [ "$EUID" -ne 0 ]; then
+  exec sudo bash "$0" "$@"  # Re-executa como root
+fi
+```
+
+#### Etapa 3 — Parada de Serviços
+
+```bash
+supervisorctl stop all
+```
+
+Todos os processos gerenciados pelo Supervisor são parados antes de qualquer
+alteração no código ou dependências.
+
+#### Etapa 4 — Atualização do Código-fonte
+
+```bash
+cd ${SUAP_DIR}
+git pull
+```
+
+> **Rollback em falha:** Se `git pull` retorna erro, os serviços são reiniciados
+> (`supervisorctl start all`) e o script encerra com exit 1.
+
+#### Etapa 5 — Atualização de Dependências Python
+
+O script detecta UV em múltiplos locais antes de executar:
+
+```
+1. Verificar `uv` no PATH
+2. Verificar ~/.cargo/bin/uv → adicionar ao PATH
+3. Verificar ~/.local/bin/uv → adicionar ao PATH
+4. Verificar /root/.cargo/bin/uv → adicionar ao PATH
+5. Verificar /root/.local/bin/uv → adicionar ao PATH
+```
+
+Após localizar UV:
+
+| Cenário | Comando |
+|---------|---------|
+| `pyproject.toml` existe | `UV_PROJECT_ENVIRONMENT=${VENV_DIR} uv sync --group prod` |
+| `requirements/` existe | `uv pip install --python ${VENV_DIR}/bin/python -r requirements/production.txt` |
+| Nenhum encontrado | exit 1 com erro |
+
+> **Rollback em falha:** Se a instalação de dependências falha, os serviços
+> são reiniciados antes do script encerrar.
+
+#### Etapa 6 — Migrate (Opcional)
+
+```
+Prompt: "Executar migrate (python manage.py migrate)? [S/n]"
+- Padrão: Sim (Enter = executar)
+- Se falha no migrate: pergunta se deseja continuar ou abortar
+- Se abortar: reinicia serviços e encerra
+```
+
+#### Etapa 7 — Collectstatic (Opcional)
+
+```
+Prompt: "Executar collectstatic (python manage.py collectstatic --noinput)? [S/n]"
+- Padrão: Sim (Enter = executar)
+```
+
+#### Etapa 8 — Sync Permissions (Opcional)
+
+```
+Prompt: "Executar sync_permissions (python manage.py sync_permissions)? [s/N]"
+- Padrão: Não (Enter = pular)
+```
+
+#### Etapa 9 — Correção de Permissões
+
+```bash
+chown -R www-data:www-data ${SUAP_DIR}
+chown -R www-data:www-data ${BASE_DIR}/logs
+chown -R www-data:www-data ${VENV_DIR}
+```
+
+#### Etapa 10 — Reinício dos Serviços
+
+```bash
+supervisorctl start all
+supervisorctl status
+```
+
+#### Etapa 11 — Resumo Final
+
+Exibe um resumo com checkmarks das ações realizadas e puladas:
+
+```
+Resumo das ações realizadas:
+  ✓ Serviços parados
+  ✓ Código atualizado (git pull)
+  ✓ Dependências Python atualizadas
+  ✓ Migrate executado          (ou "- Migrate pulado")
+  ✓ Collectstatic executado    (ou "- Collectstatic pulado")
+  - sync_permissions pulado    (ou "✓ sync_permissions executado")
+  ✓ Permissões corrigidas
+  ✓ Serviços reiniciados
+```
+
+### Diferenças entre Distribuições
+
+| Aspecto | Debian | RPM | Arch |
+|---------|--------|-----|------|
+| DISTRO_TYPE | `deb` | `rpm` | `arch` |
+| Serviço Supervisor | `supervisor` | `supervisord` | `supervisord` |
+| Restante do fluxo | Idêntico | Idêntico | Idêntico |
 
 ---
 

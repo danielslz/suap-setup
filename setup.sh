@@ -34,9 +34,10 @@ else
   echo "5) Configurar ambiente dev via Docker"
   echo "6) Configurar ambiente prod via Docker"
   echo "7) Iniciar Dockhand (via Docker)"
+  echo "8) Atualizar SUAP (produção)"
   echo "0) Sair"
   echo ""
-  read -rp "Escolha uma opção [0-7]: " CHOICE
+  read -rp "Escolha uma opção [0-8]: " CHOICE
 fi
 
 # Sair imediatamente se opção 0
@@ -59,9 +60,9 @@ if [ "${DISTRO_TYPE}" = "macos" ]; then
   esac
 else
   case "${CHOICE}" in
-    1|2|3|4|5|6|7) INTERNAL_CHOICE="${CHOICE}" ;;
+    1|2|3|4|5|6|7|8) INTERNAL_CHOICE="${CHOICE}" ;;
     *)
-      msg_error "Opção inválida: use 0, 1, 2, 3, 4, 5, 6 ou 7."
+      msg_error "Opção inválida: use 0, 1, 2, 3, 4, 5, 6, 7 ou 8."
       exit 1
       ;;
   esac
@@ -77,6 +78,7 @@ fi
 #   5 (docker dev): PYTHON_VERSION, GIT_URL, SUAP_DIR, SUAP_IMAGE
 #   6 (docker prod):DEPLOY_DIR, DEPLOY_GIT_URL
 #   7 (dockhand):   nenhuma
+#   8 (update):     PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR
 
 ensure_env_for_option "${ENV_FILE}" "${INTERNAL_CHOICE}"
 
@@ -94,6 +96,7 @@ case "${INTERNAL_CHOICE}" in
   5) TARGET_SCRIPT="${SCRIPT_DIR}/docker/dev/docker-setup.sh" ;;
   6) TARGET_SCRIPT="${SCRIPT_DIR}/docker/prod/docker-setup.sh" ;;
   7) TARGET_SCRIPT="${SCRIPT_DIR}/docker/dockhand-setup.sh" ;;
+  8) TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/suap-update.sh" ;;
 esac
 
 # Verificar existência do script antes de executar

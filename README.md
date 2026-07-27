@@ -52,6 +52,11 @@ sudo bash deb/suap-prod.sh
 sudo bash rpm/suap-prod.sh
 sudo bash arch/suap-prod.sh
 
+# Atualização de produção (requer root)
+sudo bash deb/suap-update.sh
+sudo bash rpm/suap-update.sh
+sudo bash arch/suap-update.sh
+
 # Infraestrutura
 bash deb/install-redis.sh
 bash deb/install-nginx.sh
@@ -82,6 +87,7 @@ O `setup.sh` detecta automaticamente o sistema operacional e exibe apenas as op�
 5) Configurar ambiente dev via Docker
 6) Configurar ambiente prod via Docker
 7) Iniciar Dockhand (via Docker)
+8) Atualizar ambiente de produção
 0) Sair
 ```
 
@@ -133,6 +139,9 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `deb/suap-prod.sh` | Debian/Ubuntu | Ambiente de produção |
 | `rpm/suap-prod.sh` | Fedora/RHEL | Ambiente de produção |
 | `arch/suap-prod.sh` | Arch Linux | Ambiente de produção |
+| `deb/suap-update.sh` | Debian/Ubuntu | Atualização de ambiente de produção |
+| `rpm/suap-update.sh` | Fedora/RHEL | Atualização de ambiente de produção |
+| `arch/suap-update.sh` | Arch Linux | Atualização de ambiente de produção |
 | `deb/install-redis.sh` | Debian/Ubuntu | Instala e habilita Redis |
 | `rpm/install-redis.sh` | Fedora/RHEL | Instala e habilita Redis |
 | `arch/install-redis.sh` | Arch Linux | Instala e habilita Redis |
@@ -177,6 +186,22 @@ Os scripts de produção (requerem root) realizam:
 | Debian/Ubuntu | `/etc/supervisor/conf.d/` |
 | Fedora/RHEL | `/etc/supervisord.d/` |
 | Arch Linux | `/etc/supervisor.d/` |
+
+## Atualização de produção
+
+Os scripts de atualização (`deb/suap-update.sh`, `rpm/suap-update.sh`, `arch/suap-update.sh`) automatizam o processo de atualização do SUAP em servidores de produção:
+
+1. Parar todos os serviços do Supervisor
+2. Atualizar código-fonte (`git pull`)
+3. Atualizar dependências Python via UV (`uv sync --group prod` ou `uv pip install`)
+4. Executar `migrate` (opcional, pergunta ao usuário)
+5. Executar `collectstatic` (opcional, pergunta ao usuário)
+6. Executar `sync_permissions` (opcional, pergunta ao usuário)
+7. Corrigir permissões dos diretórios (`chown www-data`)
+8. Reiniciar serviços do Supervisor
+9. Exibir status e resumo das ações realizadas
+
+> **Rollback automático em falhas:** Se o `git pull` ou a instalação de dependências falhar, os serviços são reiniciados automaticamente antes do script encerrar com erro.
 
 ## Docker
 
@@ -364,16 +389,19 @@ suap-setup/
 ├── deb/                              # Debian/Ubuntu
 │   ├── suap-dev.sh
 │   ├── suap-prod.sh
+│   ├── suap-update.sh
 │   ├── install-redis.sh
 │   └── install-nginx.sh
 ├── rpm/                              # Fedora/RHEL/CentOS
 │   ├── suap-dev.sh
 │   ├── suap-prod.sh
+│   ├── suap-update.sh
 │   ├── install-redis.sh
 │   └── install-nginx.sh
 ├── arch/                             # Arch/Manjaro/EndeavourOS
 │   ├── suap-dev.sh
 │   ├── suap-prod.sh
+│   ├── suap-update.sh
 │   ├── install-redis.sh
 │   └── install-nginx.sh
 ├── macos/                            # macOS (apenas dev)

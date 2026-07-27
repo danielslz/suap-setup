@@ -13,6 +13,7 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 - **Script_Nginx**: Scripts de instalação do Nginx (`deb/install-nginx.sh`, `rpm/install-nginx.sh`).
 - **Script_Docker_Dev**: Script de delegação (`docker/dev/docker-setup.sh`) que configura e executa o ambiente Docker de desenvolvimento delegando para o `docker-compose.dev.yml` nativo do repositório suap.
 - **Script_Docker_Prod**: Script de delegação (`docker/prod/docker-setup.sh`) que configura e executa o ambiente Docker de produção delegando para o projeto suap_deploy e seu Makefile.
+- **Script_Update**: Scripts de atualização do SUAP em produção (`deb/suap-update.sh`, `rpm/suap-update.sh`, `arch/suap-update.sh`) que param serviços, atualizam código, opcionalmente executam migrate/collectstatic/sync_permissions, corrigem permissões e reiniciam serviços.
 - **SUAP_Repo**: Repositório suap contendo o código-fonte da aplicação SUAP, incluindo os Dockerfiles e docker-compose nativos para desenvolvimento.
 - **Deploy_Repo**: Repositório suap_deploy que é o orquestrador oficial de produção, contendo Makefile, configurações de containers, WAF e integração com registry GitLab.
 - **Delegação_Docker**: Princípio arquitetural no qual suap-setup não mantém Dockerfiles ou docker-compose próprios, delegando para os repositórios oficiais upstream (suap para dev, suap_deploy para prod).
@@ -70,9 +71,9 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 
 #### Acceptance Criteria
 
-1. WHEN a detecção da distribuição é concluída com sucesso, THE Wrapper SHALL exibir um menu com as opções: (1) Configurar ambiente dev, (2) Configurar ambiente prod, (3) Instalar Redis, (4) Instalar Nginx, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker, (7) Iniciar Dockhand.
-2. WHILE executando em Distribuição_macOS, THE Wrapper SHALL exibir apenas as opções (1) Configurar ambiente dev, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker e (7) Iniciar Dockhand, ocultando as opções 2, 3 e 4 com uma mensagem "não suportado no macOS".
-3. WHEN o usuário seleciona uma opção válida (1 a 7), THE Wrapper SHALL executar o script correspondente à distribuição detectada, ao ambiente Docker ou ao Dockhand.
+1. WHEN a detecção da distribuição é concluída com sucesso, THE Wrapper SHALL exibir um menu com as opções: (1) Configurar ambiente dev, (2) Configurar ambiente prod, (3) Instalar Redis, (4) Instalar Nginx, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker, (7) Iniciar Dockhand, (8) Atualizar SUAP (produção).
+2. WHILE executando em Distribuição_macOS, THE Wrapper SHALL exibir apenas as opções (1) Configurar ambiente dev, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker e (7) Iniciar Dockhand, ocultando as opções 2, 3, 4 e 8 com uma mensagem "não suportado no macOS".
+3. WHEN o usuário seleciona uma opção válida (1 a 8), THE Wrapper SHALL executar o script correspondente à distribuição detectada, ao ambiente Docker ou ao Dockhand.
 4. IF o usuário informa uma opção inválida, THEN THE Wrapper SHALL exibir uma mensagem de erro e encerrar com código de saída 1.
 5. IF o arquivo do script correspondente não é encontrado no diretório, THEN THE Wrapper SHALL exibir uma mensagem de erro e encerrar com código de saída 2.
 
@@ -463,3 +464,31 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 5. THE Script_Docker_Dev SHALL limitar sua responsabilidade a: verificar pré-requisitos (Docker instalado), garantir a existência do SUAP_Repo, gerar arquivos de configuração a partir dos samples, exportar variáveis de ambiente e invocar o docker-compose do SUAP_Repo.
 6. THE Script_Docker_Prod SHALL limitar sua responsabilidade a: verificar pré-requisitos (Docker instalado), garantir a existência do Deploy_Repo, configurar o .env de produção a partir do sample, apresentar o menu interativo e delegar para os targets do Makefile.
 7. IF um arquivo Dockerfile, docker-compose.yml ou docker-compose.prod.yml é encontrado nos diretórios `docker/dev/` ou `docker/prod/` do suap-setup, THEN o ambiente SHALL ser considerado em violação do princípio de Delegação_Docker.
+
+
+### Requirement 33: Atualização do SUAP em ambiente de produção
+
+**User Story:** Como administrador de sistemas, eu quero scripts que automatizem a atualização da versão do SUAP em produção, para que eu possa atualizar o sistema de forma segura, com parada controlada dos serviços, opções de migrate/collectstatic/sync_permissions, e reinício automático.
+
+#### Acceptance Criteria
+
+1. WHEN o Script_Update é executado, THE Script_Update SHALL verificar a execução como root (exit 1 se EUID != 0).
+2. WHEN o Script_Update inicia, THE Script_Update SHALL carregar o Arquivo_Env_Central para obter SUAP_DIR, VENV_DIR e BASE_DIR.
+3. WHEN as variáveis são carregadas, THE Script_Update SHALL parar todos os serviços SUAP gerenciados pelo Supervisor usando `supervisorctl stop all`.
+4. WHEN os serviços são parados, THE Script_Update SHALL atualizar o código-fonte do SUAP executando `git pull` no diretório SUAP_DIR.
+5. IF o `git pull` falha (exit code != 0), THEN THE Script_Update SHALL exibir uma mensagem de erro, reiniciar os serviços via `supervisorctl start all` e encerrar com código de saída 1.
+6. WHEN o código é atualizado, THE Script_Update SHALL instalar/atualizar dependências Python usando UV (uv sync --group prod se pyproject.toml existe, ou uv pip install -r requirements/production.txt caso contrário).
+7. IF a instalação de dependências falha, THEN THE Script_Update SHALL exibir uma mensagem de erro, reiniciar os serviços via `supervisorctl start all` e encerrar com código de saída 1.
+8. WHEN as dependências são atualizadas, THE Script_Update SHALL perguntar ao usuário se deseja executar `python manage.py migrate` (padrão: sim).
+9. WHEN o usuário confirma a execução do migrate, THE Script_Update SHALL executar `python manage.py migrate` usando o Python do virtualenv.
+10. IF o migrate falha (exit code != 0), THEN THE Script_Update SHALL exibir uma mensagem de erro alertando que o banco pode estar em estado inconsistente e perguntar ao usuário se deseja continuar ou abortar (reiniciando os serviços em caso de abort).
+11. WHEN o migrate é concluído (ou pulado), THE Script_Update SHALL perguntar ao usuário se deseja executar `python manage.py collectstatic --noinput` (padrão: sim).
+12. WHEN o usuário confirma a execução do collectstatic, THE Script_Update SHALL executar `python manage.py collectstatic --noinput` usando o Python do virtualenv.
+13. WHEN o collectstatic é concluído (ou pulado), THE Script_Update SHALL perguntar ao usuário se deseja executar `python manage.py sync_permissions` (padrão: não).
+14. WHEN o usuário confirma a execução do sync_permissions, THE Script_Update SHALL executar `python manage.py sync_permissions` usando o Python do virtualenv.
+15. WHEN todas as etapas opcionais são concluídas, THE Script_Update SHALL corrigir as permissões de acesso aos arquivos executando `chown -R www-data:www-data` no SUAP_DIR, diretório de logs e VENV_DIR.
+16. WHEN as permissões são corrigidas, THE Script_Update SHALL reiniciar todos os serviços do Supervisor usando `supervisorctl start all`.
+17. WHEN os serviços são reiniciados, THE Script_Update SHALL exibir o status dos serviços via `supervisorctl status` e uma mensagem de sucesso com resumo das ações realizadas.
+18. THE Script_Update SHALL existir em três variantes: `deb/suap-update.sh`, `rpm/suap-update.sh` e `arch/suap-update.sh`, cada uma usando o gerenciador de pacotes e convenções da respectiva distribuição.
+19. WHEN o Script_Update é selecionado via menu do Wrapper, THE Wrapper SHALL executar o script com sudo (assim como o Script_Prod).
+20. THE Script_Update SHALL ser acessível como opção 8 no menu do Wrapper (Linux only), com o rótulo "Atualizar SUAP (produção)".
