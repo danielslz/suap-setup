@@ -1,8 +1,18 @@
 #!/usr/bin/env bash
 set -u
 
-# docker/prod/docker-setup.sh - Script de setup Docker para produção
-# Verifica pré-requisitos, resolve URL do repositório e inicia containers em modo detached.
+# docker/prod/docker-setup.sh - Setup Docker para produção
+# Delega para o projeto suap_deploy, que é o orquestrador oficial de produção.
+#
+# O suap_deploy:
+#   - Puxa imagens pré-construídas do registry GitLab
+#   - Usa OWASP ModSecurity CRS como WAF no Nginx
+#   - Suporta resource limits por container
+#   - Integra com Vault para segredos (opcional)
+#   - Inclui serviços auxiliares (pdfprinter, ai)
+#
+# Este script automatiza o clone/configuração do suap_deploy e delega
+# o gerenciamento dos containers para o Makefile dele.
 
 # Determinar diretório raiz do repositório suap-setup
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -19,86 +29,176 @@ load_env_file "${SCRIPT_DIR}/.env"
 # 4. Verificar se Docker e Docker Compose estão disponíveis
 check_docker_available
 
-# 5. Garantir que GIT_URL está configurada
-resolve_git_url "${SCRIPT_DIR}/.env"
-
-# 6. Se SUAP_DIR não existe ou não contém pyproject.toml, clonar o repositório
-if [ ! -d "${SUAP_DIR}" ] || [ ! -f "${SUAP_DIR}/pyproject.toml" ]; then
-  msg_action "Repositório SUAP não encontrado em ${SUAP_DIR}. Clonando..."
-  mkdir -p "$(dirname "${SUAP_DIR}")"
-  if ! git clone "${GIT_URL}" "${SUAP_DIR}"; then
-    msg_error "Falha ao clonar o repositório SUAP."
-    exit 1
-  fi
-  if [ ! -f "${SUAP_DIR}/pyproject.toml" ]; then
-    msg_error "Clone concluído, mas pyproject.toml não encontrado em ${SUAP_DIR}."
-    msg_error "Verifique se a URL do repositório está correta."
-    exit 1
-  fi
-  msg_action "Repositório clonado com sucesso em ${SUAP_DIR}"
-fi
-
-# 7. Garantir que o .env do SUAP existe (necessário para o compose)
-if [ ! -f "${SUAP_DIR}/.env" ]; then
-  if [ -f "${SUAP_DIR}/.env.dev.sample" ]; then
-    msg_action "Gerando ${SUAP_DIR}/.env a partir do sample..."
-    cp "${SUAP_DIR}/.env.dev.sample" "${SUAP_DIR}/.env"
+# 5. Garantir que DEPLOY_DIR está configurado
+if [ -z "${DEPLOY_DIR:-}" ]; then
+  # Fallback: mesmo diretório pai do SUAP_DIR
+  if [ -n "${SUAP_DIR:-}" ]; then
+    DEPLOY_DIR="$(dirname "$(eval echo "${SUAP_DIR}")")/suap_deploy"
   else
-    msg_action "Criando ${SUAP_DIR}/.env vazio..."
-    touch "${SUAP_DIR}/.env"
+    DEPLOY_DIR="${HOME}/Projetos/suap_deploy"
+  fi
+fi
+DEPLOY_DIR=$(eval echo "${DEPLOY_DIR}")
+
+# 6. Garantir que DEPLOY_GIT_URL está configurado
+DEPLOY_GIT_URL="${DEPLOY_GIT_URL:-}"
+if [ -z "${DEPLOY_GIT_URL}" ]; then
+  msg_error "DEPLOY_GIT_URL não está definido no .env"
+  msg_error "Execute setup.sh e escolha a opção 6 para configurar."
+  exit 1
+fi
+
+# 7. Se DEPLOY_DIR não existe, clonar o repositório
+if [ ! -d "${DEPLOY_DIR}" ]; then
+  msg_action "Repositório suap_deploy não encontrado em ${DEPLOY_DIR}. Clonando..."
+  mkdir -p "$(dirname "${DEPLOY_DIR}")"
+  if ! git clone --recurse-submodules "${DEPLOY_GIT_URL}" "${DEPLOY_DIR}"; then
+    msg_error "Falha ao clonar o repositório suap_deploy."
+    msg_error "Verifique se você tem acesso a: ${DEPLOY_GIT_URL}"
+    exit 1
+  fi
+  msg_action "Repositório clonado com sucesso em ${DEPLOY_DIR}"
+elif [ -d "${DEPLOY_DIR}/.git" ]; then
+  # Atualizar submodules se já existe
+  msg_action "Atualizando submodules do suap_deploy..."
+  cd "${DEPLOY_DIR}" && git submodule update --init --recursive 2>/dev/null || true
+fi
+
+# 8. Verificar que o Makefile existe
+if [ ! -f "${DEPLOY_DIR}/Makefile" ]; then
+  msg_error "Makefile não encontrado em ${DEPLOY_DIR}."
+  msg_error "Verifique se o repositório suap_deploy está correto."
+  exit 1
+fi
+
+# 9. Configurar .env do suap_deploy se não existir
+if [ ! -f "${DEPLOY_DIR}/.env" ]; then
+  if [ -f "${DEPLOY_DIR}/env.prod.sample" ]; then
+    msg_action "Gerando ${DEPLOY_DIR}/.env a partir do env.prod.sample..."
+    cp "${DEPLOY_DIR}/env.prod.sample" "${DEPLOY_DIR}/.env"
+    msg_action "ATENÇÃO: Edite ${DEPLOY_DIR}/.env com as credenciais corretas antes de prosseguir."
+    echo ""
+    echo "  Variáveis críticas para configurar:"
+    echo "    DATABASE_HOST, DATABASE_USER, DATABASE_PASSWORD"
+    echo "    SUAP_IMAGE (imagem do registry)"
+    echo "    REDIS_LOCATION, CELERY_BROKER_URL"
+    echo "    SECRET_KEY"
+    echo ""
+    read -rp "Pressione Enter após editar o .env, ou Ctrl+C para cancelar... "
+  else
+    msg_error "Arquivo .env não encontrado em ${DEPLOY_DIR} e não há sample disponível."
+    msg_error "Crie o .env com as configurações de produção antes de prosseguir."
+    exit 1
   fi
 fi
 
-# 7.1. Garantir que settings.py existe (necessário para Django/Celery)
-if [ ! -f "${SUAP_DIR}/suap/settings.py" ]; then
-  if [ -f "${SUAP_DIR}/suap/settings_sample.py" ]; then
-    msg_action "Gerando ${SUAP_DIR}/suap/settings.py a partir do sample..."
-    cp "${SUAP_DIR}/suap/settings_sample.py" "${SUAP_DIR}/suap/settings.py"
-  fi
-fi
+# 10. Menu de ações
+cd "${DEPLOY_DIR}"
 
-# 7.2. Garantir permissão de execução nos scripts bin/
-if [ -d "${SUAP_DIR}/bin" ]; then
-  chmod +x "${SUAP_DIR}/bin/"*.sh 2>/dev/null || true
-fi
-
-# 8. Exportar variáveis necessárias para o compose
-export SUAP_DIR
-export PYTHON_VERSION="${PYTHON_VERSION:-3.12}"
-export COMPOSE_DOCKER_CLI_BUILD=1
-export DOCKER_BUILDKIT=1
-
-# O Dockerfile fica no suap-setup mas o context é o SUAP_DIR.
-# Usamos path absoluto para o Dockerfile.
-export DOCKERFILE_PROD="${SCRIPT_DIR}/docker/prod/Dockerfile"
-
-# 9. Executar docker compose build + up -d
-msg_action "Iniciando containers Docker de produção (Python ${PYTHON_VERSION})..."
-msg_action "Context: ${SUAP_DIR}"
-
-COMPOSE_FILE="${SCRIPT_DIR}/docker/prod/docker-compose.prod.yml"
-
-docker compose -f "${COMPOSE_FILE}" build \
-  --build-arg PYTHON_VERSION="${PYTHON_VERSION}"
-docker compose -f "${COMPOSE_FILE}" up -d
-
-# 9. Exibir status dos serviços
 echo ""
-msg_action "=== Status dos Serviços ==="
+echo "${GREEN}=== Gerenciamento Docker de Produção (suap_deploy) ===${NO_COLOR}"
 echo ""
-docker compose -f "${COMPOSE_FILE}" ps
+echo "  Diretório: ${DEPLOY_DIR}"
+echo ""
+echo "  1) Fazer pull das imagens e iniciar todos os serviços"
+echo "  2) Fazer build local das imagens (a partir do código-fonte)"
+echo "  3) Apenas iniciar serviços (sem pull/build)"
+echo "  4) Parar todos os serviços"
+echo "  5) Ver status dos containers"
+echo "  6) Ver logs"
+echo "  7) Acessar shell do container web"
+echo "  8) Executar backup do banco"
+echo "  0) Sair"
+echo ""
+read -rp "Escolha uma opção [0-8]: " PROD_CHOICE
 
-# 10. Exibir instruções de gerenciamento
+case "${PROD_CHOICE}" in
+  1)
+    msg_action "Fazendo pull das imagens..."
+    make pull-image
+    make pull-pdf-image 2>/dev/null || true
+    make pull-ai-image 2>/dev/null || true
+    msg_action "Iniciando serviços..."
+    make start-web
+    make start-celery
+    make start-celery-beat
+    make start-flower
+    make start-cron
+    make start-pdf 2>/dev/null || true
+    make start-ai 2>/dev/null || true
+    echo ""
+    msg_action "Todos os serviços iniciados."
+    make status
+    ;;
+  2)
+    msg_action "Fazendo build das imagens a partir do código-fonte..."
+    msg_action "Isso requer que os submodules estejam atualizados."
+    git submodule update --remote
+    make build
+    msg_action "Build concluído. Deseja iniciar os serviços? [s/N]"
+    read -rp "" _start
+    if [[ "${_start}" =~ ^[sS]$ ]]; then
+      make start-web
+      make start-celery
+      make start-celery-beat
+      make start-flower
+      make start-cron
+      echo ""
+      msg_action "Serviços iniciados."
+      make status
+    fi
+    ;;
+  3)
+    msg_action "Iniciando serviços..."
+    make start-web
+    make start-celery
+    make start-celery-beat
+    make start-flower
+    make start-cron
+    make start-pdf 2>/dev/null || true
+    make start-ai 2>/dev/null || true
+    echo ""
+    make status
+    ;;
+  4)
+    msg_action "Parando todos os serviços..."
+    make stop
+    msg_action "Serviços parados."
+    ;;
+  5)
+    make status
+    ;;
+  6)
+    make logs
+    ;;
+  7)
+    make bash
+    ;;
+  8)
+    msg_action "Executando backup do banco..."
+    make backup
+    msg_action "Backup concluído."
+    ;;
+  0)
+    echo "Saindo..."
+    exit 0
+    ;;
+  *)
+    msg_error "Opção inválida."
+    exit 1
+    ;;
+esac
+
 echo ""
-msg_action "=== Ambiente Docker de Produção ==="
+msg_action "=== Comandos úteis (executar dentro de ${DEPLOY_DIR}) ==="
 echo ""
-echo "  Acesso à aplicação:   http://localhost (porta 80)"
-echo "  Celery Flower:        http://localhost:5555"
-echo ""
-echo "  Comandos de gerenciamento:"
-echo "    Parar containers:       docker compose -f ${COMPOSE_FILE} down"
-echo "    Ver logs:               docker compose -f ${COMPOSE_FILE} logs -f"
-echo "    Reiniciar containers:   docker compose -f ${COMPOSE_FILE} restart"
-echo "    Escalar workers:        docker compose -f ${COMPOSE_FILE} up -d --scale celery-worker=3"
-echo "    Acessar shell do app:   docker compose -f ${COMPOSE_FILE} exec web bash"
+echo "  make start-web        Iniciar web + nginx"
+echo "  make start-celery     Iniciar celery worker"
+echo "  make stop             Parar todos os serviços"
+echo "  make status           Ver status dos containers"
+echo "  make logs             Ver logs"
+echo "  make bash             Acessar shell do container web"
+echo "  make backup           Fazer backup do banco"
+echo "  make build            Build local das imagens"
+echo "  make push-image       Push da imagem para o registry"
 echo ""

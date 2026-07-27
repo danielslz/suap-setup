@@ -74,8 +74,8 @@ fi
 #   2 (prod):       PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL, GUNICORN_WORKERS, CELERY_MAX_WORKERS, CELERY_BROKER_URL, CELERY_FLOWER_AUTH
 #   3 (redis):      nenhuma
 #   4 (nginx):      nenhuma
-#   5 (docker dev): PYTHON_VERSION, GIT_URL
-#   6 (docker prod):PYTHON_VERSION, GIT_URL
+#   5 (docker dev): PYTHON_VERSION, GIT_URL, SUAP_DIR, SUAP_IMAGE
+#   6 (docker prod):DEPLOY_DIR, DEPLOY_GIT_URL
 #   7 (dockhand):   nenhuma
 
 ensure_env_for_option "${ENV_FILE}" "${INTERNAL_CHOICE}"

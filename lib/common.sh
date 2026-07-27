@@ -84,8 +84,8 @@ EOF
 #   2 (prod):        PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL, GUNICORN_WORKERS, GUNICORN_THREADS, CELERY_MAX_WORKERS, CELERY_MIN_WORKERS, CELERY_BROKER_URL, CELERY_FLOWER_AUTH
 #   3 (redis):       nenhuma
 #   4 (nginx):       nenhuma
-#   5 (docker dev):  PYTHON_VERSION, GIT_URL
-#   6 (docker prod): PYTHON_VERSION, GIT_URL
+#   5 (docker dev):  PYTHON_VERSION, GIT_URL, SUAP_DIR, SUAP_IMAGE
+#   6 (docker prod): DEPLOY_DIR, DEPLOY_GIT_URL
 #   7 (dockhand):    nenhuma
 ensure_env_for_option() {
   local env_path="${1}"
@@ -130,9 +130,9 @@ ensure_env_for_option() {
     echo ""
   fi
 
-  # Para Docker (5, 6) precisa de PYTHON_VERSION, GIT_URL e SUAP_DIR
-  if [ "${option}" = "5" ] || [ "${option}" = "6" ]; then
-    # GIT_URL (necessária para 5, 6)
+  # Para Docker dev (5) precisa de PYTHON_VERSION, GIT_URL e SUAP_DIR
+  if [ "${option}" = "5" ]; then
+    # GIT_URL (necessária para clone do SUAP)
     if [ -z "${GIT_URL:-}" ]; then
       _show_header
       echo "${GREEN}GIT_URL${NO_COLOR}"
@@ -147,35 +147,83 @@ ensure_env_for_option() {
       needs_update=true
       echo ""
     fi
-    # SUAP_DIR (necessária para contexto de build Docker)
+    # SUAP_DIR (caminho do código-fonte SUAP)
     if [ -z "${SUAP_DIR:-}" ]; then
       _show_header
       echo "${GREEN}SUAP_DIR${NO_COLOR}"
-      echo "  ${YELLOW}Descrição:${NO_COLOR} Caminho absoluto para o diretório do código SUAP (onde está o pyproject.toml)."
+      echo "  ${YELLOW}Descrição:${NO_COLOR} Caminho absoluto para o diretório do código SUAP."
       echo "  ${YELLOW}Exemplos:${NO_COLOR} \$HOME/Projetos/suap, /opt/suap"
       local _suap_default="\$HOME/Projetos/suap"
       read -rp "  Valor [${GREEN}${_suap_default}${NO_COLOR}]: " _input
       SUAP_DIR="${_input:-$_suap_default}"
-      # Expandir variáveis como $HOME no valor informado
-      local _expanded_suap
-      _expanded_suap=$(eval echo "${SUAP_DIR}")
-      # Se o diretório não existe ou não contém pyproject.toml, clonar o repositório
-      if [ ! -d "${_expanded_suap}" ] || [ ! -f "${_expanded_suap}/pyproject.toml" ]; then
-        echo ""
-        msg_action "Repositório SUAP não encontrado em ${_expanded_suap}. Clonando..."
-        mkdir -p "$(dirname "${_expanded_suap}")"
-        if ! git clone "${GIT_URL}" "${_expanded_suap}"; then
-          msg_error "Falha ao clonar o repositório SUAP."
-          exit 1
-        fi
-        # Verificar se o clone trouxe o pyproject.toml
-        if [ ! -f "${_expanded_suap}/pyproject.toml" ]; then
-          msg_error "Clone concluído, mas pyproject.toml não encontrado em ${_expanded_suap}."
-          msg_error "Verifique se a URL do repositório está correta."
-          exit 1
-        fi
-        msg_action "Repositório clonado com sucesso em ${_expanded_suap}"
-      fi
+      needs_update=true
+      echo ""
+    fi
+    # SUAP_IMAGE (registry de imagens)
+    if [ -z "${SUAP_IMAGE:-}" ]; then
+      _show_header
+      echo "${GREEN}SUAP_IMAGE${NO_COLOR}"
+      echo "  ${YELLOW}Descrição:${NO_COLOR} URL da imagem Docker principal do SUAP no registry."
+      echo "  ${YELLOW}Exemplos:${NO_COLOR} gitlab.instituicao.edu.br:4567/org/suap"
+      local _image_default="gitlab.instituicao.edu.br:4567/org/suap"
+      read -rp "  Valor [${GREEN}${_image_default}${NO_COLOR}]: " _input
+      SUAP_IMAGE="${_input:-$_image_default}"
+      needs_update=true
+      echo ""
+    fi
+    # SUAP_PDF_IMAGE (imagem do serviço de PDF)
+    if [ -z "${SUAP_PDF_IMAGE:-}" ]; then
+      _show_header
+      echo "${GREEN}SUAP_PDF_IMAGE${NO_COLOR}"
+      echo "  ${YELLOW}Descrição:${NO_COLOR} URL da imagem Docker do serviço de geração de PDFs."
+      echo "  ${YELLOW}Exemplos:${NO_COLOR} gitlab.instituicao.edu.br:4567/org/suap-pdf:latest"
+      local _pdf_default="gitlab.instituicao.edu.br:4567/org/suap-pdf:latest"
+      read -rp "  Valor [${GREEN}${_pdf_default}${NO_COLOR}]: " _input
+      SUAP_PDF_IMAGE="${_input:-$_pdf_default}"
+      needs_update=true
+      echo ""
+    fi
+    # SUAP_AI_IMAGE (imagem do serviço de IA)
+    if [ -z "${SUAP_AI_IMAGE:-}" ]; then
+      _show_header
+      echo "${GREEN}SUAP_AI_IMAGE${NO_COLOR}"
+      echo "  ${YELLOW}Descrição:${NO_COLOR} URL da imagem Docker do serviço de inteligência artificial."
+      echo "  ${YELLOW}Exemplos:${NO_COLOR} gitlab.instituicao.edu.br:4567/org/suap-ai:latest"
+      local _ai_default="gitlab.instituicao.edu.br:4567/org/suap-ai:latest"
+      read -rp "  Valor [${GREEN}${_ai_default}${NO_COLOR}]: " _input
+      SUAP_AI_IMAGE="${_input:-$_ai_default}"
+      needs_update=true
+      echo ""
+    fi
+    if [ "$needs_update" = "true" ]; then
+      _write_env "${env_path}"
+    fi
+    return 0
+  fi
+
+  # Para Docker prod (6) precisa de DEPLOY_DIR e DEPLOY_GIT_URL
+  if [ "${option}" = "6" ]; then
+    # DEPLOY_DIR (caminho do suap_deploy)
+    if [ -z "${DEPLOY_DIR:-}" ]; then
+      _show_header
+      echo "${GREEN}DEPLOY_DIR${NO_COLOR}"
+      echo "  ${YELLOW}Descrição:${NO_COLOR} Caminho absoluto para o repositório suap_deploy."
+      echo "  ${YELLOW}Exemplos:${NO_COLOR} \$HOME/Projetos/suap_deploy, /opt/suap_deploy"
+      local _deploy_default="\$HOME/Projetos/suap_deploy"
+      read -rp "  Valor [${GREEN}${_deploy_default}${NO_COLOR}]: " _input
+      DEPLOY_DIR="${_input:-$_deploy_default}"
+      needs_update=true
+      echo ""
+    fi
+    # DEPLOY_GIT_URL (URL do repositório suap_deploy)
+    if [ -z "${DEPLOY_GIT_URL:-}" ]; then
+      _show_header
+      echo "${GREEN}DEPLOY_GIT_URL${NO_COLOR}"
+      echo "  ${YELLOW}Descrição:${NO_COLOR} URL do repositório Git do suap_deploy."
+      echo "  ${YELLOW}Exemplos:${NO_COLOR} git@gitlab.instituicao.edu.br:org/suap_deploy.git"
+      local _deploy_git_default="git@gitlab.instituicao.edu.br:org/suap_deploy.git"
+      read -rp "  Valor [${GREEN}${_deploy_git_default}${NO_COLOR}]: " _input
+      DEPLOY_GIT_URL="${_input:-$_deploy_git_default}"
       needs_update=true
       echo ""
     fi
@@ -365,6 +413,22 @@ _write_env() {
     echo ""
     echo "# Filas do Celery (separadas por vírgula)"
     printf 'CELERY_QUEUE=%s\n' "${CELERY_QUEUE:-geral,celery_beat}"
+    echo ""
+    echo "# --- Docker ---"
+    echo "# Imagem Docker do SUAP no registry"
+    printf 'SUAP_IMAGE=%s\n' "${SUAP_IMAGE:-gitlab.instituicao.edu.br:4567/org/suap}"
+    echo ""
+    echo "# Imagem Docker do serviço de PDF"
+    printf 'SUAP_PDF_IMAGE=%s\n' "${SUAP_PDF_IMAGE:-gitlab.instituicao.edu.br:4567/org/suap-pdf:latest}"
+    echo ""
+    echo "# Imagem Docker do serviço de IA"
+    printf 'SUAP_AI_IMAGE=%s\n' "${SUAP_AI_IMAGE:-gitlab.instituicao.edu.br:4567/org/suap-ai:latest}"
+    echo ""
+    echo "# Diretório do repositório suap_deploy (produção Docker)"
+    printf 'DEPLOY_DIR=%s\n' "${DEPLOY_DIR:-\$HOME/Projetos/suap_deploy}"
+    echo ""
+    echo "# URL do repositório Git do suap_deploy"
+    printf 'DEPLOY_GIT_URL=%s\n' "${DEPLOY_GIT_URL:-git@gitlab.instituicao.edu.br:org/suap_deploy.git}"
   } > "${env_path}"
 
   echo ""

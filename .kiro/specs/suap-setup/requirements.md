@@ -11,8 +11,11 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 - **Script_Prod**: Scripts de configuração de ambiente de produção (`deb/suap-prod.sh`, `rpm/suap-prod.sh`).
 - **Script_Redis**: Scripts de instalação do Redis (`deb/install-redis.sh`, `rpm/install-redis.sh`).
 - **Script_Nginx**: Scripts de instalação do Nginx (`deb/install-nginx.sh`, `rpm/install-nginx.sh`).
-- **Script_Docker_Dev**: Script para construção e execução do ambiente SUAP em container Docker para desenvolvimento.
-- **Script_Docker_Prod**: Script para construção e execução do ambiente SUAP em container Docker para produção.
+- **Script_Docker_Dev**: Script de delegação (`docker/dev/docker-setup.sh`) que configura e executa o ambiente Docker de desenvolvimento delegando para o `docker-compose.dev.yml` nativo do repositório suap.
+- **Script_Docker_Prod**: Script de delegação (`docker/prod/docker-setup.sh`) que configura e executa o ambiente Docker de produção delegando para o projeto suap_deploy e seu Makefile.
+- **SUAP_Repo**: Repositório suap contendo o código-fonte da aplicação SUAP, incluindo os Dockerfiles e docker-compose nativos para desenvolvimento.
+- **Deploy_Repo**: Repositório suap_deploy que é o orquestrador oficial de produção, contendo Makefile, configurações de containers, WAF e integração com registry GitLab.
+- **Delegação_Docker**: Princípio arquitetural no qual suap-setup não mantém Dockerfiles ou docker-compose próprios, delegando para os repositórios oficiais upstream (suap para dev, suap_deploy para prod).
 - **Distribuição_Debian**: Família de distribuições baseadas em Debian (Debian, Ubuntu e derivados).
 - **Distribuição_RPM**: Família de distribuições baseadas em RPM (Fedora, RHEL, CentOS e derivados).
 - **Distribuição_Arch**: Família de distribuições baseadas em Arch Linux (Arch, Manjaro, EndeavourOS e derivados).
@@ -280,38 +283,44 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 7. THE Script_Nginx SHALL configurar um formato de log customizado que inclua tempo de requisição e tempo de resposta do upstream.
 8. THE Script_Nginx SHALL configurar buffers de proxy aumentados para suportar cabeçalhos HTTP grandes.
 
-### Requirement 22: Ambiente Docker para desenvolvimento
+### Requirement 22: Ambiente Docker para desenvolvimento (delegação para suap)
 
-**User Story:** Como desenvolvedor, eu quero subir o ambiente SUAP em containers Docker para desenvolvimento, para que eu possa trabalhar em um ambiente isolado e reproduzível sem instalar dependências diretamente no sistema operacional.
-
-#### Acceptance Criteria
-
-1. THE Script_Docker_Dev SHALL fornecer um arquivo `Dockerfile` para construção da imagem de desenvolvimento do SUAP com todas as dependências necessárias.
-2. THE Script_Docker_Dev SHALL fornecer um arquivo `docker-compose.yml` que defina os serviços necessários para o ambiente de desenvolvimento (aplicação SUAP, banco de dados PostgreSQL e Redis).
-3. WHEN o Script_Docker_Dev é executado, THE Script_Docker_Dev SHALL verificar se o Docker e o Docker_Compose estão instalados no sistema.
-4. IF o Docker ou o Docker_Compose não estão instalados, THEN THE Script_Docker_Dev SHALL oferecer ao usuário a opção de instalar o Docker automaticamente usando o Script_Install_Docker conforme definido no Requirement 29, e caso o usuário recuse, exibir uma mensagem de erro informando os pré-requisitos e encerrar com código de saída 1.
-5. WHEN o Docker e o Docker_Compose estão disponíveis, THE Script_Docker_Dev SHALL construir as imagens e iniciar os containers usando `docker compose up`.
-6. THE Script_Docker_Dev SHALL montar o código-fonte do SUAP como volume no container para permitir edição em tempo real no host.
-7. THE Script_Docker_Dev SHALL expor a porta 8000 do container de desenvolvimento para acesso local à aplicação.
-8. THE Script_Docker_Dev SHALL configurar variáveis de ambiente no container a partir do Arquivo_Env_Central.
-9. WHEN os containers são iniciados, THE Script_Docker_Dev SHALL exibir uma mensagem informando como acessar a aplicação e os logs.
-
-### Requirement 23: Ambiente Docker para produção
-
-**User Story:** Como administrador de sistemas, eu quero subir o ambiente SUAP em containers Docker para produção, para que o deploy seja padronizado, escalável e independente da distribuição Linux do host.
+**User Story:** Como desenvolvedor, eu quero subir o ambiente SUAP em containers Docker para desenvolvimento delegando para o docker-compose nativo do repositório suap, para que eu tenha um ambiente isolado e reproduzível que esteja sempre sincronizado com o upstream.
 
 #### Acceptance Criteria
 
-1. THE Script_Docker_Prod SHALL fornecer um arquivo `Dockerfile` otimizado para produção com imagem base mínima e multi-stage build.
-2. THE Script_Docker_Prod SHALL fornecer um arquivo `docker-compose.prod.yml` que defina os serviços necessários para o ambiente de produção (aplicação SUAP, Celery Worker, Celery Beat, Celery Flower, Redis e Nginx como proxy reverso).
-3. WHEN o Script_Docker_Prod é executado, THE Script_Docker_Prod SHALL verificar se o Docker e o Docker_Compose estão instalados no sistema.
-4. IF o Docker ou o Docker_Compose não estão instalados, THEN THE Script_Docker_Prod SHALL oferecer ao usuário a opção de instalar o Docker automaticamente usando o Script_Install_Docker conforme definido no Requirement 29, e caso o usuário recuse, exibir uma mensagem de erro informando os pré-requisitos e encerrar com código de saída 1.
-5. WHEN o Docker e o Docker_Compose estão disponíveis, THE Script_Docker_Prod SHALL construir as imagens e iniciar os containers usando `docker compose -f docker-compose.prod.yml up -d`.
-6. THE Script_Docker_Prod SHALL configurar o container Nginx como proxy reverso para o container da aplicação SUAP.
-7. THE Script_Docker_Prod SHALL configurar volumes persistentes para dados do banco de dados, arquivos de mídia e logs.
-8. THE Script_Docker_Prod SHALL configurar variáveis de ambiente no container a partir do Arquivo_Env_Central.
-9. THE Script_Docker_Prod SHALL configurar política de restart automático (`restart: unless-stopped`) para todos os serviços de produção.
-10. WHEN os containers são iniciados, THE Script_Docker_Prod SHALL exibir o status dos serviços e instruções para gerenciamento dos containers.
+1. WHEN o Script_Docker_Dev é executado, THE Script_Docker_Dev SHALL verificar se o Docker e o Docker_Compose estão instalados no sistema.
+2. IF o Docker ou o Docker_Compose não estão instalados, THEN THE Script_Docker_Dev SHALL oferecer ao usuário a opção de instalar o Docker automaticamente usando o Script_Install_Docker conforme definido no Requirement 29, e caso o usuário recuse, exibir uma mensagem de erro informando os pré-requisitos e encerrar com código de saída 1.
+3. WHEN o SUAP_Repo não existe no caminho definido por SUAP_DIR, THE Script_Docker_Dev SHALL clonar o repositório usando a variável GIT_URL do Arquivo_Env_Central.
+4. WHEN o SUAP_Repo existe no caminho SUAP_DIR, THE Script_Docker_Dev SHALL utilizar o repositório existente sem clonar novamente.
+5. WHEN o SUAP_Repo é verificado, THE Script_Docker_Dev SHALL validar a existência do arquivo `docker/docker-compose.dev.yml` dentro do SUAP_Repo.
+6. IF o arquivo `docker/docker-compose.dev.yml` não existe no SUAP_Repo, THEN THE Script_Docker_Dev SHALL exibir uma mensagem de erro informando que o compose nativo não foi encontrado e encerrar com código de saída 1.
+7. WHEN o arquivo `.env` não existe no SUAP_Repo, THE Script_Docker_Dev SHALL gerar o `.env` a partir do arquivo `.env.dev.sample` do SUAP_Repo.
+8. WHEN o arquivo `suap/settings.py` não existe no SUAP_Repo, THE Script_Docker_Dev SHALL gerar o `suap/settings.py` a partir do arquivo `suap/settings_sample.py` do SUAP_Repo.
+9. WHEN o ambiente está preparado, THE Script_Docker_Dev SHALL exportar as variáveis de ambiente SUAP_IMAGE, CELERY_QUEUE, CELERY_BROKER_URL e FLOWER_BASIC_AUTH para uso pelo docker-compose.
+10. WHEN as variáveis estão exportadas, THE Script_Docker_Dev SHALL executar `docker compose -f docker/docker-compose.dev.yml build` seguido de `docker compose -f docker/docker-compose.dev.yml up` a partir do diretório SUAP_DIR.
+11. WHEN os containers são iniciados, THE Script_Docker_Dev SHALL exibir uma mensagem informando como acessar a aplicação, Celery Flower, PostgreSQL e Redis, e instruções para gerenciamento dos containers.
+12. THE Script_Docker_Dev SHALL delegar integralmente a definição de serviços, volumes e Dockerfiles para o SUAP_Repo, sem manter Dockerfiles ou docker-compose próprios no diretório `docker/dev/`.
+
+### Requirement 23: Ambiente Docker para produção (delegação para suap_deploy)
+
+**User Story:** Como administrador de sistemas, eu quero subir o ambiente SUAP em containers Docker para produção delegando para o projeto suap_deploy, para que o deploy utilize a infraestrutura oficial com imagens pré-construídas, WAF, gerenciamento de segredos e resource limits.
+
+#### Acceptance Criteria
+
+1. WHEN o Script_Docker_Prod é executado, THE Script_Docker_Prod SHALL verificar se o Docker e o Docker_Compose estão instalados no sistema.
+2. IF o Docker ou o Docker_Compose não estão instalados, THEN THE Script_Docker_Prod SHALL oferecer ao usuário a opção de instalar o Docker automaticamente usando o Script_Install_Docker conforme definido no Requirement 29, e caso o usuário recuse, exibir uma mensagem de erro informando os pré-requisitos e encerrar com código de saída 1.
+3. WHEN o Deploy_Repo não existe no caminho definido por DEPLOY_DIR, THE Script_Docker_Prod SHALL clonar o repositório usando a variável DEPLOY_GIT_URL com a flag `--recurse-submodules`.
+4. WHEN o Deploy_Repo existe no caminho DEPLOY_DIR, THE Script_Docker_Prod SHALL atualizar os submodules do repositório existente sem clonar novamente.
+5. WHEN o Deploy_Repo é verificado, THE Script_Docker_Prod SHALL validar a existência do arquivo `Makefile` dentro do Deploy_Repo.
+6. IF o arquivo `Makefile` não existe no Deploy_Repo, THEN THE Script_Docker_Prod SHALL exibir uma mensagem de erro informando que o Makefile não foi encontrado e encerrar com código de saída 1.
+7. WHEN o arquivo `.env` não existe no Deploy_Repo, THE Script_Docker_Prod SHALL gerar o `.env` a partir do arquivo `env.prod.sample` do Deploy_Repo e solicitar ao usuário que edite as credenciais antes de prosseguir.
+8. IF o arquivo `.env` não existe no Deploy_Repo e o `env.prod.sample` também não existe, THEN THE Script_Docker_Prod SHALL exibir uma mensagem de erro e encerrar com código de saída 1.
+9. WHEN o ambiente está preparado, THE Script_Docker_Prod SHALL apresentar um menu interativo com as opções: (1) fazer pull das imagens e iniciar serviços, (2) fazer build local das imagens, (3) apenas iniciar serviços, (4) parar serviços, (5) ver status, (6) ver logs, (7) acessar shell do container web, (8) executar backup do banco.
+10. WHEN o usuário seleciona uma opção válida, THE Script_Docker_Prod SHALL delegar a execução para os targets correspondentes do Makefile no Deploy_Repo (make pull-image, make build, make start-web, make start-celery, make stop, make status, make logs, make bash, make backup).
+11. IF o usuário informa uma opção inválida, THEN THE Script_Docker_Prod SHALL exibir uma mensagem de erro e encerrar com código de saída 1.
+12. WHEN a operação é concluída, THE Script_Docker_Prod SHALL exibir uma lista de comandos úteis do Makefile para gerenciamento posterior dos containers.
+13. THE Script_Docker_Prod SHALL delegar integralmente a definição de serviços, Dockerfiles, imagens e orquestração para o Deploy_Repo, sem manter Dockerfiles ou docker-compose próprios no diretório `docker/prod/`.
 
 ### Requirement 24: Idempotência dos scripts
 
@@ -440,3 +449,17 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 10. WHILE executando em Distribuição_macOS, THE Wrapper SHALL exibir no menu apenas as opções (1) Configurar ambiente dev, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker e (7) Iniciar Dockhand; as opções 2, 3 e 4 SHALL ser ocultadas com mensagem "não suportado no macOS".
 11. WHEN a função `check_docker_available()` é executada em Distribuição_macOS, THE Script_Install_Docker SHALL verificar se o Docker Desktop está instalado no sistema.
 12. IF o Docker Desktop não está instalado em Distribuição_macOS, THEN THE Script_Install_Docker SHALL exibir a URL de download (https://docs.docker.com/desktop/install/mac-install/) e informar que o Docker Desktop é obrigatório, sem realizar instalação automatizada via brew.
+
+### Requirement 32: Princípio de delegação Docker (sem Dockerfiles locais)
+
+**User Story:** Como mantenedor do suap-setup, eu quero que o projeto nunca mantenha Dockerfiles ou docker-compose próprios nos diretórios `docker/dev/` e `docker/prod/`, para que a configuração de build esteja sempre sincronizada com os projetos upstream e não ocorra drift silencioso.
+
+#### Acceptance Criteria
+
+1. THE Script_Docker_Dev SHALL utilizar exclusivamente os Dockerfiles e docker-compose definidos no SUAP_Repo, sem criar ou manter Dockerfiles no diretório `docker/dev/` do suap-setup.
+2. THE Script_Docker_Prod SHALL utilizar exclusivamente o Makefile e a infraestrutura definida no Deploy_Repo, sem criar ou manter Dockerfiles ou docker-compose no diretório `docker/prod/` do suap-setup.
+3. WHEN o SUAP_Repo atualiza seus Dockerfiles ou docker-compose, THE Script_Docker_Dev SHALL refletir automaticamente as mudanças na próxima execução sem necessidade de alteração no suap-setup.
+4. WHEN o Deploy_Repo atualiza seus targets de Makefile ou configurações de containers, THE Script_Docker_Prod SHALL refletir automaticamente as mudanças na próxima execução sem necessidade de alteração no suap-setup.
+5. THE Script_Docker_Dev SHALL limitar sua responsabilidade a: verificar pré-requisitos (Docker instalado), garantir a existência do SUAP_Repo, gerar arquivos de configuração a partir dos samples, exportar variáveis de ambiente e invocar o docker-compose do SUAP_Repo.
+6. THE Script_Docker_Prod SHALL limitar sua responsabilidade a: verificar pré-requisitos (Docker instalado), garantir a existência do Deploy_Repo, configurar o .env de produção a partir do sample, apresentar o menu interativo e delegar para os targets do Makefile.
+7. IF um arquivo Dockerfile, docker-compose.yml ou docker-compose.prod.yml é encontrado nos diretórios `docker/dev/` ou `docker/prod/` do suap-setup, THEN o ambiente SHALL ser considerado em violação do princípio de Delegação_Docker.

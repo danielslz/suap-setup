@@ -1,198 +1,159 @@
 #!/usr/bin/env bats
-# tests/smoke/test_docker.bats - Testes de fumaça para arquivos Docker
-# Valida: Requisitos 22.1, 22.2, 23.1, 23.2
+# tests/smoke/test_docker.bats - Testes de fumaça para scripts Docker
+# Valida a arquitetura de delegação (suap-setup → suap / suap_deploy)
 
 setup() {
     PROJECT_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../.." && pwd)"
-    DEV_COMPOSE="$PROJECT_ROOT/docker/dev/docker-compose.yml"
-    PROD_COMPOSE="$PROJECT_ROOT/docker/prod/docker-compose.prod.yml"
-    DEV_DOCKERFILE="$PROJECT_ROOT/docker/dev/Dockerfile"
-    PROD_DOCKERFILE="$PROJECT_ROOT/docker/prod/Dockerfile"
+    DEV_SCRIPT="$PROJECT_ROOT/docker/dev/docker-setup.sh"
+    PROD_SCRIPT="$PROJECT_ROOT/docker/prod/docker-setup.sh"
+    COMMON_LIB="$PROJECT_ROOT/lib/common.sh"
 }
 
 # ============================================================
-# Validação de sintaxe YAML dos docker-compose files
+# Validação de existência e permissões dos scripts
 # ============================================================
 
-@test "docker-compose.yml de desenvolvimento é YAML válido" {
-    run python3 -c "
-import yaml, sys
-with open('$DEV_COMPOSE', 'r') as f:
-    yaml.safe_load(f)
-print('OK')
-"
-    [ "$status" -eq 0 ]
-    [ "$output" = "OK" ]
+@test "docker/dev/docker-setup.sh existe" {
+    [ -f "$DEV_SCRIPT" ]
 }
 
-@test "docker-compose.prod.yml de produção é YAML válido" {
-    run python3 -c "
-import yaml, sys
-with open('$PROD_COMPOSE', 'r') as f:
-    yaml.safe_load(f)
-print('OK')
-"
+@test "docker/prod/docker-setup.sh existe" {
+    [ -f "$PROD_SCRIPT" ]
+}
+
+@test "docker/dev/docker-setup.sh é bash válido" {
+    run bash -n "$DEV_SCRIPT"
     [ "$status" -eq 0 ]
-    [ "$output" = "OK" ]
+}
+
+@test "docker/prod/docker-setup.sh é bash válido" {
+    run bash -n "$PROD_SCRIPT"
+    [ "$status" -eq 0 ]
 }
 
 # ============================================================
-# Validação de serviços obrigatórios no compose de desenvolvimento
-# Requisito 22.2: serviços suap, db (PostgreSQL) e redis
+# Validação de que os scripts NÃO mantêm Dockerfiles locais
+# (princípio de delegação — sem duplicação)
 # ============================================================
 
-@test "docker-compose dev contém serviço 'web'" {
-    run python3 -c "
-import yaml
-with open('$DEV_COMPOSE', 'r') as f:
-    data = yaml.safe_load(f)
-assert 'web' in data.get('services', {}), 'serviço web não encontrado'
-print('OK')
-"
-    [ "$status" -eq 0 ]
-    [ "$output" = "OK" ]
+@test "NÃO existe Dockerfile local em docker/dev/" {
+    [ ! -f "$PROJECT_ROOT/docker/dev/Dockerfile" ]
 }
 
-@test "docker-compose dev contém serviço 'db'" {
-    run python3 -c "
-import yaml
-with open('$DEV_COMPOSE', 'r') as f:
-    data = yaml.safe_load(f)
-assert 'db' in data.get('services', {}), 'serviço db não encontrado'
-print('OK')
-"
-    [ "$status" -eq 0 ]
-    [ "$output" = "OK" ]
+@test "NÃO existe Dockerfile local em docker/prod/" {
+    [ ! -f "$PROJECT_ROOT/docker/prod/Dockerfile" ]
 }
 
-@test "docker-compose dev contém serviço 'redis'" {
-    run python3 -c "
-import yaml
-with open('$DEV_COMPOSE', 'r') as f:
-    data = yaml.safe_load(f)
-assert 'redis' in data.get('services', {}), 'serviço redis não encontrado'
-print('OK')
-"
-    [ "$status" -eq 0 ]
-    [ "$output" = "OK" ]
+@test "NÃO existe docker-compose.yml local em docker/dev/" {
+    [ ! -f "$PROJECT_ROOT/docker/dev/docker-compose.yml" ]
+}
+
+@test "NÃO existe docker-compose.prod.yml local em docker/prod/" {
+    [ ! -f "$PROJECT_ROOT/docker/prod/docker-compose.prod.yml" ]
 }
 
 # ============================================================
-# Validação de serviços obrigatórios no compose de produção
-# Requisito 23.2: serviços suap, celery-worker, celery-beat,
-#                  celery-flower, redis e nginx
+# Validação de que os scripts sourcam lib/common.sh
 # ============================================================
 
-@test "docker-compose prod contém serviço 'web'" {
-    run python3 -c "
-import yaml
-with open('$PROD_COMPOSE', 'r') as f:
-    data = yaml.safe_load(f)
-assert 'web' in data.get('services', {}), 'serviço web não encontrado'
-print('OK')
-"
+@test "docker/dev/docker-setup.sh faz source de lib/common.sh" {
+    run grep -q 'source.*lib/common.sh' "$DEV_SCRIPT"
     [ "$status" -eq 0 ]
-    [ "$output" = "OK" ]
 }
 
-@test "docker-compose prod contém serviço 'celery-worker'" {
-    run python3 -c "
-import yaml
-with open('$PROD_COMPOSE', 'r') as f:
-    data = yaml.safe_load(f)
-assert 'celery-worker' in data.get('services', {}), 'serviço celery-worker não encontrado'
-print('OK')
-"
+@test "docker/prod/docker-setup.sh faz source de lib/common.sh" {
+    run grep -q 'source.*lib/common.sh' "$PROD_SCRIPT"
     [ "$status" -eq 0 ]
-    [ "$output" = "OK" ]
-}
-
-@test "docker-compose prod contém serviço 'celery-beat'" {
-    run python3 -c "
-import yaml
-with open('$PROD_COMPOSE', 'r') as f:
-    data = yaml.safe_load(f)
-assert 'celery-beat' in data.get('services', {}), 'serviço celery-beat não encontrado'
-print('OK')
-"
-    [ "$status" -eq 0 ]
-    [ "$output" = "OK" ]
-}
-
-@test "docker-compose prod contém serviço 'celery-flower'" {
-    run python3 -c "
-import yaml
-with open('$PROD_COMPOSE', 'r') as f:
-    data = yaml.safe_load(f)
-assert 'celery-flower' in data.get('services', {}), 'serviço celery-flower não encontrado'
-print('OK')
-"
-    [ "$status" -eq 0 ]
-    [ "$output" = "OK" ]
-}
-
-@test "docker-compose prod contém serviço 'redis'" {
-    run python3 -c "
-import yaml
-with open('$PROD_COMPOSE', 'r') as f:
-    data = yaml.safe_load(f)
-assert 'redis' in data.get('services', {}), 'serviço redis não encontrado'
-print('OK')
-"
-    [ "$status" -eq 0 ]
-    [ "$output" = "OK" ]
-}
-
-@test "docker-compose prod contém serviço 'nginx'" {
-    run python3 -c "
-import yaml
-with open('$PROD_COMPOSE', 'r') as f:
-    data = yaml.safe_load(f)
-assert 'nginx' in data.get('services', {}), 'serviço nginx não encontrado'
-print('OK')
-"
-    [ "$status" -eq 0 ]
-    [ "$output" = "OK" ]
 }
 
 # ============================================================
-# Validação de Dockerfiles - diretivas essenciais
-# Requisito 22.1: Dockerfile de desenvolvimento
-# Requisito 23.1: Dockerfile de produção (multi-stage)
+# Validação de delegação: dev → suap (docker-compose.dev.yml)
 # ============================================================
 
-@test "Dockerfile de desenvolvimento contém diretiva FROM" {
-    run grep -q "^FROM " "$DEV_DOCKERFILE"
+@test "docker/dev/docker-setup.sh referencia docker-compose.dev.yml do SUAP" {
+    run grep -q 'docker-compose.dev.yml' "$DEV_SCRIPT"
     [ "$status" -eq 0 ]
 }
 
-@test "Dockerfile de desenvolvimento contém diretiva COPY ou ADD" {
-    run grep -qE "^(COPY|ADD) " "$DEV_DOCKERFILE"
+@test "docker/dev/docker-setup.sh usa SUAP_DIR como base" {
+    run grep -q 'SUAP_DIR' "$DEV_SCRIPT"
     [ "$status" -eq 0 ]
 }
 
-@test "Dockerfile de desenvolvimento contém diretiva CMD ou ENTRYPOINT" {
-    run grep -qE "^(CMD|ENTRYPOINT) " "$DEV_DOCKERFILE"
+@test "docker/dev/docker-setup.sh exporta SUAP_IMAGE" {
+    run grep -q 'export SUAP_IMAGE' "$DEV_SCRIPT"
     [ "$status" -eq 0 ]
 }
 
-@test "Dockerfile de produção contém diretiva FROM" {
-    run grep -q "^FROM " "$PROD_DOCKERFILE"
+@test "docker/dev/docker-setup.sh verifica check_docker_available" {
+    run grep -q 'check_docker_available' "$DEV_SCRIPT"
     [ "$status" -eq 0 ]
 }
 
-@test "Dockerfile de produção contém diretiva COPY ou ADD" {
-    run grep -qE "^(COPY|ADD) " "$PROD_DOCKERFILE"
+# ============================================================
+# Validação de delegação: prod → suap_deploy (Makefile)
+# ============================================================
+
+@test "docker/prod/docker-setup.sh referencia DEPLOY_DIR" {
+    run grep -q 'DEPLOY_DIR' "$PROD_SCRIPT"
     [ "$status" -eq 0 ]
 }
 
-@test "Dockerfile de produção contém diretiva CMD ou ENTRYPOINT" {
-    run grep -qE "^(CMD|ENTRYPOINT) " "$PROD_DOCKERFILE"
+@test "docker/prod/docker-setup.sh referencia Makefile do suap_deploy" {
+    run grep -q 'Makefile' "$PROD_SCRIPT"
     [ "$status" -eq 0 ]
 }
 
-@test "Dockerfile de produção usa multi-stage build (múltiplos FROM)" {
-    local from_count
-    from_count=$(grep -c "^FROM " "$PROD_DOCKERFILE")
-    [ "$from_count" -ge 2 ]
+@test "docker/prod/docker-setup.sh usa make para gerenciar serviços" {
+    run grep -q 'make start-web' "$PROD_SCRIPT"
+    [ "$status" -eq 0 ]
+}
+
+@test "docker/prod/docker-setup.sh usa make pull-image" {
+    run grep -q 'make pull-image' "$PROD_SCRIPT"
+    [ "$status" -eq 0 ]
+}
+
+@test "docker/prod/docker-setup.sh usa make build" {
+    run grep -q 'make build' "$PROD_SCRIPT"
+    [ "$status" -eq 0 ]
+}
+
+@test "docker/prod/docker-setup.sh verifica check_docker_available" {
+    run grep -q 'check_docker_available' "$PROD_SCRIPT"
+    [ "$status" -eq 0 ]
+}
+
+@test "docker/prod/docker-setup.sh suporta clone com --recurse-submodules" {
+    run grep -q '\-\-recurse-submodules' "$PROD_SCRIPT"
+    [ "$status" -eq 0 ]
+}
+
+# ============================================================
+# Validação de variáveis Docker no .env e common.sh
+# ============================================================
+
+@test "lib/common.sh suporta variável SUAP_IMAGE no wizard" {
+    run grep -q 'SUAP_IMAGE' "$COMMON_LIB"
+    [ "$status" -eq 0 ]
+}
+
+@test "lib/common.sh suporta variável DEPLOY_DIR no wizard" {
+    run grep -q 'DEPLOY_DIR' "$COMMON_LIB"
+    [ "$status" -eq 0 ]
+}
+
+@test "lib/common.sh suporta variável DEPLOY_GIT_URL no wizard" {
+    run grep -q 'DEPLOY_GIT_URL' "$COMMON_LIB"
+    [ "$status" -eq 0 ]
+}
+
+@test "lib/common.sh grava SUAP_IMAGE no _write_env" {
+    run grep -q "SUAP_IMAGE" "$COMMON_LIB"
+    [ "$status" -eq 0 ]
+}
+
+@test "lib/common.sh grava DEPLOY_DIR no _write_env" {
+    run grep -q "DEPLOY_DIR" "$COMMON_LIB"
+    [ "$status" -eq 0 ]
 }

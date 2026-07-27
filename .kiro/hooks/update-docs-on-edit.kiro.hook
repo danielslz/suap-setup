@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "Update Docs on Code Change",
+  "description": "After editing any shell script or configuration file, reminds the agent to update README.md and docs/TECHNICAL.md to reflect the changes.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/*.sh",
+      "lib/**",
+      "nginx/**",
+      "supervisor/**",
+      ".env"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A code file was just modified. Check if README.md or docs/TECHNICAL.md need to be updated to reflect this change. If the modification affects usage instructions, menu options, environment variables, algorithms, package lists, or any documented behavior, update the relevant sections in both documents. If the change is purely internal (refactoring without behavior change), no documentation update is needed."
+  }
+}

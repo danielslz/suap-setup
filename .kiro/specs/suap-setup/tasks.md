@@ -543,6 +543,75 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
 - [x] 22. Checkpoint - Verificar suporte Arch/macOS/Docker install
   - Garantir que todos os testes passem, perguntar ao usuário se houver dúvidas.
 
+- [x] 23. Refatoração Docker — Arquitetura de delegação (substitui Dockerfiles locais)
+  - [x] 23.1 Reescrever `docker/dev/docker-setup.sh` para delegar ao SUAP_Repo
+    - Remover lógica de build/compose local
+    - Implementar verificação de SUAP_DIR e clone do SUAP_Repo se necessário
+    - Validar existência de `${SUAP_DIR}/docker/docker-compose.dev.yml`
+    - Exportar variáveis (SUAP_IMAGE, CELERY_QUEUE, CELERY_BROKER_URL, FLOWER_BASIC_AUTH)
+    - Executar `docker compose -f docker/docker-compose.dev.yml build` + `up` a partir de SUAP_DIR
+    - Exibir mensagem com URLs de acesso e instruções de gerenciamento
+    - _Requisitos: 22.1, 22.2, 22.3, 22.4, 22.5, 22.6, 22.7, 22.8, 22.9, 22.10, 22.11, 22.12_
+
+  - [x] 23.2 Reescrever `docker/prod/docker-setup.sh` para delegar ao Deploy_Repo
+    - Remover lógica de build/compose local
+    - Implementar verificação de DEPLOY_DIR e clone do Deploy_Repo se necessário
+    - Validar existência de `${DEPLOY_DIR}/Makefile`
+    - Gerar `.env` do Deploy_Repo a partir de `env.prod.sample` se ausente
+    - Apresentar menu interativo delegando para targets do Makefile
+    - Exibir lista de comandos make úteis
+    - _Requisitos: 23.1, 23.2, 23.3, 23.4, 23.5, 23.6, 23.7, 23.8, 23.9, 23.10, 23.11_
+
+  - [x] 23.3 Remover Dockerfiles e docker-compose locais de `docker/dev/` e `docker/prod/`
+    - Remover `docker/dev/Dockerfile` (se existia)
+    - Remover `docker/dev/docker-compose.yml` (se existia)
+    - Remover `docker/prod/Dockerfile` (se existia)
+    - Remover `docker/prod/docker-compose.prod.yml` (se existia)
+    - Garantir que apenas os scripts de delegação permanecem nos diretórios
+    - _Requisitos: 32.1, 32.2, 32.3_
+
+  - [x] 23.4 Adicionar variáveis `SUAP_IMAGE`, `DEPLOY_DIR`, `DEPLOY_GIT_URL` ao .env e wizard
+    - Adicionar `SUAP_IMAGE` ao template do .env com comentário descritivo
+    - Adicionar `DEPLOY_DIR` ao template do .env com comentário descritivo
+    - Adicionar `DEPLOY_GIT_URL` ao template do .env com comentário descritivo
+    - Atualizar `interactive_env_wizard()` para incluir as novas variáveis quando relevante
+    - _Requisitos: 22.3, 22.9, 23.3, 23.4_
+
+  - [x] 23.5 Atualizar `ensure_env_for_option()` em `lib/common.sh` para opções 5 e 6
+    - Opção 5: coletar SUAP_DIR, GIT_URL, SUAP_IMAGE
+    - Opção 6: coletar DEPLOY_DIR, DEPLOY_GIT_URL
+    - Solicitar apenas variáveis ausentes via prompt interativo
+    - Gravar .env atualizado com comentários descritivos
+    - _Requisitos: 22.3, 22.9, 23.3, 23.4_
+
+  - [x] 23.6 Atualizar testes de fumaça (`tests/smoke/test_docker.bats`) para delegação
+    - Validar que `docker/dev/docker-setup.sh` NÃO contém referências a Dockerfile local
+    - Validar que `docker/prod/docker-setup.sh` NÃO contém referências a Dockerfile local
+    - Validar que nenhum Dockerfile existe em `docker/dev/` ou `docker/prod/`
+    - Validar que nenhum `docker-compose.yml` existe em `docker/dev/` ou `docker/prod/`
+    - Validar presença de delegação para SUAP_Repo (docker-compose.dev.yml) no script dev
+    - Validar presença de delegação para Deploy_Repo (Makefile) no script prod
+    - _Requisitos: 22.12, 23.11, 32.1, 32.2, 32.3_
+
+  - [x] 23.7 Criar `docker/README.md` documentando a arquitetura de delegação
+    - Documentar o princípio de delegação Docker (sem Dockerfiles locais)
+    - Documentar fluxo do script dev (preparação + delegação para SUAP_Repo)
+    - Documentar fluxo do script prod (preparação + delegação para Deploy_Repo)
+    - Listar variáveis de ambiente necessárias por script
+    - Documentar comandos úteis e troubleshooting
+    - _Requisitos: 22.12, 23.11, 32.1_
+
+  - [x] 23.8 Escrever teste de propriedade para delegação Docker
+    - **Property 9: Delegação Docker — sem Dockerfiles locais**
+    - Validar que nenhum arquivo `Dockerfile*` existe em `docker/dev/` ou `docker/prod/`
+    - Validar que nenhum arquivo `docker-compose*.yml` existe em `docker/dev/` ou `docker/prod/`
+    - Validar que os scripts de delegação referenciam repos upstream
+    - Teste incluído em `tests/smoke/test_docker.bats`
+    - **Valida: Requisitos 22.12, 23.11, 32.1, 32.2, 32.3**
+
+- [x] 24. Checkpoint - Verificar refatoração Docker delegação
+  - Garantir que todos os testes passem, perguntar ao usuário se houver dúvidas.
+
 ## Notes
 
 - Tasks marcadas com `*` são opcionais e podem ser puladas para um MVP mais rápido
@@ -579,7 +648,10 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     { "id": 18, "tasks": ["17.1", "17.2", "17.3", "17.4", "17.5"] },
     { "id": 19, "tasks": ["17.6", "18.1", "18.3", "18.4", "19.1", "20.1"] },
     { "id": 20, "tasks": ["18.2", "20.2", "21.1"] },
-    { "id": 21, "tasks": ["21.2"] }
+    { "id": 21, "tasks": ["21.2"] },
+    { "id": 22, "tasks": ["23.1", "23.2", "23.3"] },
+    { "id": 23, "tasks": ["23.4", "23.5"] },
+    { "id": 24, "tasks": ["23.6", "23.7", "23.8"] }
   ]
 }
 ```

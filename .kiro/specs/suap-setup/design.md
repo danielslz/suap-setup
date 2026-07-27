@@ -9,7 +9,7 @@ Este documento descreve o design técnico do projeto **suap-setup**, uma coleç�
 1. **Arquivo `.env` centralizado**: Todas as variáveis compartilhadas são lidas de um único arquivo na raiz do repositório, eliminando duplicação entre scripts.
 2. **Funções utilitárias em `lib/common.sh`**: Lógica compartilhada (carregamento de .env, detecção de distro, output colorido, verificações idempotentes, wizard interativo) é extraída para um arquivo de biblioteca sourced por todos os scripts.
 3. **Separação por família de distribuição/OS**: Scripts em `deb/`, `rpm/`, `arch/` e `macos/` contêm apenas lógica específica do gerenciador de pacotes ou plataforma.
-4. **Docker como alternativa isolada**: Ambientes Docker não dependem de scripts deb/rpm — possuem Dockerfiles e compose files próprios.
+4. **Docker por delegação (sem Dockerfiles locais)**: Ambientes Docker delegam integralmente para os projetos upstream — `docker/dev/` delega para o `docker-compose.dev.yml` do SUAP_Repo (suap) e `docker/prod/` delega para o Makefile do Deploy_Repo (suap_deploy). O suap-setup não mantém Dockerfiles nem docker-compose próprios.
 5. **Idempotência por verificação prévia**: Cada etapa verifica o estado antes de agir, usando cores diferentes para ações executadas vs. puladas.
 6. **Wizard interativo para .env**: Na primeira execução do wrapper, um assistente interativo (`interactive_env_wizard`) guia o usuário pela criação do .env com prompts descritivos, defaults e validação de campos obrigatórios — substituindo a criação silenciosa com valores padrão.
 7. **Fallback de .env em scripts individuais**: Scripts executados diretamente (sem wrapper) abortam com erro se .env não existe, evitando execução parcial sem configuração.
@@ -40,10 +40,8 @@ graph TD
     A --> M[docker/prod/docker-setup.sh]
     A --> S[docker/dockhand-setup.sh]
     B --> N[.env - Variáveis Centralizadas]
-    L --> O[docker/dev/Dockerfile]
-    L --> P[docker/dev/docker-compose.yml]
-    M --> Q[docker/prod/Dockerfile]
-    M --> R[docker/prod/docker-compose.prod.yml]
+    L -->|delega| SUAP_REPO[suap repo - docker-compose.dev.yml + Dockerfiles]
+    M -->|delega| DEPLOY_REPO[suap_deploy repo - Makefile + imagens registry]
     S --> T[lscr.io/linuxserver/dockhand:latest]
 
 ```
@@ -121,6 +119,23 @@ require_env_file() { ... }
 # Parâmetros: caminho absoluto onde criar o .env
 # Exit 1 se GIT_URL vazia
 interactive_env_wizard() { ... }
+
+# ensure_env_for_option(env_path, option)
+# Coleta apenas as variáveis necessárias para a opção escolhida pelo usuário.
+# Fluxo:
+#   1. Carrega .env existente (se houver)
+#   2. Verifica quais variáveis estão faltando para a opção escolhida
+#   3. Solicita apenas as variáveis ausentes via prompt interativo
+#   4. Grava o .env atualizado com comentários descritivos
+#   5. Exibe confirmação com os valores configurados
+# Variáveis por opção:
+#   Opção 1-2: PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL
+#   Opção 3-4: Nenhuma
+#   Opção 5: SUAP_DIR, GIT_URL, SUAP_IMAGE
+#   Opção 6: DEPLOY_DIR, DEPLOY_GIT_URL
+#   Opção 7: Nenhuma
+# Parâmetros: caminho do .env, número da opção
+ensure_env_for_option() { ... }
 
 # resolve_git_url(env_path)
 # Lê GIT_URL do .env ou solicita ao usuário via prompt interativo.
@@ -220,16 +235,20 @@ set -u
 # 5. Exibir menu:
 #    - macOS: menu restrito (opções 1, 5, 6, 7 — ocultar 2, 3, 4 com msg "não suportado no macOS")
 #    - Linux: menu completo com 7 opções
-# 6. Validar entrada e executar script correspondente
-# 7. Verificar existência do script antes de executar
+# 6. Validar entrada do usuário
+# 7. Coletar variáveis via ensure_env_for_option(env_path, opção)
+#    - Coleta apenas variáveis necessárias para a opção selecionada
+# 8. Carregar .env completo com load_env_file()
+# 9. Verificar existência do script antes de executar
+# 10. Executar script correspondente
 
 # Mapeamento opção → script:
 # 1 → ${DISTRO_TYPE}/suap-dev.sh
 # 2 → ${DISTRO_TYPE}/suap-prod.sh (com sudo) [Linux only]
 # 3 → ${DISTRO_TYPE}/install-redis.sh [Linux only]
 # 4 → ${DISTRO_TYPE}/install-nginx.sh [Linux only]
-# 5 → docker/dev/docker-setup.sh
-# 6 → docker/prod/docker-setup.sh
+# 5 → docker/dev/docker-setup.sh (delega para SUAP_Repo)
+# 6 → docker/prod/docker-setup.sh (delega para Deploy_Repo)
 # 7 → docker/dockhand-setup.sh
 ```
 
@@ -323,34 +342,91 @@ set -u
 # Nota: macOS NÃO suporta ambiente de produção (sem script prod para macOS)
 ```
 
-### 5. Scripts Docker (`docker/dev/docker-setup.sh`, `docker/prod/docker-setup.sh`)
+### 5. Scripts Docker — Arquitetura de Delegação
+
+Os scripts Docker do suap-setup **não mantêm Dockerfiles nem docker-compose próprios**. Eles apenas preparam o ambiente (pré-requisitos, clone de repos, geração de configs a partir de samples) e delegam para os projetos upstream.
+
+#### 5.1 Docker Dev (`docker/dev/docker-setup.sh`) — Delega para SUAP_Repo
 
 ```bash
 #!/usr/bin/env bash
 set -u
-# Algoritmo do script Docker dev:
+# Algoritmo do script Docker dev (delegação para suap):
 #
-# 1. Source lib/common.sh
-# 2. require_env_file() - falha com exit 1 se .env não existe (fallback individual)
-# 3. load_env_file()
-# 4. check_docker_available() - exit 1 se Docker não disponível
-# 5. resolve_git_url()
-# 6. msg_action() para mensagens de progresso em verde
-# 7. docker compose up --build
-# 8. Exibir mensagem com URL de acesso e comandos úteis
-
-# Algoritmo do script Docker prod:
+# 1. Determinar SCRIPT_DIR (raiz do suap-setup)
+# 2. Source lib/common.sh
+# 3. require_env_file() - falha com exit 1 se .env não existe
+# 4. load_env_file() - carregar variáveis centralizadas
+# 5. check_docker_available() - exit 1 se Docker não disponível
+# 6. Verificar SUAP_DIR definido no .env (exit 1 se vazio)
+# 7. Se SUAP_DIR não existe: resolve_git_url() + git clone → SUAP_DIR
+# 8. Validar existência de ${SUAP_DIR}/docker/docker-compose.dev.yml
+#    - Se ausente: msg_error + exit 1
+# 9. Se ${SUAP_DIR}/.env não existe:
+#    - Copiar de .env.dev.sample (se existir) ou exit 1
+# 10. Se ${SUAP_DIR}/suap/settings.py não existe:
+#     - Copiar de suap/settings_sample.py
+# 11. Exportar variáveis para o compose:
+#     - SUAP_IMAGE, SUAP_PDF_IMAGE, SUAP_AI_IMAGE
+#     - CELERY_QUEUE, CELERY_BROKER_URL, FLOWER_BASIC_AUTH
+#     - COMPOSE_DOCKER_CLI_BUILD=1, DOCKER_BUILDKIT=1
+# 12. cd ${SUAP_DIR}
+# 13. docker compose -f docker/docker-compose.dev.yml build
+# 14. docker compose -f docker/docker-compose.dev.yml up ${SERVICES}
+# 15. Exibir mensagem com URLs de acesso e comandos úteis
 #
-# 1. Source lib/common.sh
-# 2. require_env_file() - falha com exit 1 se .env não existe (fallback individual)
-# 3. load_env_file()
-# 4. check_docker_available() - exit 1 se Docker não disponível
-# 5. resolve_git_url()
-# 6. msg_action() para mensagens de progresso em verde
-# 7. docker compose -f docker-compose.prod.yml up -d --build
-# 8. docker compose -f docker-compose.prod.yml ps
-# 9. Exibir status dos serviços e instruções de gerenciamento
+# PRINCÍPIO: Nenhum Dockerfile ou docker-compose.yml existe em docker/dev/.
+# O script APENAS prepara o ambiente e invoca o compose do SUAP_Repo.
 ```
+
+#### 5.2 Docker Prod (`docker/prod/docker-setup.sh`) — Delega para Deploy_Repo
+
+```bash
+#!/usr/bin/env bash
+set -u
+# Algoritmo do script Docker prod (delegação para suap_deploy):
+#
+# 1. Determinar SCRIPT_DIR (raiz do suap-setup)
+# 2. Source lib/common.sh
+# 3. require_env_file() - falha com exit 1 se .env não existe
+# 4. load_env_file() - carregar variáveis centralizadas
+# 5. check_docker_available() - exit 1 se Docker não disponível
+# 6. Determinar DEPLOY_DIR (fallback: dirname(SUAP_DIR)/suap_deploy)
+# 7. Determinar DEPLOY_GIT_URL (fallback: git@gitlab.exemplo.com:org/suap_deploy.git)
+# 8. Se DEPLOY_DIR não existe:
+#    - git clone --recurse-submodules ${DEPLOY_GIT_URL} ${DEPLOY_DIR}
+# 9. Se DEPLOY_DIR já existe (.git presente):
+#    - git submodule update --init --recursive
+# 10. Validar existência de ${DEPLOY_DIR}/Makefile
+#     - Se ausente: msg_error + exit 1
+# 11. Se ${DEPLOY_DIR}/.env não existe:
+#     - Copiar de env.prod.sample (se existir) ou exit 1
+#     - Solicitar ao usuário edição das credenciais (aguarda Enter)
+# 12. cd ${DEPLOY_DIR}
+# 13. Apresentar menu interativo:
+#     1) Pull imagens + iniciar (make pull-image, make start-*)
+#     2) Build local (git submodule update --remote, make build)
+#     3) Apenas iniciar (make start-*)
+#     4) Parar (make stop)
+#     5) Status (make status)
+#     6) Logs (make logs)
+#     7) Shell (make bash)
+#     8) Backup (make backup)
+#     0) Sair
+# 14. Delegar para targets do Makefile conforme opção
+# 15. Exibir lista de comandos make úteis
+#
+# PRINCÍPIO: Nenhum Dockerfile ou docker-compose existe em docker/prod/.
+# O script APENAS prepara o ambiente e delega para o Makefile do suap_deploy.
+```
+
+**Decisões de Design da Delegação Docker:**
+
+- **Evita drift**: Quando o upstream muda dependências, Dockerfiles locais ficariam desatualizados silenciosamente.
+- **Single source of truth**: Os Dockerfiles do suap são os que o CI/CD constrói e publica — são os "oficiais".
+- **Completude**: O compose do suap inclui todos os serviços necessários (minio, ai, pdf) que um setup local precisaria duplicar.
+- **Produção real**: O suap_deploy tem configurações battle-tested (WAF, limits, Vault, SSL) que não fazem sentido recriar.
+- **Facilidade de atualização**: Um `git pull` no repo upstream atualiza toda a configuração de containers sem alterar nada no suap-setup.
 
 ### 6. Scripts de Redis e Nginx
 
@@ -455,7 +531,34 @@ VENV_DIR=${BASE_DIR}/venv
 
 # URL do repositório Git do SUAP
 GIT_URL=
+
+# --- Docker Dev (opção 5) ---
+
+# URL da imagem SUAP no registry (para docker-compose.dev.yml)
+SUAP_IMAGE=registry.exemplo.com:5000/org/suap
+
+# --- Docker Prod (opção 6) ---
+
+# Diretório onde o repositório suap_deploy será clonado
+DEPLOY_DIR=${BASE_DIR}/suap_deploy
+
+# URL Git do repositório suap_deploy
+DEPLOY_GIT_URL=git@gitlab.exemplo.com:org/suap_deploy.git
 ```
+
+### Variáveis Necessárias por Opção (`ensure_env_for_option`)
+
+O wizard coleta apenas as variáveis necessárias para a opção escolhida:
+
+| Opção | Script | Variáveis necessárias |
+|-------|--------|----------------------|
+| 1 | `{distro}/suap-dev.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL |
+| 2 | `{distro}/suap-prod.sh` | Todas as de dev |
+| 3 | `{distro}/install-redis.sh` | Nenhuma |
+| 4 | `{distro}/install-nginx.sh` | Nenhuma |
+| 5 | `docker/dev/docker-setup.sh` | SUAP_DIR, GIT_URL, SUAP_IMAGE |
+| 6 | `docker/prod/docker-setup.sh` | DEPLOY_DIR, DEPLOY_GIT_URL |
+| 7 | `docker/dockhand-setup.sh` | Nenhuma |
 
 ### Estrutura de Diretórios do Projeto (após refatoração)
 
@@ -484,13 +587,9 @@ suap-setup/
 │   └── suap-dev.sh              # Dev - macOS (somente dev)
 ├── docker/
 │   ├── dev/
-│   │   ├── Dockerfile           # Imagem dev
-│   │   ├── docker-compose.yml   # Compose dev
-│   │   └── docker-setup.sh      # Script de setup Docker dev
+│   │   └── docker-setup.sh      # Script de delegação → SUAP_Repo (suap)
 │   ├── prod/
-│   │   ├── Dockerfile           # Imagem prod (multi-stage)
-│   │   ├── docker-compose.prod.yml  # Compose prod
-│   │   └── docker-setup.sh      # Script de setup Docker prod
+│   │   └── docker-setup.sh      # Script de delegação → Deploy_Repo (suap_deploy)
 │   ├── install-docker.sh        # Script de instalação do Docker
 │   └── dockhand-setup.sh        # Script de setup Dockhand
 ├── nginx/
@@ -507,126 +606,44 @@ suap-setup/
 └── README.md
 ```
 
-### Docker Compose - Desenvolvimento (`docker/dev/docker-compose.yml`)
+### Docker Dev — Repositório Upstream (suap)
 
-```yaml
-# Serviços:
-services:
-  suap:
-    build:
-      context: ../..
-      dockerfile: docker/dev/Dockerfile
-    ports:
-      - "8000:8000"
-    volumes:
-      - ../../:/app  # Código-fonte montado para hot-reload
-    env_file:
-      - ../../.env
-    depends_on:
-      - db
-      - redis
-    command: uv run python manage.py runserver 0.0.0.0:8000
+O Script_Docker_Dev **não mantém** docker-compose nem Dockerfiles. Ele delega para o `docker-compose.dev.yml` existente no SUAP_Repo. O compose do upstream tipicamente define:
 
-  db:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: suap
-      POSTGRES_USER: suap
-      POSTGRES_PASSWORD: suap
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+- **web**: Aplicação Django (build a partir de Dockerfile do repo, hot-reload via volume)
+- **db**: PostgreSQL
+- **redis**: Redis para cache e broker Celery
+- **celery / celery-beat / celery-flower**: Workers e monitoramento
+- **cron**: Tarefas agendadas
+- **minio** (opcional): Object storage para desenvolvimento
+- **pdfprinter / ai** (opcional): Serviços auxiliares
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
+As variáveis exportadas pelo script (`SUAP_IMAGE`, `CELERY_QUEUE`, `CELERY_BROKER_URL`, `FLOWER_BASIC_AUTH`) são consumidas pelo compose do upstream via interpolação de variáveis de ambiente.
 
-volumes:
-  pgdata:
-```
+### Docker Prod — Repositório Upstream (suap_deploy)
 
-### Docker Compose - Produção (`docker/prod/docker-compose.prod.yml`)
+O Script_Docker_Prod **não mantém** docker-compose nem Dockerfiles. Ele delega para o Makefile do Deploy_Repo. O suap_deploy:
 
-```yaml
-# Serviços:
-services:
-  suap:
-    build:
-      context: ../..
-      dockerfile: docker/prod/Dockerfile
-    env_file:
-      - ../../.env
-    depends_on:
-      - redis
-    restart: unless-stopped
-    volumes:
-      - static:/opt/suap/deploy/static
-      - media:/opt/suap/deploy/media
-      - logs:/opt/logs
+- Puxa imagens pré-construídas do registry GitLab
+- Usa OWASP ModSecurity CRS como WAF no Nginx
+- Suporta resource limits por container
+- Integra com Vault para gerenciamento de segredos (opcional)
+- Inclui serviços auxiliares (pdfprinter, ai)
+- Gerencia via Makefile com targets bem definidos:
 
-  celery-worker:
-    build:
-      context: ../..
-      dockerfile: docker/prod/Dockerfile
-    command: celery -A suap worker -l info
-    env_file:
-      - ../../.env
-    depends_on:
-      - redis
-    restart: unless-stopped
-    volumes:
-      - logs:/opt/logs
-
-  celery-beat:
-    build:
-      context: ../..
-      dockerfile: docker/prod/Dockerfile
-    command: celery -A suap beat -l info
-    env_file:
-      - ../../.env
-    depends_on:
-      - redis
-    restart: unless-stopped
-
-  celery-flower:
-    build:
-      context: ../..
-      dockerfile: docker/prod/Dockerfile
-    command: celery -A suap flower
-    env_file:
-      - ../../.env
-    depends_on:
-      - redis
-    restart: unless-stopped
-    ports:
-      - "5555:5555"
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "8001:8001"
-    volumes:
-      - ../../nginx/suap:/etc/nginx/conf.d/default.conf:ro
-      - static:/opt/suap/deploy/static:ro
-      - media:/opt/suap/deploy/media:ro
-      - logs:/opt/logs/nginx
-    depends_on:
-      - suap
-    restart: unless-stopped
-
-volumes:
-  static:
-  media:
-  logs:
-  pgdata:
-```
+| Target | Descrição |
+|--------|-----------|
+| `make pull-image` | Pull da imagem principal do registry |
+| `make build` | Build local a partir do código-fonte |
+| `make start-web` | Iniciar web + nginx |
+| `make start-celery` | Iniciar celery worker |
+| `make start-celery-beat` | Iniciar celery beat |
+| `make start-flower` | Iniciar celery flower |
+| `make stop` | Parar todos os serviços |
+| `make status` | Ver status dos containers |
+| `make logs` | Ver logs |
+| `make bash` | Shell no container web |
+| `make backup` | Backup do banco de dados |
 
 ### Tabela de Roteamento do Wrapper
 
@@ -648,8 +665,8 @@ volumes:
 | 4     | rpm    | `rpm/install-nginx.sh`              | Não  |                                |
 | 4     | arch   | `arch/install-nginx.sh`             | Não  |                                |
 | 4     | macos  | —                                   | —    | Não suportado (oculto no menu) |
-| 5     | *      | `docker/dev/docker-setup.sh`        | Não  |                                |
-| 6     | *      | `docker/prod/docker-setup.sh`       | Não  |                                |
+| 5     | *      | `docker/dev/docker-setup.sh`        | Não  | Delega para SUAP_Repo            |
+| 6     | *      | `docker/prod/docker-setup.sh`       | Não  | Delega para Deploy_Repo          |
 | 7     | *      | `docker/dockhand-setup.sh`          | Não  |                                |
 
 ### Tabela de Caminhos por Distribuição/OS
@@ -719,6 +736,12 @@ volumes:
 
 **Validates: Requirements 25.1, 25.3, 25.5, 25.6, 25.7, 25.8, 25.9**
 
+### Property 9: Delegação Docker — ausência de Dockerfiles locais
+
+*Para qualquer* estado do repositório suap-setup, os diretórios `docker/dev/` e `docker/prod/` não devem conter arquivos Dockerfile, docker-compose.yml nem docker-compose.prod.yml. O conteúdo desses diretórios deve ser limitado exclusivamente a scripts shell de delegação (docker-setup.sh).
+
+**Validates: Requirements 32.1, 32.2, 32.7**
+
 ## Error Handling
 
 ### Códigos de Saída
@@ -778,7 +801,7 @@ Dada a natureza do projeto (scripts shell com efeitos colaterais no sistema oper
 1. **Testes de propriedade (property-based)**: Para lógica pura extraída em funções — carregamento de .env, detecção de distro, roteamento de menu.
 2. **Testes unitários (example-based)**: Para verificações de formato, conteúdo de arquivos gerados e mensagens de saída.
 3. **Testes de integração em container**: Para validar fluxos completos de instalação em ambientes Docker isolados (Debian e Fedora).
-4. **Testes de fumaça (smoke)**: Para verificar configurações estáticas (nginx/suap, docker-compose files).
+4. **Testes de fumaça (smoke)**: Para verificar configurações estáticas (nginx/suap, princípio de delegação Docker).
 
 ### Framework de Teste
 
@@ -798,6 +821,7 @@ Dada a natureza do projeto (scripts shell com efeitos colaterais no sistema oper
   - `# Feature: suap-setup, Property 6: Round-trip do Wizard_Env`
   - `# Feature: suap-setup, Property 7: Fallback de .env em scripts individuais`
   - `# Feature: suap-setup, Property 8: Mensagens de progresso em verde`
+  - `# Feature: suap-setup, Property 9: Delegação Docker — ausência de Dockerfiles locais`
 
 ### Estrutura de Testes
 
@@ -817,7 +841,8 @@ tests/
 │   ├── test_idempotency.bats     # Property 4 & 5: idempotência
 │   ├── test_wizard_roundtrip.bats # Property 6: round-trip Wizard_Env
 │   ├── test_env_fallback.bats    # Property 7: fallback .env em scripts individuais
-│   └── test_green_messages.bats  # Property 8: mensagens de progresso em verde
+│   ├── test_green_messages.bats  # Property 8: mensagens de progresso em verde
+│   └── test_docker_delegation.bats # Property 9: ausência de Dockerfiles locais
 ├── integration/
 │   ├── Dockerfile.debian         # Container Debian para testes
 │   ├── Dockerfile.fedora         # Container Fedora para testes
@@ -830,7 +855,7 @@ tests/
 │   └── test_prod_arch.bats       # Fluxo prod completo (Arch)
 └── smoke/
     ├── test_nginx_config.bats    # Validação do arquivo nginx/suap
-    ├── test_docker_compose.bats  # Validação dos docker-compose files
+    ├── test_docker_delegation.bats # Verificação: sem Dockerfiles em docker/dev/ e docker/prod/
     ├── test_supervisor_confs.bats # Validação dos .conf do Supervisor
     └── test_docker.bats          # Validação do script Dockhand e Docker
 ```

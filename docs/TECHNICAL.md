@@ -164,8 +164,8 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 | 2 | `{distro}/suap-prod.sh` | Todas as de dev + GUNICORN_*, CELERY_* |
 | 3 | `{distro}/install-redis.sh` | Nenhuma |
 | 4 | `{distro}/install-nginx.sh` | Nenhuma |
-| 5 | `docker/dev/docker-setup.sh` | PYTHON_VERSION, GIT_URL |
-| 6 | `docker/prod/docker-setup.sh` | PYTHON_VERSION, GIT_URL |
+| 5 | `docker/dev/docker-setup.sh` | SUAP_DIR, GIT_URL, SUAP_IMAGE, SUAP_PDF_IMAGE, SUAP_AI_IMAGE |
+| 6 | `docker/prod/docker-setup.sh` | DEPLOY_DIR, DEPLOY_GIT_URL |
 | 7 | `docker/dockhand-setup.sh` | Nenhuma |
 
 **macOS (com remapeamento):**
@@ -589,69 +589,92 @@ dinâmicas para o Gunicorn.
 ## Ambiente Docker — Desenvolvimento
 
 **Arquivos:**
-- `docker/dev/docker-setup.sh` — Script de orquestração
-- `docker/dev/Dockerfile` — Imagem de desenvolvimento
-- `docker/dev/docker-compose.yml` — Definição dos serviços
+- `docker/dev/docker-setup.sh` — Script de orquestração (delega para suap)
 
 ### Visão Geral
 
-O ambiente Docker de desenvolvimento oferece uma alternativa isolada à instalação
-nativa. Funciona em qualquer sistema com Docker, sem instalar dependências no host.
+O ambiente Docker de desenvolvimento **delega para o `docker-compose.dev.yml` nativo**
+do repositório SUAP (suap). Isso garante que:
 
-### Dockerfile de Desenvolvimento
+- Os Dockerfiles utilizados são os mesmos que o CI/CD constrói e publica
+- Atualizações de dependências no upstream são automaticamente refletidas
+- Todos os serviços auxiliares (minio, pdfprinter, ai) estão disponíveis
 
-**Imagem base:** `ghcr.io/astral-sh/uv:python{VERSION}-trixie-slim`
+### Arquitetura de Delegação
 
-A imagem já vem com UV e Python pré-instalados. O Dockerfile:
+```
+suap-setup                          suap (SUAP_DIR)
+┌─────────────────────┐             ┌─────────────────────────────────┐
+│ docker/dev/         │             │ docker/                         │
+│   docker-setup.sh ──┼──delega──▶  │   Dockerfile.base               │
+│                     │             │   Dockerfile (multi-target)     │
+│                     │             │   docker-compose.dev.yml        │
+└─────────────────────┘             └─────────────────────────────────┘
+```
 
-1. Instala dependências de compilação do sistema (mesmo conjunto do script nativo)
-2. Configura locale `pt_BR.UTF-8`
-3. Instala dependências Python via `uv sync --locked --group dev`
-4. Usa cache mount para acelerar builds subsequentes
-5. Expõe porta 8000
+### Dockerfile Nativo do SUAP
 
-**Build arg:** `PYTHON_VERSION` (padrão: 3.12) — permite trocar a versão do
-Python sem editar o Dockerfile.
+O SUAP usa dois Dockerfiles com multi-target build:
+
+**`Dockerfile.base`** — Imagem base com dependências do sistema:
+- Imagem: `ghcr.io/astral-sh/uv:python3.12-bookworm-slim`
+- Instala dependências de compilação e runtime
+- Configura locale `pt_BR.UTF-8`
+- Instala dependências Python via `uv sync --locked --group prod --no-dev`
+
+**`Dockerfile`** — Targets finais:
+- `suap-app` — Produção (gunicorn, collectstatic)
+- `suap-dev` — Desenvolvimento (Chrome/ChromeDriver para testes, all groups)
 
 ### Docker Compose — Serviços
 
-| Serviço | Imagem | Porta | Volume | Descrição |
-|---------|--------|-------|--------|-----------|
-| `suap` | Build local | 8000 | `../../:/app` (bind mount) | Aplicação Django com hot-reload |
-| `db` | `postgres:16` | 5432 | `pgdata` (named volume) | Banco de dados PostgreSQL |
-| `redis` | `redis:7-alpine` | 6379 | — | Cache e broker Celery |
-
-**Hot-reload:** O código-fonte é montado como volume bind (`../../:/app`),
-permitindo editar arquivos no host e ver as mudanças refletidas imediatamente
-no container (sem rebuild).
+| Serviço | Imagem | Porta | Descrição |
+|---------|--------|-------|-----------|
+| `web` | `${SUAP_IMAGE}:dev` | 8000 | Django runserver com hot-reload |
+| `celery` | `${SUAP_IMAGE}:dev` | — | Worker Celery com autoreload |
+| `celery-beat` | `${SUAP_IMAGE}:dev` | — | Agendador de tarefas |
+| `celery-flower` | `${SUAP_IMAGE}:dev` | 5555 | Monitor web do Celery |
+| `cron` | `${SUAP_IMAGE}:dev` | — | Tarefas agendadas via crontab |
+| `pdfprinter` | `${SUAP_PDF_IMAGE}` | 9000 | Serviço de geração de PDFs |
+| `ai` | `${SUAP_AI_IMAGE}` | 7000 | Serviço de IA |
+| `minio` | `quay.io/minio/minio` | 9000/9001 | Object storage (S3-compatible) |
+| `redis` | `redis:latest` | 6379 | Cache e broker Celery |
+| `db` | `postgres:15` | 5432 | Banco de dados PostgreSQL |
 
 ### Etapas do Script
 
 ```
 1. Source lib/common.sh
-2. require_env_file() → verifica .env
+2. require_env_file() → verifica .env do suap-setup
 3. load_env_file() → carrega variáveis
-4. check_docker_available() → verifica Docker (oferece instalar se ausente)
-5. resolve_git_url() → garante GIT_URL
-6. docker compose build --build-arg PYTHON_VERSION=3.12
-7. docker compose up (foreground — logs visíveis no terminal)
-8. Exibe URLs de acesso e comandos úteis
+4. check_docker_available() → verifica Docker
+5. Verificar/clonar repositório SUAP em SUAP_DIR
+6. Verificar existência do docker-compose.dev.yml nativo
+7. Gerar .env do SUAP a partir do sample (se necessário)
+8. Gerar suap/settings.py a partir do sample (se necessário)
+9. Exportar variáveis para o compose (SUAP_IMAGE, CELERY_*, etc.)
+10. docker compose -f docker/docker-compose.dev.yml build
+11. docker compose -f docker/docker-compose.dev.yml up
+12. Exibir URLs de acesso e comandos úteis
 ```
+
+### Variáveis Necessárias
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `SUAP_DIR` | `$HOME/Projetos/suap` | Caminho do código-fonte |
+| `GIT_URL` | — | URL do repositório (para clone) |
+| `SUAP_IMAGE` | `registry.exemplo.com:5000/org/suap` | Imagem no registry |
 
 ### Comandos Úteis
 
 ```bash
-# Parar containers
-docker compose -f docker/dev/docker-compose.yml down
-
-# Ver logs
-docker compose -f docker/dev/docker-compose.yml logs -f
-
-# Acessar shell do container
-docker compose -f docker/dev/docker-compose.yml exec suap bash
-
-# Executar migrations
-docker compose -f docker/dev/docker-compose.yml exec suap uv run python manage.py migrate
+# Acessar o diretório do SUAP e usar o compose diretamente
+cd $SUAP_DIR
+docker compose -f docker/docker-compose.dev.yml down
+docker compose -f docker/docker-compose.dev.yml logs -f
+docker compose -f docker/docker-compose.dev.yml exec web bash
+docker compose -f docker/docker-compose.dev.yml exec web python manage.py migrate
 ```
 
 ---
@@ -659,108 +682,114 @@ docker compose -f docker/dev/docker-compose.yml exec suap uv run python manage.p
 ## Ambiente Docker — Produção
 
 **Arquivos:**
-- `docker/prod/docker-setup.sh` — Script de orquestração
-- `docker/prod/Dockerfile` — Imagem de produção (multi-stage)
-- `docker/prod/docker-compose.prod.yml` — Definição dos serviços
+- `docker/prod/docker-setup.sh` — Script de orquestração (delega para suap_deploy)
 
 ### Visão Geral
 
-O ambiente Docker de produção fornece todos os serviços necessários em containers
-isolados, com restart automático, volumes persistentes e Nginx como proxy reverso.
+O ambiente Docker de produção **delega para o projeto `suap_deploy`**, que é o
+orquestrador oficial de produção. O suap_deploy:
 
-### Dockerfile de Produção (Multi-Stage Build)
+- Puxa imagens pré-construídas do registry GitLab
+- Usa OWASP ModSecurity CRS como WAF no Nginx
+- Suporta resource limits por container (até 15G por serviço)
+- Integra com HashiCorp Vault para gerenciamento de segredos
+- Inclui serviços auxiliares (pdfprinter, ai)
+- Gerencia via Makefile com targets bem definidos
 
-**Stage 1 — Builder:**
-- Imagem: `ghcr.io/astral-sh/uv:python{VERSION}-trixie-slim`
-- Instala dependências de compilação
-- Executa `uv sync --locked --no-install-project` (cache de dependências)
-- Copia código e faz sync final
-- Instala Gunicorn no venv
+### Arquitetura de Delegação
 
-**Stage 2 — Runtime:**
-- Imagem: `python:{VERSION}-slim-trixie` (sem UV, sem compiladores)
-- Instala apenas bibliotecas de runtime (`.so` compartilhadas)
-- Configura locale `pt_BR.UTF-8`
-- Cria usuário não-root (`suap:999`)
-- Copia `/app` do builder (inclui `.venv`)
-- Expõe porta 8000
-- CMD: Gunicorn com 4 workers, timeout 300s, logging em `/opt/logs/`
-
-**Resultado:** Imagem final ~50% menor que uma imagem com ferramentas de build.
+```
+suap-setup                          suap_deploy (DEPLOY_DIR)
+┌─────────────────────┐             ┌────────────────────────────────────┐
+│ docker/prod/        │             │ Makefile                           │
+│   docker-setup.sh ──┼──delega──▶  │ docker-compose.yml                 │
+│                     │             │ default-services.yml               │
+│                     │             │ nginx/ (OWASP ModSecurity)         │
+│                     │             │ src/suap (git submodule)           │
+└─────────────────────┘             └────────────────────────────────────┘
+```
 
 ### Docker Compose — Serviços de Produção
 
-| Serviço | Imagem | Portas | Restart | Descrição |
-|---------|--------|--------|---------|-----------|
-| `suap` | Build local | — (via nginx) | `unless-stopped` | Gunicorn servindo SUAP |
-| `celery-worker` | Build local | — | `unless-stopped` | Processamento assíncrono |
-| `celery-beat` | Build local | — | `unless-stopped` | Agendamento de tarefas |
-| `celery-flower` | Build local | 5555 | `unless-stopped` | Monitor web do Celery |
-| `redis` | `redis:7-alpine` | — | `unless-stopped` | Broker de mensagens |
-| `nginx` | `nginx:alpine` | 80, 8001 | `unless-stopped` | Proxy reverso + static |
+| Serviço | Imagem | Porta | Restart | Descrição |
+|---------|--------|-------|---------|-----------|
+| `web` | `${SUAP_IMAGE}` (registry) | — | `always` | Gunicorn com SUAP |
+| `celery` | `${SUAP_IMAGE}` | — | `always` | Worker Celery |
+| `celery-beat` | `${SUAP_IMAGE}` | — | `always` | Agendador de tarefas |
+| `celery-flower` | `${SUAP_IMAGE}` | 5555 | `always` | Monitor web |
+| `cron` | `${SUAP_IMAGE}` | — | `always` | Tarefas crontab |
+| `nginx` | `owasp/modsecurity-crs:nginx` | 80, 443, 8080 | `always` | WAF + proxy reverso |
+| `pdfprinter` | `${SUAP_PDF_IMAGE}` | 9000 | `always` | Geração de PDFs |
+| `ai` | `${SUAP_AI_IMAGE}` | 7000 | `always` | Serviço de IA |
+| `redis` | `redis:latest` | 6379 | `always` | (somente homologação) |
+| `db` | `postgres:15` | 5432 | `always` | (somente homologação) |
 
-### Volumes Persistentes
+### Menu Interativo
 
-| Volume | Montagem | Propósito |
-|--------|----------|-----------|
-| `static` | `/opt/suap/deploy/static` | Arquivos estáticos (CSS, JS, imagens) |
-| `media` | `/opt/suap/deploy/media` | Uploads de usuários |
-| `logs` | `/opt/logs` | Logs de Gunicorn e Celery |
-| `pgdata` | (reservado) | Dados do PostgreSQL (se adicionado) |
+O script apresenta um menu de gerenciamento:
 
-### Nginx no Docker
-
-O container Nginx usa `nginx/suap.docker` como configuração, que difere do
-`nginx/suap` nativo no upstream:
-
-```nginx
-# nginx/suap.docker (Docker)
-upstream suap_server {
-    least_conn;
-    server suap:8000;  # Nome do serviço Docker (DNS interno)
-}
-
-# nginx/suap (nativo)
-upstream suap_server {
-    least_conn;
-    server 127.0.0.1:8000;  # Localhost
-}
+```
+1) Fazer pull das imagens e iniciar todos os serviços
+2) Fazer build local das imagens (a partir do código-fonte)
+3) Apenas iniciar serviços (sem pull/build)
+4) Parar todos os serviços
+5) Ver status dos containers
+6) Ver logs
+7) Acessar shell do container web
+8) Executar backup do banco
+0) Sair
 ```
 
 ### Etapas do Script
 
 ```
 1. Source lib/common.sh
-2. require_env_file() → verifica .env
+2. require_env_file() → verifica .env do suap-setup
 3. load_env_file() → carrega variáveis
 4. check_docker_available() → verifica Docker
-5. resolve_git_url() → garante GIT_URL
-6. docker compose -f docker-compose.prod.yml build --build-arg PYTHON_VERSION=3.12
-7. docker compose -f docker-compose.prod.yml up -d (detached)
-8. docker compose -f docker-compose.prod.yml ps (exibe status)
-9. Exibe URLs de acesso e comandos de gerenciamento
+5. Verificar/clonar repositório suap_deploy em DEPLOY_DIR
+6. Atualizar submodules (se repositório já existe)
+7. Verificar existência do Makefile
+8. Configurar .env do suap_deploy (a partir do sample se necessário)
+9. Exibir menu interativo de gerenciamento
+10. Executar target do Makefile conforme opção escolhida
 ```
 
-### Comandos de Gerenciamento
+### Variáveis Necessárias
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `DEPLOY_DIR` | `$HOME/Projetos/suap_deploy` | Caminho do suap_deploy |
+| `DEPLOY_GIT_URL` | `git@gitlab.exemplo.com:org/suap_deploy.git` | URL do repositório |
+
+### Comandos de Gerenciamento (via Makefile do suap_deploy)
 
 ```bash
-# Ver status
-docker compose -f docker/prod/docker-compose.prod.yml ps
+cd $DEPLOY_DIR
 
-# Ver logs de todos os serviços
-docker compose -f docker/prod/docker-compose.prod.yml logs -f
+# Gerenciamento básico
+make start-web         # Iniciar web + nginx
+make start-celery      # Iniciar celery worker
+make start-celery-beat # Iniciar celery beat
+make start-flower      # Iniciar celery flower
+make start-cron        # Iniciar cron
+make stop              # Parar todos os serviços
+make status            # Ver status
 
-# Escalar workers do Celery
-docker compose -f docker/prod/docker-compose.prod.yml up -d --scale celery-worker=3
+# Operações de banco
+make backup            # Backup do PostgreSQL
+make restore DUMP=deploy/backup/dump_2024-01-01.sql  # Restore
+make psql              # Acessar psql
 
-# Reiniciar apenas o SUAP
-docker compose -f docker/prod/docker-compose.prod.yml restart suap
+# Build e deploy
+make build             # Build local das imagens
+make push-image        # Push para registry
+make pull-image        # Pull do registry
 
-# Parar tudo
-docker compose -f docker/prod/docker-compose.prod.yml down
-
-# Acessar shell da aplicação
-docker compose -f docker/prod/docker-compose.prod.yml exec suap bash
+# Acesso ao container
+make bash              # Shell no container web
+make shell             # Python shell (manage.py shell)
+make execute COMMAND='python manage.py migrate'  # Comando arbitrário
 ```
 
 ---
@@ -1065,6 +1094,16 @@ na primeira execução do `setup.sh`.
 | `CELERY_MIN_WORKERS` | Int | `2` | Mínimo de workers Celery (autoscale) |
 | `CELERY_QUEUE` | String | `geral,celery_beat` | Filas do Celery (separadas por vírgula) |
 
+### Variáveis Docker
+
+| Variável | Tipo | Padrão | Descrição |
+|----------|------|--------|-----------|
+| `SUAP_IMAGE` | String | *(solicitado pelo wizard)* | Imagem Docker principal do SUAP no registry |
+| `SUAP_PDF_IMAGE` | String | *(solicitado pelo wizard)* | Imagem Docker do serviço de geração de PDFs |
+| `SUAP_AI_IMAGE` | String | *(solicitado pelo wizard)* | Imagem Docker do serviço de inteligência artificial |
+| `DEPLOY_DIR` | Path | `$HOME/Projetos/suap_deploy` | Diretório do repositório suap_deploy |
+| `DEPLOY_GIT_URL` | URL | *(solicitado pelo wizard)* | URL do repositório suap_deploy |
+
 ### Exemplo Completo de .env
 
 ```ini
@@ -1085,7 +1124,7 @@ SUAP_DIR=${BASE_DIR}/suap
 VENV_DIR=${BASE_DIR}/venv
 
 # URL do repositório Git do SUAP
-GIT_URL=https://gitlab.exemplo.com/suap/suap.git
+GIT_URL=git@gitlab.exemplo.com:org/suap.git
 
 # --- Gunicorn (produção) ---
 GUNICORN_WORKERS=5
@@ -1097,6 +1136,13 @@ CELERY_FLOWER_AUTH=admin:senhasegura
 CELERY_MAX_WORKERS=5
 CELERY_MIN_WORKERS=2
 CELERY_QUEUE=geral,celery_beat
+
+# --- Docker ---
+SUAP_IMAGE=registry.exemplo.com:5000/org/suap
+SUAP_PDF_IMAGE=registry.exemplo.com:5000/org/suap-pdf:latest
+SUAP_AI_IMAGE=registry.exemplo.com:5000/org/suap-ai:latest
+DEPLOY_DIR=$HOME/Projetos/suap_deploy
+DEPLOY_GIT_URL=git@gitlab.exemplo.com:org/suap_deploy.git
 ```
 
 ### Carregamento de Variáveis

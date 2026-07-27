@@ -115,6 +115,11 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `CELERY_FLOWER_AUTH` | Autenticação do Flower | — | `admin:admin` |
 | `CELERY_MAX_WORKERS` | Máximo de workers Celery | — | `5` |
 | `CELERY_MIN_WORKERS` | Mínimo de workers Celery | — | `2` |
+| `SUAP_IMAGE` | Imagem Docker do SUAP no registry | — | *(solicitado pelo wizard)* |
+| `SUAP_PDF_IMAGE` | Imagem Docker do serviço de PDF | — | *(solicitado pelo wizard)* |
+| `SUAP_AI_IMAGE` | Imagem Docker do serviço de IA | — | *(solicitado pelo wizard)* |
+| `DEPLOY_DIR` | Diretório do repositório suap_deploy | — | `$HOME/Projetos/suap_deploy` |
+| `DEPLOY_GIT_URL` | URL Git do suap_deploy | — | *(solicitado pelo wizard)* |
 
 ## Scripts disponíveis
 
@@ -175,53 +180,90 @@ Os scripts de produção (requerem root) realizam:
 
 ## Docker
 
+### Arquitetura de Delegação
+
+Os scripts Docker do suap-setup **não mantêm Dockerfiles nem docker-compose próprios**. Em vez disso, delegam para os repositórios upstream oficiais:
+
+- **Desenvolvimento** → delega para o `docker-compose.dev.yml` nativo do repositório SUAP (suap-ifma)
+- **Produção** → delega para o Makefile do projeto suap_deploy
+
+Isso garante que a configuração de build esteja sempre sincronizada com o upstream.
+
+### Variáveis Docker (solicitadas pelo wizard na opção 5)
+
+| Variável | Descrição | Exemplo |
+|----------|-----------|---------|
+| `SUAP_IMAGE` | Imagem principal do SUAP no registry | `gitlab.instituicao.edu.br:4567/org/suap` |
+| `SUAP_PDF_IMAGE` | Imagem do serviço de PDF | `gitlab.instituicao.edu.br:4567/org/suap-pdf:latest` |
+| `SUAP_AI_IMAGE` | Imagem do serviço de IA | `gitlab.instituicao.edu.br:4567/org/suap-ai:latest` |
+
 ### Desenvolvimento (Docker)
 
-Serviços em `docker/dev/docker-compose.yml`:
+O script `docker/dev/docker-setup.sh` delega para o `docker-compose.dev.yml` do repositório SUAP:
 
-| Serviço | Imagem | Porta | Descrição |
-|---------|--------|-------|-----------|
-| `suap` | Build local | 8000 | Aplicação SUAP com hot-reload |
-| `db` | postgres:16 | 5432 | Banco de dados PostgreSQL |
-| `redis` | redis:7-alpine | 6379 | Cache Redis |
+1. Verifica Docker disponível (oferece instalar se ausente)
+2. Clona/verifica o repositório SUAP em `SUAP_DIR`
+3. Valida existência do `docker/docker-compose.dev.yml` nativo
+4. Gera `.env` e `settings.py` a partir dos samples (se necessário)
+5. Exporta variáveis de imagens (SUAP_IMAGE, SUAP_PDF_IMAGE, SUAP_AI_IMAGE)
+6. Executa `docker compose -f docker/docker-compose.dev.yml build` + `up`
 
-O código-fonte é montado como volume para edição em tempo real.
+Serviços típicos fornecidos pelo compose do SUAP:
+
+| Serviço | Porta | Descrição |
+|---------|-------|-----------|
+| web | 8000 | Aplicação SUAP com hot-reload |
+| celery | — | Worker Celery |
+| celery-beat | — | Agendador de tarefas |
+| celery-flower | 5555 | Monitor do Celery |
+| redis | 6379 | Cache e broker |
+| db | 5432 | PostgreSQL |
 
 ```bash
 # Iniciar
 bash docker/dev/docker-setup.sh
 
-# Logs
-docker compose -f docker/dev/docker-compose.yml logs -f suap
-
-# Parar
-docker compose -f docker/dev/docker-compose.yml down
+# Após iniciar, use diretamente no diretório do SUAP:
+cd $SUAP_DIR
+docker compose -f docker/docker-compose.dev.yml logs -f
+docker compose -f docker/docker-compose.dev.yml exec web bash
+docker compose -f docker/docker-compose.dev.yml down
 ```
 
 ### Produção (Docker)
 
-Serviços em `docker/prod/docker-compose.prod.yml`:
+O script `docker/prod/docker-setup.sh` delega para o projeto suap_deploy:
 
-| Serviço | Descrição |
-|---------|-----------|
-| `suap` | Aplicação SUAP (Gunicorn) |
-| `celery-worker` | Worker do Celery |
-| `celery-beat` | Scheduler do Celery |
-| `celery-flower` | Monitor do Celery (porta 5555) |
-| `redis` | Cache Redis |
-| `nginx` | Proxy reverso (portas 80 e 8001) |
+1. Verifica Docker disponível
+2. Clona/verifica o repositório suap_deploy em `DEPLOY_DIR`
+3. Configura `.env` de produção a partir do sample
+4. Apresenta menu interativo de gerenciamento:
 
-Todos os serviços possuem `restart: unless-stopped`. Volumes persistentes para static, media e logs.
+```
+1) Fazer pull das imagens e iniciar todos os serviços
+2) Fazer build local das imagens (a partir do código-fonte)
+3) Apenas iniciar serviços (sem pull/build)
+4) Parar todos os serviços
+5) Ver status dos containers
+6) Ver logs
+7) Acessar shell do container web
+8) Executar backup do banco
+0) Sair
+```
+
+O suap_deploy utiliza imagens pré-construídas do registry GitLab, OWASP ModSecurity CRS como WAF no Nginx, e resource limits por container.
 
 ```bash
 # Iniciar
 bash docker/prod/docker-setup.sh
 
-# Status
-docker compose -f docker/prod/docker-compose.prod.yml ps
-
-# Parar
-docker compose -f docker/prod/docker-compose.prod.yml down
+# Ou usar diretamente no diretório do suap_deploy:
+cd $DEPLOY_DIR
+make start-web
+make start-celery
+make status
+make logs
+make stop
 ```
 
 ### Instalação do Docker
@@ -309,6 +351,7 @@ O projeto utiliza [bats-core](https://github.com/bats-core/bats-core) como frame
 6. **Round-trip do Wizard** — valores fornecidos ao wizard são preservados no .env
 7. **Fallback de .env** — scripts individuais encerram com exit 1 quando .env não existe
 8. **Mensagens verdes** — todos os scripts usam `msg_action()` para feedback visual
+9. **Delegação Docker** — nenhum Dockerfile ou docker-compose existe em `docker/dev/` ou `docker/prod/`
 
 ## Estrutura do repositório
 
@@ -338,14 +381,11 @@ suap-setup/
 ├── docker/
 │   ├── install-docker.sh             # Instalação do Docker
 │   ├── dockhand-setup.sh             # Dockhand
+│   ├── README.md                     # Documentação da arquitetura de delegação
 │   ├── dev/
-│   │   ├── Dockerfile
-│   │   ├── docker-compose.yml
-│   │   └── docker-setup.sh
+│   │   └── docker-setup.sh           # Delegação → suap-ifma (docker-compose.dev.yml)
 │   └── prod/
-│       ├── Dockerfile
-│       ├── docker-compose.prod.yml
-│       └── docker-setup.sh
+│       └── docker-setup.sh           # Delegação → suap_deploy (Makefile)
 ├── nginx/
 │   ├── suap                          # Config para instalação nativa
 │   └── suap.docker                   # Config para containers Docker
@@ -376,6 +416,8 @@ suap-setup/
 - **Remoção condicional do nginx default** (Debian): o link `sites-enabled/default` só é removido após a config do SUAP ser ativada.
 - **Detecção inteligente de UV**: verifica `~/.cargo/bin/uv` e `~/.local/bin/uv` antes de baixar.
 - **Docker auto-install**: se Docker não estiver disponível, os scripts Docker oferecem instalação automática.
+- **Delegação Docker**: scripts Docker não mantêm Dockerfiles locais — delegam para repositórios upstream (suap-ifma para dev, suap_deploy para prod).
+- **Variáveis de imagens Docker** (`SUAP_IMAGE`, `SUAP_PDF_IMAGE`, `SUAP_AI_IMAGE`) são solicitadas pelo wizard e não possuem valores hardcoded no código.
 - As opções Docker funcionam em qualquer sistema com Docker, independente da distribuição.
 
 ## Licença
