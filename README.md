@@ -60,6 +60,7 @@ sudo bash arch/suap-update.sh
 # Infraestrutura
 bash deb/install-redis.sh
 bash deb/install-nginx.sh
+bash deb/install-postgres.sh
 bash arch/install-redis.sh
 bash arch/install-nginx.sh
 
@@ -88,6 +89,7 @@ O `setup.sh` detecta automaticamente o sistema operacional e exibe apenas as op�
 6) Configurar ambiente prod via Docker
 7) Iniciar Dockhand (via Docker)
 8) Atualizar ambiente de produção
+9) Instalar PostgreSQL
 0) Sair
 ```
 
@@ -111,6 +113,7 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | Variável | Descrição | Padrão (dev) | Padrão (prod) |
 |----------|-----------|--------------|---------------|
 | `PYTHON_VERSION` | Versão do Python | `3.12` | `3.12` |
+| `POSTGRES_VERSION` | Versão do PostgreSQL a instalar | `16` | `16` |
 | `BASE_DIR` | Diretório base para instalação | `$HOME/Projetos` | `/opt` |
 | `SUAP_DIR` | Diretório do código SUAP | `${BASE_DIR}/suap` | `${BASE_DIR}/suap` |
 | `VENV_DIR` | Diretório do virtualenv | `${SUAP_DIR}/.venv` | `/opt/venv` |
@@ -146,6 +149,7 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `rpm/install-redis.sh` | Fedora/RHEL | Instala e habilita Redis |
 | `arch/install-redis.sh` | Arch Linux | Instala e habilita Redis |
 | `deb/install-nginx.sh` | Debian/Ubuntu | Instala Nginx e configura proxy SUAP |
+| `deb/install-postgres.sh` | Debian/Ubuntu | Instala PostgreSQL via repositório PGDG |
 | `rpm/install-nginx.sh` | Fedora/RHEL | Instala Nginx e configura proxy SUAP |
 | `arch/install-nginx.sh` | Arch Linux | Instala Nginx e configura proxy SUAP |
 | `docker/install-docker.sh` | Linux | Instala Docker Engine e Compose |
@@ -391,7 +395,8 @@ suap-setup/
 │   ├── suap-prod.sh
 │   ├── suap-update.sh
 │   ├── install-redis.sh
-│   └── install-nginx.sh
+│   ├── install-nginx.sh
+│   └── install-postgres.sh
 ├── rpm/                              # Fedora/RHEL/CentOS
 │   ├── suap-dev.sh
 │   ├── suap-prod.sh

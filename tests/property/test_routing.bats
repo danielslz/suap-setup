@@ -1,13 +1,13 @@
 #!/usr/bin/env bats
 # Feature: suap-setup, Property 3: Roteamento do menu produz caminho de script correto
 #
-# Para qualquer combinação válida de opção do menu (1-8) e tipo de distribuição/OS
+# Para qualquer combinação válida de opção do menu (1-9) e tipo de distribuição/OS
 # detectado (deb/rpm/arch/macos), o wrapper deve construir o caminho correto do script
-# de acordo com a tabela de roteamento; opções não suportadas na plataforma (2, 3, 4, 8
+# de acordo com a tabela de roteamento; opções não suportadas na plataforma (2, 3, 4, 8, 9
 # no macOS) devem ser rejeitadas; e opções fora do intervalo válido devem resultar em
 # código de saída 1.
 #
-# **Validates: Requirements 3.2, 3.3, 30.11, 31.10, 33.19, 33.20**
+# **Validates: Requirements 3.2, 3.3, 30.11, 31.10, 33.19, 33.20, 34.18, 34.19**
 
 setup() {
     load '../test_helper/common-setup'
@@ -33,7 +33,7 @@ _resolve_target_script() {
     # Reject unsupported options on macOS
     if [ "$distro_type" = "macos" ]; then
         case "${choice}" in
-            2|3|4|8) return 1 ;;
+            2|3|4|8|9) return 1 ;;
         esac
     fi
 
@@ -62,6 +62,9 @@ _resolve_target_script() {
         8)
             echo "${distro_type}/suap-update.sh"
             ;;
+        9)
+            echo "${distro_type}/install-postgres.sh"
+            ;;
         *)
             return 1
             ;;
@@ -78,13 +81,13 @@ random_choice() {
     echo "${arr[$idx]}"
 }
 
-# Generate a random invalid option (not 1-8)
+# Generate a random invalid option (not 1-9)
 random_invalid_option() {
     local category=$(( RANDOM % 4 ))
     case $category in
         0)
-            # Numbers outside 1-8 (0, 9-99, negative)
-            local -a nums=("0" "9" "10" "42" "99" "-1" "-5" "100" "255")
+            # Numbers outside 1-9 (0, 10-99, negative)
+            local -a nums=("0" "10" "11" "42" "99" "-1" "-5" "100" "255")
             random_choice "${nums[@]}"
             ;;
         1)
@@ -107,20 +110,21 @@ random_invalid_option() {
 
 # --- Property Tests ---
 
-@test "Property 3.1: Valid options (1-4, 8) with deb/rpm/arch produce correct distro-prefixed path (100 iterations)" {
+@test "Property 3.1: Valid options (1-4, 8, 9) with deb/rpm/arch produce correct distro-prefixed path (100 iterations)" {
     local iterations=100
     local i
 
-    local -a valid_options=("1" "2" "3" "4" "8")
+    local -a valid_options=("1" "2" "3" "4" "8" "9")
     local -a distro_types=("deb" "rpm" "arch")
 
-    # Expected script names for options 1-4 and 8
+    # Expected script names for options 1-4, 8 and 9
     declare -A script_map
     script_map[1]="suap-dev.sh"
     script_map[2]="suap-prod.sh"
     script_map[3]="install-redis.sh"
     script_map[4]="install-nginx.sh"
     script_map[8]="suap-update.sh"
+    script_map[9]="install-postgres.sh"
 
     for ((i = 1; i <= iterations; i++)); do
         local option
@@ -201,12 +205,12 @@ random_invalid_option() {
     done
 }
 
-@test "Property 3.4: All valid options (1-8) produce paths that match existing project scripts (100 iterations)" {
+@test "Property 3.4: All valid options (1-9) produce paths that match existing project scripts (100 iterations)" {
     local iterations=100
     local i
 
-    # For deb/rpm/arch, all options 1-8 are valid
-    local -a all_options=("1" "2" "3" "4" "5" "6" "7" "8")
+    # For deb/rpm/arch, all options 1-9 are valid
+    local -a all_options=("1" "2" "3" "4" "5" "6" "7" "8" "9")
     local -a linux_distros=("deb" "rpm" "arch")
     # For macOS, only options 1, 5, 6, 7 are valid
     local -a macos_options=("1" "5" "6" "7")
@@ -237,11 +241,11 @@ random_invalid_option() {
     done
 }
 
-@test "Property 3.5: macOS restricts options 2, 3, 4, 8 with exit code 1 (100 iterations)" {
+@test "Property 3.5: macOS restricts options 2, 3, 4, 8, 9 with exit code 1 (100 iterations)" {
     local iterations=100
     local i
 
-    local -a restricted_options=("2" "3" "4" "8")
+    local -a restricted_options=("2" "3" "4" "8" "9")
 
     for ((i = 1; i <= iterations; i++)); do
         local option

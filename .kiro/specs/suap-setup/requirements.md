@@ -14,6 +14,7 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 - **Script_Docker_Dev**: Script de delegação (`docker/dev/docker-setup.sh`) que configura e executa o ambiente Docker de desenvolvimento delegando para o `docker-compose.dev.yml` nativo do repositório suap.
 - **Script_Docker_Prod**: Script de delegação (`docker/prod/docker-setup.sh`) que configura e executa o ambiente Docker de produção delegando para o projeto suap_deploy e seu Makefile.
 - **Script_Update**: Scripts de atualização do SUAP em produção (`deb/suap-update.sh`, `rpm/suap-update.sh`, `arch/suap-update.sh`) que param serviços, atualizam código, opcionalmente executam migrate/collectstatic/sync_permissions, corrigem permissões e reiniciam serviços.
+- **Script_Postgres**: Scripts de instalação do PostgreSQL (`deb/install-postgres.sh`, `rpm/install-postgres.sh`, `arch/install-postgres.sh`) que instalam o PostgreSQL a partir do repositório oficial PGDG, inicializam o cluster, criam banco/usuário de aplicação e configuram controle de acesso.
 - **SUAP_Repo**: Repositório suap contendo o código-fonte da aplicação SUAP, incluindo os Dockerfiles e docker-compose nativos para desenvolvimento.
 - **Deploy_Repo**: Repositório suap_deploy que é o orquestrador oficial de produção, contendo Makefile, configurações de containers, WAF e integração com registry GitLab.
 - **Delegação_Docker**: Princípio arquitetural no qual suap-setup não mantém Dockerfiles ou docker-compose próprios, delegando para os repositórios oficiais upstream (suap para dev, suap_deploy para prod).
@@ -71,9 +72,9 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 
 #### Acceptance Criteria
 
-1. WHEN a detecção da distribuição é concluída com sucesso, THE Wrapper SHALL exibir um menu com as opções: (1) Configurar ambiente dev, (2) Configurar ambiente prod, (3) Instalar Redis, (4) Instalar Nginx, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker, (7) Iniciar Dockhand, (8) Atualizar SUAP (produção).
-2. WHILE executando em Distribuição_macOS, THE Wrapper SHALL exibir apenas as opções (1) Configurar ambiente dev, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker e (7) Iniciar Dockhand, ocultando as opções 2, 3, 4 e 8 com uma mensagem "não suportado no macOS".
-3. WHEN o usuário seleciona uma opção válida (1 a 8), THE Wrapper SHALL executar o script correspondente à distribuição detectada, ao ambiente Docker ou ao Dockhand.
+1. WHEN a detecção da distribuição é concluída com sucesso, THE Wrapper SHALL exibir um menu com as opções: (1) Configurar ambiente dev, (2) Configurar ambiente prod, (3) Instalar Redis, (4) Instalar Nginx, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker, (7) Iniciar Dockhand, (8) Atualizar SUAP (produção), (9) Instalar PostgreSQL.
+2. WHILE executando em Distribuição_macOS, THE Wrapper SHALL exibir apenas as opções (1) Configurar ambiente dev, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker e (7) Iniciar Dockhand, ocultando as opções 2, 3, 4, 8 e 9 com uma mensagem "não suportado no macOS".
+3. WHEN o usuário seleciona uma opção válida (1 a 9), THE Wrapper SHALL executar o script correspondente à distribuição detectada, ao ambiente Docker ou ao Dockhand.
 4. IF o usuário informa uma opção inválida, THEN THE Wrapper SHALL exibir uma mensagem de erro e encerrar com código de saída 1.
 5. IF o arquivo do script correspondente não é encontrado no diretório, THEN THE Wrapper SHALL exibir uma mensagem de erro e encerrar com código de saída 2.
 
@@ -492,3 +493,31 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 18. THE Script_Update SHALL existir em três variantes: `deb/suap-update.sh`, `rpm/suap-update.sh` e `arch/suap-update.sh`, cada uma usando o gerenciador de pacotes e convenções da respectiva distribuição.
 19. WHEN o Script_Update é selecionado via menu do Wrapper, THE Wrapper SHALL executar o script com sudo (assim como o Script_Prod).
 20. THE Script_Update SHALL ser acessível como opção 8 no menu do Wrapper (Linux only), com o rótulo "Atualizar SUAP (produção)".
+
+### Requirement 34: Instalação automatizada do PostgreSQL
+
+**User Story:** Como administrador de sistemas, eu quero scripts que automatizem a instalação e configuração inicial do PostgreSQL, para que eu possa provisionar o banco de dados do SUAP de forma rápida e padronizada sem seguir procedimentos manuais.
+
+#### Acceptance Criteria
+
+1. WHEN o Script_Postgres é executado, THE Script_Postgres SHALL verificar a execução como root (exit 1 se EUID != 0).
+2. WHEN o Script_Postgres inicia, THE Script_Postgres SHALL verificar se o PostgreSQL já está instalado no sistema antes de tentar instalá-lo.
+3. WHEN o PostgreSQL não está instalado, THE Script_Postgres SHALL adicionar o repositório oficial PGDG (PostgreSQL Global Development Group) e instalar a versão configurada do PostgreSQL.
+4. WHILE executando em uma Distribuição_Debian, THE Script_Postgres SHALL adicionar a chave GPG e o repositório apt do PGDG e instalar os pacotes `postgresql-<versão>` e `postgresql-contrib-<versão>`.
+5. WHILE executando em uma Distribuição_RPM, THE Script_Postgres SHALL adicionar o repositório yum/dnf do PGDG, desabilitar o módulo postgresql do sistema e instalar os pacotes `postgresql<versão>-server` e `postgresql<versão>-contrib`.
+6. WHILE executando em uma Distribuição_Arch, THE Script_Postgres SHALL instalar o pacote `postgresql` via `pacman -S --needed --noconfirm`.
+7. IF a instalação dos pacotes PostgreSQL falha, THEN THE Script_Postgres SHALL exibir uma mensagem de erro e encerrar com código de saída 1.
+8. WHEN a instalação dos pacotes é concluída, THE Script_Postgres SHALL inicializar o cluster de banco de dados (initdb) caso ainda não tenha sido inicializado.
+9. WHEN o cluster é inicializado, THE Script_Postgres SHALL iniciar o serviço PostgreSQL via systemctl e habilitá-lo para iniciar automaticamente no boot.
+10. WHEN o serviço está em execução, THE Script_Postgres SHALL perguntar ao usuário se deseja criar o banco de dados e o usuário de aplicação do SUAP.
+11. WHEN o usuário confirma a criação, THE Script_Postgres SHALL solicitar via prompt interativo o nome do banco (padrão: `suap`), o nome do usuário de aplicação (padrão: `suap_app`) e a senha do usuário.
+12. IF o usuário não informa uma senha (valor vazio), THEN THE Script_Postgres SHALL exibir uma mensagem de erro informando que a senha é obrigatória e encerrar com código de saída 1.
+13. WHEN os dados são coletados, THE Script_Postgres SHALL criar o usuário e o banco de dados com encoding UTF-8, locale `pt_BR.UTF-8` e configurar `bytea_output = 'escape'`.
+14. WHEN o banco e o usuário são criados, THE Script_Postgres SHALL configurar o `pg_hba.conf` para permitir conexões do usuário de aplicação apenas via rede local (método `scram-sha-256`).
+15. WHEN o `pg_hba.conf` é configurado, THE Script_Postgres SHALL definir `password_encryption = scram-sha-256` no `postgresql.conf`.
+16. WHEN a configuração de acesso é aplicada, THE Script_Postgres SHALL recarregar a configuração do PostgreSQL via `systemctl reload` ou `pg_ctl reload`.
+17. WHEN toda a configuração é concluída, THE Script_Postgres SHALL exibir uma mensagem de sucesso com um resumo contendo: versão instalada, nome do banco, nome do usuário, porta de escuta e diretório de dados.
+18. THE Script_Postgres SHALL existir em três variantes: `deb/install-postgres.sh`, `rpm/install-postgres.sh` e `arch/install-postgres.sh`, cada uma usando o gerenciador de pacotes e convenções da respectiva distribuição.
+19. THE Script_Postgres SHALL ser acessível como opção 9 no menu do Wrapper (Linux only), com o rótulo "Instalar PostgreSQL".
+20. THE Script_Postgres SHALL utilizar a variável `POSTGRES_VERSION` do Arquivo_Env_Central (padrão: `16`) para determinar qual versão do PostgreSQL instalar.
+21. WHEN o PostgreSQL já está instalado e em execução, THE Script_Postgres SHALL exibir uma mensagem informativa (msg_skip) e oferecer apenas a opção de criar banco/usuário (pulando a instalação de pacotes).

@@ -11,6 +11,8 @@ Sempre que qualquer arquivo de código (.sh, configuração, scripts) for criado
 
 2. **docs/TECHNICAL.md** — Atualizar a documentação técnica detalhada com: algoritmos de scripts modificados, tabelas de pacotes, fluxos de execução, variáveis de ambiente e qualquer seção afetada pela mudança.
 
+3. **docs/DEPLOYMENT.md** — Atualizar o guia de implantação em produção com: novos scripts ou opções de menu disponíveis, variáveis de ambiente adicionadas, alterações na arquitetura de referência, procedimentos de atualização ou qualquer mudança que afete o fluxo de implantação/operação em ambientes de homologação e produção.
+
 ## O que atualizar em cada documento
 
 ### README.md
@@ -27,6 +29,15 @@ Sempre que qualquer arquivo de código (.sh, configuração, scripts) for criado
 - Diagramas de fluxo (se o fluxo de execução mudou)
 - Seção de códigos de saída (se novos exit codes foram introduzidos)
 - Seção de testes (se novos testes foram adicionados)
+
+### docs/DEPLOYMENT.md
+- Seções de implantação (se novos scripts de provisionamento foram adicionados, ex: install-postgres.sh)
+- Opções do menu do wrapper mencionadas no documento (se o menu mudou)
+- Variáveis de ambiente listadas nas tabelas (se novas variáveis relevantes para produção foram adicionadas)
+- Procedimentos da rotina de atualização (se o fluxo de suap-update.sh mudou)
+- Arquitetura de referência e dimensionamento (se novos componentes foram introduzidos)
+- Checklist de go-live (se novos pré-requisitos de produção surgiram)
+- Configurações de banco, Nginx, Supervisor ou mídia (se os scripts correspondentes mudaram)
 
 ## Regra
 - NÃO deixar a documentação desatualizada em relação ao código.

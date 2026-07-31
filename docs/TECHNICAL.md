@@ -9,14 +9,15 @@
 5. [Ambiente de Produção — Nativo](#ambiente-de-produção-nativo)
 6. [Instalação de Redis](#instalação-de-redis)
 7. [Instalação de Nginx](#instalação-de-nginx)
-8. [Ambiente Docker — Desenvolvimento](#ambiente-docker-desenvolvimento)
-9. [Ambiente Docker — Produção](#ambiente-docker-produção)
-10. [Instalação do Docker](#instalação-do-docker)
-11. [Dockhand — Gerenciamento Docker via Web](#dockhand)
-12. [Configuração Nginx Detalhada](#configuração-nginx-detalhada)
-13. [Configuração Supervisor Detalhada](#configuração-supervisor-detalhada)
-14. [Variáveis de Ambiente](#variáveis-de-ambiente)
-15. [Testes Automatizados](#testes-automatizados)
+8. [Instalação de PostgreSQL](#instalação-de-postgresql)
+9. [Ambiente Docker — Desenvolvimento](#ambiente-docker-desenvolvimento)
+10. [Ambiente Docker — Produção](#ambiente-docker-produção)
+11. [Instalação do Docker](#instalação-do-docker)
+12. [Dockhand — Gerenciamento Docker via Web](#dockhand)
+13. [Configuração Nginx Detalhada](#configuração-nginx-detalhada)
+14. [Configuração Supervisor Detalhada](#configuração-supervisor-detalhada)
+15. [Variáveis de Ambiente](#variáveis-de-ambiente)
+16. [Testes Automatizados](#testes-automatizados)
 
 ---
 
@@ -143,7 +144,7 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 2. Source lib/common.sh (carrega todas as funções utilitárias)
 3. Detecta distribuição/OS via detect_distro()
 4. Exibe menu adaptativo conforme plataforma:
-   - Linux: 7 opções (dev, prod, redis, nginx, docker dev, docker prod, dockhand)
+   - Linux: 9 opções (dev, prod, redis, nginx, docker dev, docker prod, dockhand, update, postgresql)
    - macOS: 4 opções (dev, docker dev, docker prod, dockhand)
 5. Valida entrada do usuário
 6. Remapeia opções do macOS para índices internos
@@ -168,6 +169,7 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 | 6 | `docker/prod/docker-setup.sh` | DEPLOY_DIR, DEPLOY_GIT_URL |
 | 7 | `docker/dockhand-setup.sh` | Nenhuma |
 | 8 | `{distro}/suap-update.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR |
+| 9 | `{distro}/install-postgres.sh` | POSTGRES_VERSION |
 
 **macOS (com remapeamento):**
 
@@ -734,6 +736,49 @@ dinâmicas para o Gunicorn.
 
 ---
 
+## Instalação de PostgreSQL
+
+**Arquivos:** `deb/install-postgres.sh`
+
+### O que é instalado
+
+O [PostgreSQL](https://www.postgresql.org/) é o banco de dados relacional utilizado
+pelo SUAP para persistência de dados. O script instala a partir do repositório
+oficial PGDG (PostgreSQL Global Development Group), garantindo acesso à versão
+mais recente.
+
+### Variável de configuração
+
+| Variável | Tipo | Padrão | Descrição |
+|----------|------|--------|-----------|
+| `POSTGRES_VERSION` | String | `16` | Versão do PostgreSQL a instalar |
+
+A variável pode ser definida no `.env` ou será utilizado o valor padrão `16`.
+
+### Etapas
+
+```
+1. Source lib/common.sh
+2. Carregar .env (se disponível) para obter POSTGRES_VERSION
+3. Elevar para root via exec sudo (se necessário)
+4. Verificar se PostgreSQL já está instalado e em execução
+   - Se psql existe E serviço está ativo → pular com msg_skip
+5. Adicionar repositório oficial PGDG:
+   - Instalar dependências (curl, ca-certificates, gnupg, lsb-release)
+   - Importar chave GPG do PostgreSQL (ACCC4CF8)
+   - Adicionar fonte APT: apt.postgresql.org/pub/repos/apt
+6. Instalar pacotes: postgresql-{VERSION}, postgresql-contrib-{VERSION}
+7. systemctl enable postgresql
+8. systemctl start postgresql
+```
+
+**Idempotência:** Se o PostgreSQL já está instalado e rodando, o script exibe
+a versão detectada via `msg_skip` e encerra sem modificar o sistema.
+
+**Porta padrão:** 5432
+
+---
+
 ## Ambiente Docker — Desenvolvimento
 
 **Arquivos:**
@@ -1230,6 +1275,12 @@ na primeira execução do `setup.sh`.
 | `VENV_DIR` | Path | `${SUAP_DIR}/.venv` | Diretório do virtualenv |
 | `GIT_URL` | URL | *(obrigatório)* | URL do repositório Git |
 
+### Variáveis de Infraestrutura
+
+| Variável | Tipo | Padrão | Descrição |
+|----------|------|--------|-----------|
+| `POSTGRES_VERSION` | String | `16` | Versão do PostgreSQL a instalar (repositório PGDG) |
+
 ### Variáveis de Produção (adicionais)
 
 | Variável | Tipo | Padrão | Descrição |
@@ -1284,6 +1335,9 @@ CELERY_FLOWER_AUTH=admin:senhasegura
 CELERY_MAX_WORKERS=5
 CELERY_MIN_WORKERS=2
 CELERY_QUEUE=geral,celery_beat
+
+# --- PostgreSQL ---
+POSTGRES_VERSION=16
 
 # --- Docker ---
 SUAP_IMAGE=registry.exemplo.com:5000/org/suap

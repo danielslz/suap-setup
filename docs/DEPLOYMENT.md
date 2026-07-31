@@ -347,13 +347,32 @@ A configuração provida automaticamente inclui:
 
 ### 9.3. VM de Banco de Dados + Redis
 
-Instalar apenas os serviços de banco e cache nesta VM:
+Instalar os serviços de banco e cache nesta VM:
 
 ```bash
-bash deb/install-redis.sh
+cd suap-setup
+bash setup.sh
 ```
 
-O PostgreSQL deve ser instalado e configurado separadamente (ver seção 10).
+Selecione **3) Instalar Redis** e depois **9) Instalar PostgreSQL**, ou execute-os diretamente:
+
+```bash
+sudo bash deb/install-redis.sh      # ou rpm/ ou arch/ conforme distribuição
+sudo bash deb/install-postgres.sh   # ou rpm/ ou arch/ conforme distribuição
+```
+
+O script de instalação do PostgreSQL (`install-postgres.sh`) realiza automaticamente:
+
+1. Adiciona o repositório oficial PGDG (versão configurável via `POSTGRES_VERSION`, padrão: 16);
+2. Instala os pacotes do PostgreSQL;
+3. Inicializa o cluster (initdb) e inicia o serviço;
+4. Oferece criação interativa do banco e usuário de aplicação (nome do banco, usuário e senha via prompt);
+5. Configura `pg_hba.conf` com `scram-sha-256` para o usuário criado;
+6. Configura `password_encryption = scram-sha-256`;
+7. Pergunta se o PostgreSQL deve escutar apenas em localhost ou em todos os endereços (para VMs separadas);
+8. Exibe resumo com string de conexão.
+
+Para tuning avançado, réplicas de leitura e connection pooling, ver seção 10.
 
 ### 9.4. VM de Tarefas Assíncronas (Celery)
 
@@ -381,6 +400,10 @@ Variáveis relevantes no `.env`:
 As documentações do IFRN citam PostgreSQL 15 (instalação nativa) e 16 (Docker). Recomenda-se adotar a **versão mais recente suportada oficialmente pela versão do SUAP em uso** — confirme com a equipe de desenvolvimento qual versão é homologada.
 
 ### 10.2. Instalação
+
+A forma mais rápida de instalar é via `suap-setup` (opção 9 do menu ou executando diretamente o script `install-postgres.sh` da distribuição — ver seção 9.3). O script já adiciona o repositório oficial, instala os pacotes, inicializa o cluster e configura acesso.
+
+Para instalação manual ou quando é necessário controle adicional:
 
 **Debian/Ubuntu:**
 
@@ -428,6 +451,8 @@ sudo systemctl start postgresql-16
 ```
 
 ### 10.4. Criação do banco e usuário de aplicação
+
+> **Nota:** Se você utilizou o `install-postgres.sh` (seção 9.3) e respondeu "Sim" à criação do banco/usuário, estes passos já foram executados automaticamente. Os comandos abaixo são para referência ou criação manual.
 
 ```bash
 sudo -u postgres psql

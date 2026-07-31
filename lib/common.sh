@@ -88,13 +88,14 @@ EOF
 #   6 (docker prod): DEPLOY_DIR, DEPLOY_GIT_URL
 #   7 (dockhand):    nenhuma
 #   8 (update):      nenhuma (requer .env já existente do setup de produção)
+#   9 (postgres):    POSTGRES_VERSION
 ensure_env_for_option() {
   local env_path="${1}"
   local option="${2}"
 
   # Opções que não precisam de variáveis
   case "${option}" in
-    3|4|7|8) return 0 ;;
+    3|4|7|8|9) return 0 ;;
   esac
 
   # Carregar variáveis existentes (se .env já existe)
@@ -430,6 +431,10 @@ _write_env() {
     echo ""
     echo "# URL do repositório Git do suap_deploy"
     printf 'DEPLOY_GIT_URL=%s\n' "${DEPLOY_GIT_URL:-git@gitlab.instituicao.edu.br:org/suap_deploy.git}"
+    echo ""
+    echo "# --- PostgreSQL ---"
+    echo "# Versão do PostgreSQL a ser instalada"
+    printf 'POSTGRES_VERSION=%s\n' "${POSTGRES_VERSION:-16}"
   } > "${env_path}"
 
   echo ""

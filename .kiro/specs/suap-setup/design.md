@@ -233,8 +233,8 @@ set -u
 #    a. Verificar uname -s == "Darwin" → DISTRO_TYPE="macos"
 #    b. Caso contrário, ler /etc/os-release → "deb", "rpm" ou "arch"
 # 5. Exibir menu:
-#    - macOS: menu restrito (opções 1, 5, 6, 7 — ocultar 2, 3, 4, 8 com msg "não suportado no macOS")
-#    - Linux: menu completo com 8 opções
+#    - macOS: menu restrito (opções 1, 5, 6, 7 — ocultar 2, 3, 4, 8, 9 com msg "não suportado no macOS")
+#    - Linux: menu completo com 9 opções
 # 6. Validar entrada do usuário
 # 7. Coletar variáveis via ensure_env_for_option(env_path, opção)
 #    - Coleta apenas variáveis necessárias para a opção selecionada
@@ -251,6 +251,7 @@ set -u
 # 6 → docker/prod/docker-setup.sh (delega para Deploy_Repo)
 # 7 → docker/dockhand-setup.sh
 # 8 → ${DISTRO_TYPE}/suap-update.sh (com sudo) [Linux only]
+# 9 → ${DISTRO_TYPE}/install-postgres.sh (com sudo) [Linux only]
 ```
 
 ### 3. Scripts de Desenvolvimento (`deb/suap-dev.sh`, `rpm/suap-dev.sh`, `arch/suap-dev.sh`, `macos/suap-dev.sh`)
@@ -515,6 +516,71 @@ Os scripts de Redis e Nginx seguem padrão simples:
 # Nota: macOS NÃO suporta Redis/Nginx scripts (opções ocultas no menu)
 ```
 
+### 6.1. Script de Instalação do PostgreSQL (`deb/install-postgres.sh`, `rpm/install-postgres.sh`, `arch/install-postgres.sh`)
+
+```bash
+#!/bin/bash
+set -u
+# Algoritmo sequencial do script de instalação do PostgreSQL:
+#
+# 1. Source lib/common.sh
+# 2. require_env_file() - falha com exit 1 se .env não existe
+# 3. load_env_file() - carregar variáveis centralizadas
+# 4. Validar execução como root (exit 1 se EUID != 0)
+# 5. Definir POSTGRES_VERSION a partir do .env (padrão: 16)
+# 6. Verificar se PostgreSQL já está instalado e em execução:
+#    - Se sim: msg_skip, pular para etapa 10 (criação de banco/usuário)
+# 7. Adicionar repositório oficial PGDG:
+#    - Debian: chave GPG + repositório apt
+#    - RPM: pacote pgdg-redhat-repo + desabilitar módulo postgresql
+#    - Arch: pacote postgresql no repositório extra
+# 8. Instalar pacotes PostgreSQL:
+#    - Debian: postgresql-${VERSION} postgresql-contrib-${VERSION}
+#    - RPM: postgresql${VERSION}-server postgresql${VERSION}-contrib
+#    - Arch: postgresql
+#    - Se falha → exit 1
+# 9. Inicializar cluster (initdb) se necessário + systemctl start + enable
+# 10. Perguntar se deseja criar banco/usuário de aplicação:
+#     - Se não: exibir mensagem de sucesso e encerrar
+# 11. Coletar via prompt:
+#     - Nome do banco (padrão: suap)
+#     - Nome do usuário (padrão: suap_app)
+#     - Senha do usuário (obrigatória, exit 1 se vazia)
+# 12. Criar usuário e banco via psql:
+#     - CREATE USER com senha
+#     - CREATE DATABASE com ENCODING UTF8, LC_COLLATE pt_BR.UTF-8
+#     - ALTER DATABASE SET bytea_output TO 'escape'
+# 13. Configurar pg_hba.conf:
+#     - Adicionar entrada para conexão local do usuário de aplicação
+#     - Método: scram-sha-256
+# 14. Configurar postgresql.conf:
+#     - password_encryption = scram-sha-256
+#     - listen_addresses (perguntar ao usuário: localhost ou IP de rede interna)
+# 15. Recarregar configuração (systemctl reload)
+# 16. Exibir resumo: versão, banco, usuário, porta, datadir
+
+# Diferenças entre deb, rpm e arch:
+# - Repositório e pacotes (nomes variam)
+# - Caminho do pg_hba.conf:
+#     Debian: /etc/postgresql/${VERSION}/main/pg_hba.conf
+#     RPM:    /var/lib/pgsql/${VERSION}/data/pg_hba.conf
+#     Arch:   /var/lib/postgres/data/pg_hba.conf
+# - Caminho do postgresql.conf:
+#     Debian: /etc/postgresql/${VERSION}/main/postgresql.conf
+#     RPM:    /var/lib/pgsql/${VERSION}/data/postgresql.conf
+#     Arch:   /var/lib/postgres/data/postgresql.conf
+# - Inicialização do cluster:
+#     Debian: automática no apt install
+#     RPM:    postgresql-${VERSION}-setup initdb
+#     Arch:   initdb -D /var/lib/postgres/data --locale pt_BR.UTF-8
+# - Serviço systemd:
+#     Debian: postgresql
+#     RPM:    postgresql-${VERSION}
+#     Arch:   postgresql
+#
+# Nota: macOS NÃO suporta script de instalação do PostgreSQL (opção oculta no menu)
+```
+
 ### 7. Script Dockhand (`docker/dockhand-setup.sh`)
 
 ```bash
@@ -609,6 +675,7 @@ O wizard coleta apenas as variáveis necessárias para a opção escolhida:
 | 6 | `docker/prod/docker-setup.sh` | DEPLOY_DIR, DEPLOY_GIT_URL |
 | 7 | `docker/dockhand-setup.sh` | Nenhuma |
 | 8 | `{distro}/suap-update.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR |
+| 9 | `{distro}/install-postgres.sh` | POSTGRES_VERSION |
 
 ### Estrutura de Diretórios do Projeto (após refatoração)
 
@@ -623,19 +690,22 @@ suap-setup/
 │   ├── suap-prod.sh             # Prod - Debian
 │   ├── suap-update.sh           # Atualização prod - Debian
 │   ├── install-redis.sh         # Redis - Debian
-│   └── install-nginx.sh         # Nginx - Debian
+│   ├── install-nginx.sh         # Nginx - Debian
+│   └── install-postgres.sh      # PostgreSQL - Debian
 ├── rpm/
 │   ├── suap-dev.sh              # Dev - RPM
 │   ├── suap-prod.sh             # Prod - RPM
 │   ├── suap-update.sh           # Atualização prod - RPM
 │   ├── install-redis.sh         # Redis - RPM
-│   └── install-nginx.sh         # Nginx - RPM
+│   ├── install-nginx.sh         # Nginx - RPM
+│   └── install-postgres.sh      # PostgreSQL - RPM
 ├── arch/
 │   ├── suap-dev.sh              # Dev - Arch Linux
 │   ├── suap-prod.sh             # Prod - Arch Linux
 │   ├── suap-update.sh           # Atualização prod - Arch Linux
 │   ├── install-redis.sh         # Redis - Arch Linux
-│   └── install-nginx.sh         # Nginx - Arch Linux
+│   ├── install-nginx.sh         # Nginx - Arch Linux
+│   └── install-postgres.sh      # PostgreSQL - Arch Linux
 ├── macos/
 │   └── suap-dev.sh              # Dev - macOS (somente dev)
 ├── docker/
@@ -725,6 +795,10 @@ O Script_Docker_Prod **não mantém** docker-compose nem Dockerfiles. Ele delega
 | 8     | rpm    | `rpm/suap-update.sh`                | Sim  | Atualização de produção          |
 | 8     | arch   | `arch/suap-update.sh`               | Sim  | Atualização de produção          |
 | 8     | macos  | —                                   | —    | Não suportado (oculto no menu) |
+| 9     | deb    | `deb/install-postgres.sh`           | Sim  | Instalação do PostgreSQL         |
+| 9     | rpm    | `rpm/install-postgres.sh`           | Sim  | Instalação do PostgreSQL         |
+| 9     | arch   | `arch/install-postgres.sh`          | Sim  | Instalação do PostgreSQL         |
+| 9     | macos  | —                                   | —    | Não suportado (oculto no menu) |
 
 ### Tabela de Caminhos por Distribuição/OS
 
