@@ -6,7 +6,7 @@ set -u
 # 1. Source lib/common.sh
 # 2. Verificar Homebrew disponível
 # 3. load_env_file() - carregar variáveis centralizadas
-# 4. resolve_git_url() - garantir GIT_URL disponível
+# 4. resolve_git_url() - garantir SUAP_GIT_URL disponível
 # 5. Verificar e instalar dependências do sistema (brew install)
 # 6. Locale: pular (não necessário no macOS)
 # 7. Configurar timezone America/Fortaleza (se necessário)
@@ -46,7 +46,7 @@ BASE_DIR="${HOME}/Projetos"
 SUAP_DIR="${BASE_DIR}/suap"
 VENV_DIR="${SUAP_DIR}/.venv"
 
-### 5. Garantir GIT_URL disponível
+### 5. Garantir SUAP_GIT_URL disponível
 resolve_git_url "${SCRIPT_DIR}/.env"
 
 ### 6. Verificar e instalar dependências do sistema
@@ -122,7 +122,7 @@ if [ ! -d "${SUAP_DIR}/.git" ]; then
   msg_action "Clonando repositório SUAP"
   mkdir -p "${BASE_DIR}"
   cd "${BASE_DIR}"
-  git clone "${GIT_URL}" suap
+  git clone "${SUAP_GIT_URL}" suap
 else
   msg_skip "Repositório SUAP já existe, atualizando..."
   cd "${SUAP_DIR}"

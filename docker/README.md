@@ -19,7 +19,7 @@ aplicação). Isso garante que:
 
 **Variáveis necessárias no `.env` do suap-setup:**
 - `SUAP_DIR` - Caminho para o repositório suap
-- `GIT_URL` - URL git do repositório (para clone automático)
+- `SUAP_GIT_URL` - URL git do repositório (para clone automático)
 - `SUAP_IMAGE` - URL da imagem no registry
 
 ## Produção (`docker/prod/docker-setup.sh`)

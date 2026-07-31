@@ -38,7 +38,7 @@ if [ ! -d "${SUAP_DIR}" ]; then
   resolve_git_url "${SCRIPT_DIR}/.env"
   msg_action "Repositório SUAP não encontrado em ${SUAP_DIR}. Clonando..."
   mkdir -p "$(dirname "${SUAP_DIR}")"
-  if ! git clone "${GIT_URL}" "${SUAP_DIR}"; then
+  if ! git clone "${SUAP_GIT_URL}" "${SUAP_DIR}"; then
     msg_error "Falha ao clonar o repositório SUAP."
     exit 1
   fi

@@ -462,11 +462,11 @@ MOCK
         export TEST_TEMP_DIR='${TEST_TEMP_DIR}'
         SUAP_DIR='${suap_dir}'
         BASE_DIR='${base_dir}'
-        GIT_URL='https://example.com/suap.git'
+        SUAP_GIT_URL='https://example.com/suap.git'
 
         if [ ! -d \"\${SUAP_DIR}/.git\" ]; then
             cd \"\${BASE_DIR}\"
-            git clone --depth 1 \"\${GIT_URL}\"
+            git clone --depth 1 \"\${SUAP_GIT_URL}\"
         fi
     "
     assert_success

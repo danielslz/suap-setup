@@ -73,7 +73,7 @@ teardown() {
     run grep "BASE_DIR" "${TEST_ENV_FILE}"
     assert_success
 
-    run grep "GIT_URL" "${TEST_ENV_FILE}"
+    run grep "SUAP_GIT_URL" "${TEST_ENV_FILE}"
     assert_success
 }
 
@@ -82,7 +82,7 @@ teardown() {
     cat > "${TEST_ENV_FILE}" << 'EOF'
 PYTHON_VERSION=3.12
 BASE_DIR=/tmp/test
-GIT_URL=https://example.com/suap.git
+SUAP_GIT_URL=https://example.com/suap.git
 EOF
 
     run bash -c "source '${PROJECT_ROOT}/lib/common.sh' && load_env_file '${TEST_ENV_FILE}' && echo \${PYTHON_VERSION}"

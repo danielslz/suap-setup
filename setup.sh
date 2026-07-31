@@ -72,11 +72,11 @@ fi
 # --- Coletar variáveis de ambiente conforme a opção escolhida ---
 # Mapeamento de variáveis necessárias por opção:
 #   0: nenhuma
-#   1 (dev):        PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL
-#   2 (prod):       PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL, GUNICORN_WORKERS, CELERY_MAX_WORKERS, CELERY_BROKER_URL, CELERY_FLOWER_AUTH
+#   1 (dev):        PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, SUAP_GIT_URL
+#   2 (prod):       PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, SUAP_GIT_URL, GUNICORN_WORKERS, CELERY_MAX_WORKERS, CELERY_BROKER_URL, CELERY_FLOWER_AUTH
 #   3 (redis):      nenhuma
 #   4 (nginx):      nenhuma
-#   5 (docker dev): PYTHON_VERSION, GIT_URL, SUAP_DIR, SUAP_IMAGE
+#   5 (docker dev): PYTHON_VERSION, SUAP_GIT_URL, SUAP_DIR, SUAP_IMAGE
 #   6 (docker prod):SUAP_DEPLOY_DIR, SUAP_DEPLOY_GIT_URL
 #   7 (dockhand):   nenhuma
 #   8 (update):     PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR

@@ -66,7 +66,7 @@ SUAP_DIR=${BASE_DIR}/suap
 VENV_DIR=${BASE_DIR}/venv
 
 # URL do repositório Git do SUAP
-GIT_URL=
+SUAP_GIT_URL=
 EOF
 
   msg_action "Arquivo .env criado em ${env_path} com valores padrão."
@@ -80,11 +80,11 @@ EOF
 # Se falta alguma variável, pergunta somente as que faltam.
 #
 # Mapeamento de variáveis por opção:
-#   1 (dev):         PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL
-#   2 (prod):        PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL, GUNICORN_WORKERS, GUNICORN_THREADS, CELERY_MAX_WORKERS, CELERY_MIN_WORKERS, CELERY_BROKER_URL, CELERY_FLOWER_AUTH
+#   1 (dev):         PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, SUAP_GIT_URL
+#   2 (prod):        PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, SUAP_GIT_URL, GUNICORN_WORKERS, GUNICORN_THREADS, CELERY_MAX_WORKERS, CELERY_MIN_WORKERS, CELERY_BROKER_URL, CELERY_FLOWER_AUTH
 #   3 (redis):       nenhuma
 #   4 (nginx):       nenhuma
-#   5 (docker dev):  PYTHON_VERSION, GIT_URL, SUAP_DIR, SUAP_IMAGE
+#   5 (docker dev):  PYTHON_VERSION, SUAP_GIT_URL, SUAP_DIR, SUAP_IMAGE
 #   6 (docker prod): SUAP_DEPLOY_DIR, SUAP_DEPLOY_GIT_URL
 #   7 (dockhand):    nenhuma
 #   8 (update):      nenhuma (requer .env já existente do setup de produção)
@@ -132,20 +132,20 @@ ensure_env_for_option() {
     echo ""
   fi
 
-  # Para Docker dev (5) precisa de PYTHON_VERSION, GIT_URL e SUAP_DIR
+  # Para Docker dev (5) precisa de PYTHON_VERSION, SUAP_GIT_URL e SUAP_DIR
   if [ "${option}" = "5" ]; then
-    # GIT_URL (necessária para clone do SUAP)
-    if [ -z "${GIT_URL:-}" ]; then
+    # SUAP_GIT_URL (necessária para clone do SUAP)
+    if [ -z "${SUAP_GIT_URL:-}" ]; then
       _show_header
-      echo "${GREEN}GIT_URL${NO_COLOR}"
+      echo "${GREEN}SUAP_GIT_URL${NO_COLOR}"
       echo "  ${YELLOW}Descrição:${NO_COLOR} URL do repositório Git do SUAP (${RED}obrigatório${NO_COLOR})."
       echo "  ${YELLOW}Exemplos:${NO_COLOR} https://github.com/org/suap.git, git@github.com:org/suap.git"
       read -rp "  Valor (${RED}obrigatório${NO_COLOR}): " _input
       if [ -z "${_input}" ]; then
-        msg_error "GIT_URL é obrigatória. Não é possível continuar sem a URL do repositório."
+        msg_error "SUAP_GIT_URL é obrigatória. Não é possível continuar sem a URL do repositório."
         exit 1
       fi
-      GIT_URL="${_input}"
+      SUAP_GIT_URL="${_input}"
       needs_update=true
       echo ""
     fi
@@ -275,18 +275,18 @@ ensure_env_for_option() {
     echo ""
   fi
 
-  # GIT_URL (necessária para opções 1, 2)
-  if [ -z "${GIT_URL:-}" ]; then
+  # SUAP_GIT_URL (necessária para opções 1, 2)
+  if [ -z "${SUAP_GIT_URL:-}" ]; then
     _show_header
-    echo "${GREEN}GIT_URL${NO_COLOR}"
+    echo "${GREEN}SUAP_GIT_URL${NO_COLOR}"
     echo "  ${YELLOW}Descrição:${NO_COLOR} URL do repositório Git do SUAP (${RED}obrigatório${NO_COLOR})."
     echo "  ${YELLOW}Exemplos:${NO_COLOR} https://github.com/org/suap.git, git@github.com:org/suap.git"
     read -rp "  Valor (${RED}obrigatório${NO_COLOR}): " _input
     if [ -z "${_input}" ]; then
-      msg_error "GIT_URL é obrigatória. Não é possível continuar sem a URL do repositório."
+      msg_error "SUAP_GIT_URL é obrigatória. Não é possível continuar sem a URL do repositório."
       exit 1
     fi
-    GIT_URL="${_input}"
+    SUAP_GIT_URL="${_input}"
     needs_update=true
     echo ""
   fi
@@ -391,7 +391,7 @@ _write_env() {
     printf 'VENV_DIR=%s\n' "${VENV_DIR:-$_venv_default}"
     echo ""
     echo "# URL do repositório Git do SUAP"
-    printf 'GIT_URL=%s\n' "${GIT_URL:-}"
+    printf 'SUAP_GIT_URL=%s\n' "${SUAP_GIT_URL:-}"
     echo ""
     echo "# --- Gunicorn (produção) ---"
     echo "# Número de workers (recomendado: 2n + 1, onde n = nº de CPUs)"
@@ -481,30 +481,30 @@ load_env_file() {
 }
 
 # resolve_git_url(env_path)
-# Lê GIT_URL do .env ou solicita ao usuário via prompt interativo.
+# Lê SUAP_GIT_URL do .env ou solicita ao usuário via prompt interativo.
 # Persiste o valor informado no .env para uso futuro.
 # Parâmetros: caminho do .env
 # Exit 1 se URL informada estiver vazia
 resolve_git_url() {
   local env_path="${1}"
 
-  if [ -n "${GIT_URL:-}" ]; then
-    msg_skip "GIT_URL já configurada: ${GIT_URL}"
+  if [ -n "${SUAP_GIT_URL:-}" ]; then
+    msg_skip "SUAP_GIT_URL já configurada: ${SUAP_GIT_URL}"
     return 0
   fi
 
   echo ""
-  read -rp "Informe a URL do repositório Git do SUAP: " GIT_URL
+  read -rp "Informe a URL do repositório Git do SUAP: " SUAP_GIT_URL
 
-  if [ -z "${GIT_URL}" ]; then
+  if [ -z "${SUAP_GIT_URL}" ]; then
     msg_error "URL do repositório não pode ser vazia."
     exit 1
   fi
 
   # Persistir no .env
-  sed -i "s|^GIT_URL=.*|GIT_URL=${GIT_URL}|" "${env_path}"
-  export GIT_URL
-  msg_action "GIT_URL salva no arquivo .env."
+  sed -i "s|^SUAP_GIT_URL=.*|SUAP_GIT_URL=${SUAP_GIT_URL}|" "${env_path}"
+  export SUAP_GIT_URL
+  msg_action "SUAP_GIT_URL salva no arquivo .env."
 }
 
 # --- Detecção de Distribuição ---

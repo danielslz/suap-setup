@@ -117,7 +117,7 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `BASE_DIR` | Diretório base para instalação | `$HOME/Projetos` | `/opt` |
 | `SUAP_DIR` | Diretório do código SUAP | `${BASE_DIR}/suap` | `${BASE_DIR}/suap` |
 | `VENV_DIR` | Diretório do virtualenv | `${SUAP_DIR}/.venv` | `/opt/venv` |
-| `GIT_URL` | URL do repositório Git | *(obrigatório)* | *(obrigatório)* |
+| `SUAP_GIT_URL` | URL do repositório Git | *(obrigatório)* | *(obrigatório)* |
 | `GUNICORN_WORKERS` | Workers do Gunicorn | — | `5` |
 | `GUNICORN_THREADS` | Threads por worker | — | `1` |
 | `CELERY_BROKER_URL` | URL do broker Redis | — | `redis://127.0.0.1:6379/3` |

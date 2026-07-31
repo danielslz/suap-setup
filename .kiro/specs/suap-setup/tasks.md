@@ -13,7 +13,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Implementar funções de output: `msg_action()`, `msg_skip()`, `msg_error()`
     - Implementar `create_default_env()` que cria `.env` com valores padrão e comentários descritivos
     - Implementar `load_env_file()` que carrega variáveis do `.env` (cria se não existir)
-    - Implementar `resolve_git_url()` que lê `GIT_URL` do `.env` ou solicita via prompt
+    - Implementar `resolve_git_url()` que lê `SUAP_GIT_URL` do `.env` ou solicita via prompt
     - _Requisitos: 1.1, 1.6, 1.7, 4.1, 4.2, 4.3, 4.4, 25.1, 25.2, 25.3, 25.4_
 
   - [x] 1.2 Implementar detecção de distribuição e funções de caminho
@@ -95,7 +95,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
 
   - [x] 4.3 Escrever testes unitários para fluxo de desenvolvimento
     - Criar `tests/unit/test_dev_flow.bats`
-    - Testar carregamento de variáveis e resolução de GIT_URL
+    - Testar carregamento de variáveis e resolução de SUAP_GIT_URL
     - Testar lógica de idempotência (pular etapas já concluídas)
     - Testar geração de arquivos de configuração (não sobrescrever existentes)
     - Testar detecção de pyproject.toml vs requirements/
@@ -307,10 +307,10 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
 
 - [x] 15. Implementar wizard interativo de .env, fallback de require_env_file, e melhorias de robustez
   - [x] 15.1 Implementar `interactive_env_wizard()` em `lib/common.sh`
-    - Implementar função `interactive_env_wizard(env_path)` que solicita ao usuário valores para: PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL
+    - Implementar função `interactive_env_wizard(env_path)` que solicita ao usuário valores para: PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, SUAP_GIT_URL
     - Para cada variável: exibir nome, descrição do propósito, exemplos e valor padrão (dev)
-    - Se o usuário pressiona Enter sem digitar → usar valor padrão (exceto GIT_URL)
-    - GIT_URL não possui valor padrão → exit 1 com `msg_error` se vazia
+    - Se o usuário pressiona Enter sem digitar → usar valor padrão (exceto SUAP_GIT_URL)
+    - SUAP_GIT_URL não possui valor padrão → exit 1 com `msg_error` se vazia
     - Após coleta, gravar o .env com comentários descritivos por variável
     - Exibir confirmação ao usuário com os valores gravados
     - _Requisitos: 28.1, 28.2, 28.3, 28.4, 28.5, 28.6, 28.7, 28.8, 28.9, 28.10_
@@ -578,7 +578,7 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - _Requisitos: 22.3, 22.9, 23.3, 23.4_
 
   - [x] 23.5 Atualizar `ensure_env_for_option()` em `lib/common.sh` para opções 5 e 6
-    - Opção 5: coletar SUAP_DIR, GIT_URL, SUAP_IMAGE
+    - Opção 5: coletar SUAP_DIR, SUAP_GIT_URL, SUAP_IMAGE
     - Opção 6: coletar SUAP_DEPLOY_DIR, SUAP_DEPLOY_GIT_URL
     - Solicitar apenas variáveis ausentes via prompt interativo
     - Gravar .env atualizado com comentários descritivos

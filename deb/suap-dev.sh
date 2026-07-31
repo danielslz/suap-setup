@@ -22,7 +22,7 @@ load_env_file "${SCRIPT_DIR}/.env"
 
 export DISTRO_TYPE="deb"
 
-# --- 3. Resolver GIT_URL ---
+# --- 3. Resolver SUAP_GIT_URL ---
 resolve_git_url "${SCRIPT_DIR}/.env"
 
 # --- 4. Verificar e instalar dependências do sistema ---
@@ -104,7 +104,7 @@ if [ ! -d "${SUAP_DIR}/.git" ]; then
   msg_action "Clonando repositório SUAP"
   mkdir -p "${BASE_DIR}"
   cd "${BASE_DIR}"
-  git clone "${GIT_URL}" suap
+  git clone "${SUAP_GIT_URL}" suap
 else
   msg_skip "Repositório SUAP já existe, atualizando..."
   cd "${SUAP_DIR}"

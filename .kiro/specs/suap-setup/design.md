@@ -52,8 +52,8 @@ graph TD
 flowchart TD
     Start([Usuário executa setup.sh]) --> EnvExists{.env existe?}
     EnvExists -->|Não| Wizard[Wizard_Env: prompt interativo para cada variável]
-    Wizard --> GitEmpty{GIT_URL vazia?}
-    GitEmpty -->|Sim| ErrGit[msg_error: GIT_URL obrigatória - exit 1]
+    Wizard --> GitEmpty{SUAP_GIT_URL vazia?}
+    GitEmpty -->|Sim| ErrGit[msg_error: SUAP_GIT_URL obrigatória - exit 1]
     GitEmpty -->|Não| WriteEnv[Gravar .env com comentários + confirmar]
     WriteEnv --> LoadEnv[Carregar .env centralizado]
     EnvExists -->|Sim| LoadEnv
@@ -110,14 +110,14 @@ require_env_file() { ... }
 
 # interactive_env_wizard(env_path)
 # Assistente interativo para criação do .env na primeira execução pelo wrapper.
-# Solicita ao usuário: PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL.
+# Solicita ao usuário: PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, SUAP_GIT_URL.
 # Para cada variável:
 #   - Exibe nome, descrição do propósito, exemplos e valor padrão (dev)
 #   - Se o usuário pressiona Enter sem digitar → usa valor padrão
-# Exceção: GIT_URL não possui valor padrão → exit 1 se vazia
+# Exceção: SUAP_GIT_URL não possui valor padrão → exit 1 se vazia
 # Após coleta, grava o .env com comentários descritivos e exibe confirmação.
 # Parâmetros: caminho absoluto onde criar o .env
-# Exit 1 se GIT_URL vazia
+# Exit 1 se SUAP_GIT_URL vazia
 interactive_env_wizard() { ... }
 
 # ensure_env_for_option(env_path, option)
@@ -129,19 +129,19 @@ interactive_env_wizard() { ... }
 #   4. Grava o .env atualizado com comentários descritivos
 #   5. Exibe confirmação com os valores configurados
 # Variáveis por opção:
-#   Opção 1-2: PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL
+#   Opção 1-2: PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, SUAP_GIT_URL
 #   Opção 3-4: Nenhuma
-#   Opção 5: SUAP_DIR, GIT_URL, SUAP_IMAGE
+#   Opção 5: SUAP_DIR, SUAP_GIT_URL, SUAP_IMAGE
 #   Opção 6: SUAP_DEPLOY_DIR, SUAP_DEPLOY_GIT_URL
 #   Opção 7: Nenhuma
 # Parâmetros: caminho do .env, número da opção
 ensure_env_for_option() { ... }
 
 # resolve_git_url(env_path)
-# Lê GIT_URL do .env ou solicita ao usuário via prompt interativo.
+# Lê SUAP_GIT_URL do .env ou solicita ao usuário via prompt interativo.
 # Persiste o valor informado no .env para uso futuro.
 # Parâmetros: caminho do .env
-# Retorno: exporta GIT_URL
+# Retorno: exporta SUAP_GIT_URL
 # Exit 1 se URL informada estiver vazia
 resolve_git_url() { ... }
 
@@ -264,7 +264,7 @@ set -u
 # 1. Source lib/common.sh
 # 2. require_env_file() - falha com exit 1 se .env não existe (fallback individual)
 # 3. load_env_file() - carregar variáveis centralizadas
-# 4. resolve_git_url() - garantir GIT_URL disponível
+# 4. resolve_git_url() - garantir SUAP_GIT_URL disponível
 # 5. Verificar e instalar dependências do sistema (check_all_packages_installed)
 #    - Se apt/dnf/pacman/brew falha → exit 1 (Requirement 5.3)
 # 6. Configurar locale pt_BR.UTF-8 (se necessário)
@@ -315,7 +315,7 @@ set -u
 # 2. require_env_file() - falha com exit 1 se .env não existe (fallback individual)
 # 3. load_env_file() - carregar variáveis centralizadas
 # 4. Validar execução como root (exit 1 se EUID != 0)
-# 5. resolve_git_url() - garantir GIT_URL disponível
+# 5. resolve_git_url() - garantir SUAP_GIT_URL disponível
 # 6. Verificar e instalar dependências do sistema
 #    - Se apt/dnf/pacman falha → exit 1 (Requirement 11.3)
 # 7. Configurar locale e timezone
@@ -645,7 +645,7 @@ SUAP_DIR=${BASE_DIR}/suap
 VENV_DIR=${BASE_DIR}/venv
 
 # URL do repositório Git do SUAP
-GIT_URL=
+SUAP_GIT_URL=
 
 # --- Docker Dev (opção 5) ---
 
@@ -667,11 +667,11 @@ O wizard coleta apenas as variáveis necessárias para a opção escolhida:
 
 | Opção | Script | Variáveis necessárias |
 |-------|--------|----------------------|
-| 1 | `{distro}/suap-dev.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL |
+| 1 | `{distro}/suap-dev.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, SUAP_GIT_URL |
 | 2 | `{distro}/suap-prod.sh` | Todas as de dev |
 | 3 | `{distro}/install-redis.sh` | Nenhuma |
 | 4 | `{distro}/install-nginx.sh` | Nenhuma |
-| 5 | `docker/dev/docker-setup.sh` | SUAP_DIR, GIT_URL, SUAP_IMAGE |
+| 5 | `docker/dev/docker-setup.sh` | SUAP_DIR, SUAP_GIT_URL, SUAP_IMAGE |
 | 6 | `docker/prod/docker-setup.sh` | SUAP_DEPLOY_DIR, SUAP_DEPLOY_GIT_URL |
 | 7 | `docker/dockhand-setup.sh` | Nenhuma |
 | 8 | `{distro}/suap-update.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR |
@@ -851,7 +851,7 @@ O Script_Docker_Prod **não mantém** docker-compose nem Dockerfiles. Ele delega
 
 ### Property 6: Round-trip do Wizard_Env
 
-*Para qualquer* conjunto de valores de entrada (PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR como strings não-vazias, e GIT_URL como string não-vazia), quando esses valores são fornecidos como stdin ao `interactive_env_wizard()`, o arquivo `.env` resultante, ao ser carregado com `load_env_file()`, deve produzir variáveis de shell com exatamente os mesmos valores fornecidos.
+*Para qualquer* conjunto de valores de entrada (PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR como strings não-vazias, e SUAP_GIT_URL como string não-vazia), quando esses valores são fornecidos como stdin ao `interactive_env_wizard()`, o arquivo `.env` resultante, ao ser carregado com `load_env_file()`, deve produzir variáveis de shell com exatamente os mesmos valores fornecidos.
 
 **Validates: Requirements 28.3, 28.4, 28.5, 28.6, 28.8, 28.9**
 
@@ -882,7 +882,7 @@ O Script_Docker_Prod **não mantém** docker-compose nem Dockerfiles. Ele delega
 | 0      | Sucesso                                        | Todos os scripts               |
 | 1      | Erro de entrada/validação                      | URL vazia, opção inválida, falta pré-requisito |
 | 1      | .env ausente (execução individual)             | Script_Dev, Script_Prod, Script_Docker sem wrapper |
-| 1      | GIT_URL vazia no wizard                        | Wizard_Env (Requirement 28.7) |
+| 1      | SUAP_GIT_URL vazia no wizard                        | Wizard_Env (Requirement 28.7) |
 | 1      | Falha na instalação de pacotes                 | apt/dnf/pacman retorna != 0 (Req. 5.3, 11.3) |
 | 1      | Homebrew ausente no macOS                      | Script_Dev_macOS (Req. 31.4) |
 | 1      | Falha na instalação de dependências Python     | uv sync/pip install retorna != 0 (Req. 10.7, 14.6) |
@@ -912,7 +912,7 @@ flowchart TD
     B -->|Não| C[msg_error + exit 1]
     B -->|Sim| D[load_env_file]
     D --> G[resolve_git_url]
-    G --> H{GIT_URL vazia?}
+    G --> H{SUAP_GIT_URL vazia?}
     H -->|Sim| I[msg_error + exit 1]
     H -->|Não| Pkg[Instalar pacotes]
     Pkg --> PkgOk{apt/dnf sucesso?}

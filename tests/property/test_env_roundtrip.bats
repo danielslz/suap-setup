@@ -254,7 +254,7 @@ random_value() {
 # Feature: suap-setup, Property 6: Round-trip do Wizard_Env
 #
 # Para qualquer conjunto de valores de entrada (PYTHON_VERSION, BASE_DIR,
-# SUAP_DIR, VENV_DIR como strings não-vazias, e GIT_URL como string não-vazia),
+# SUAP_DIR, VENV_DIR como strings não-vazias, e SUAP_GIT_URL como string não-vazia),
 # quando esses valores são fornecidos como stdin ao interactive_env_wizard(),
 # o arquivo .env resultante, ao ser carregado com load_env_file(), deve produzir
 # variáveis de shell com exatamente os mesmos valores fornecidos.
@@ -285,7 +285,7 @@ random_value() {
         rand_venv_dir="/var/venvs/$(random_string 7)"
 
         # ensure_env_for_option with option "1" (dev) asks in this order:
-        # 1. PYTHON_VERSION, 2. BASE_DIR, 3. SUAP_DIR, 4. VENV_DIR, 5. GIT_URL
+        # 1. PYTHON_VERSION, 2. BASE_DIR, 3. SUAP_DIR, 4. VENV_DIR, 5. SUAP_GIT_URL
         printf '%s\n%s\n%s\n%s\n%s\n' \
             "$rand_python_version" \
             "$rand_base_dir" \
@@ -298,7 +298,7 @@ random_value() {
         [ -f "$env_file" ] || fail "Iteration $i: .env file was not created at $env_file"
 
         # Unset variables before loading to ensure clean state
-        unset PYTHON_VERSION BASE_DIR SUAP_DIR VENV_DIR GIT_URL 2>/dev/null || true
+        unset PYTHON_VERSION BASE_DIR SUAP_DIR VENV_DIR SUAP_GIT_URL 2>/dev/null || true
 
         # Load the generated .env using load_env_file
         load_env_file "$env_file"
@@ -308,8 +308,8 @@ random_value() {
             fail "Iteration $i: PYTHON_VERSION expected '$rand_python_version' but got '$PYTHON_VERSION'"
         fi
 
-        if [ "$GIT_URL" != "$rand_git_url" ]; then
-            fail "Iteration $i: GIT_URL expected '$rand_git_url' but got '$GIT_URL'"
+        if [ "$SUAP_GIT_URL" != "$rand_git_url" ]; then
+            fail "Iteration $i: SUAP_GIT_URL expected '$rand_git_url' but got '$SUAP_GIT_URL'"
         fi
 
         if [ "$BASE_DIR" != "$rand_base_dir" ]; then
@@ -325,6 +325,6 @@ random_value() {
         fi
 
         # Clean up variables for next iteration
-        unset PYTHON_VERSION BASE_DIR SUAP_DIR VENV_DIR GIT_URL
+        unset PYTHON_VERSION BASE_DIR SUAP_DIR VENV_DIR SUAP_GIT_URL
     done
 }

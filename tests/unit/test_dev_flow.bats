@@ -108,33 +108,33 @@ EOF
 # Testes de resolve_git_url() - Resolução de URL Git
 # ============================================================
 
-@test "resolve_git_url() usa GIT_URL existente sem solicitar entrada" {
+@test "resolve_git_url() usa SUAP_GIT_URL existente sem solicitar entrada" {
     local env_file="${TEST_TEMP_DIR}/.env"
     cat > "$env_file" << 'EOF'
-GIT_URL=https://github.com/example/suap.git
+SUAP_GIT_URL=https://github.com/example/suap.git
 EOF
 
-    export GIT_URL="https://github.com/example/suap.git"
+    export SUAP_GIT_URL="https://github.com/example/suap.git"
 
     # Deve retornar sucesso sem necessitar de input
     run resolve_git_url "$env_file"
     assert_success
     # Deve exibir mensagem de skip indicando que já está configurada
-    assert_output --partial "GIT_URL já configurada"
+    assert_output --partial "SUAP_GIT_URL já configurada"
 }
 
-@test "resolve_git_url() não sobrescreve GIT_URL já definida" {
+@test "resolve_git_url() não sobrescreve SUAP_GIT_URL já definida" {
     local env_file="${TEST_TEMP_DIR}/.env"
     cat > "$env_file" << 'EOF'
-GIT_URL=https://github.com/original/suap.git
+SUAP_GIT_URL=https://github.com/original/suap.git
 EOF
 
-    export GIT_URL="https://github.com/original/suap.git"
+    export SUAP_GIT_URL="https://github.com/original/suap.git"
 
     resolve_git_url "$env_file"
 
     # O valor deve permanecer o original
-    [ "$GIT_URL" = "https://github.com/original/suap.git" ]
+    [ "$SUAP_GIT_URL" = "https://github.com/original/suap.git" ]
 }
 
 # ============================================================

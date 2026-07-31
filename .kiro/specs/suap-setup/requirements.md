@@ -28,7 +28,7 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 - **UV**: Gerenciador de pacotes Python moderno (astral.sh/uv) utilizado no ambiente de desenvolvimento.
 - **Supervisor**: Sistema de controle de processos utilizado para gerenciar serviços SUAP em produção.
 - **Virtualenv**: Ambiente virtual Python isolado para dependências do projeto.
-- **Arquivo_Env**: Arquivo `.env` na raiz do projeto suap-setup que armazena variáveis de configuração compartilhadas entre todos os scripts (GIT_URL, PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, etc.).
+- **Arquivo_Env**: Arquivo `.env` na raiz do projeto suap-setup que armazena variáveis de configuração compartilhadas entre todos os scripts (SUAP_GIT_URL, PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, etc.).
 - **Arquivo_Env_Central**: Arquivo centralizado de configuração (`.env`) na raiz do repositório suap-setup que contém todas as variáveis reutilizáveis entre os scripts.
 - **Docker_Compose**: Ferramenta para definir e executar aplicações multi-container Docker usando arquivo `docker-compose.yml`.
 - **Dockhand**: Interface web para gerenciamento de containers Docker (https://dockhand.pro/), executada como container Docker.
@@ -43,7 +43,7 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 
 #### Acceptance Criteria
 
-1. THE Arquivo_Env_Central SHALL conter todas as variáveis compartilhadas entre os scripts: PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR e GIT_URL.
+1. THE Arquivo_Env_Central SHALL conter todas as variáveis compartilhadas entre os scripts: PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR e SUAP_GIT_URL.
 2. WHEN o Script_Dev é executado, THE Script_Dev SHALL carregar as variáveis a partir do Arquivo_Env_Central antes de iniciar qualquer operação.
 3. WHEN o Script_Prod é executado, THE Script_Prod SHALL carregar as variáveis a partir do Arquivo_Env_Central antes de iniciar qualquer operação.
 4. WHEN o Script_Docker_Dev é executado, THE Script_Docker_Dev SHALL carregar as variáveis a partir do Arquivo_Env_Central antes de iniciar qualquer operação.
@@ -84,12 +84,12 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 
 #### Acceptance Criteria
 
-1. WHEN o Arquivo_Env_Central existe e contém a variável `GIT_URL`, THE Script_Dev SHALL utilizar o valor armazenado sem solicitar entrada do usuário.
-2. WHEN o Arquivo_Env_Central não existe ou não contém a variável `GIT_URL`, THE Script_Dev SHALL solicitar a URL do repositório Git ao usuário via prompt interativo.
+1. WHEN o Arquivo_Env_Central existe e contém a variável `SUAP_GIT_URL`, THE Script_Dev SHALL utilizar o valor armazenado sem solicitar entrada do usuário.
+2. WHEN o Arquivo_Env_Central não existe ou não contém a variável `SUAP_GIT_URL`, THE Script_Dev SHALL solicitar a URL do repositório Git ao usuário via prompt interativo.
 3. WHEN o usuário informa a URL do repositório, THE Script_Dev SHALL persistir o valor no Arquivo_Env_Central para uso futuro.
 4. IF o usuário informa uma URL vazia, THEN THE Script_Dev SHALL exibir uma mensagem de erro e encerrar com código de saída 1.
-5. WHEN o Arquivo_Env_Central existe e contém a variável `GIT_URL`, THE Script_Prod SHALL utilizar o valor armazenado sem solicitar entrada do usuário.
-6. WHEN o Arquivo_Env_Central não existe ou não contém a variável `GIT_URL`, THE Script_Prod SHALL solicitar a URL do repositório Git ao usuário via prompt interativo.
+5. WHEN o Arquivo_Env_Central existe e contém a variável `SUAP_GIT_URL`, THE Script_Prod SHALL utilizar o valor armazenado sem solicitar entrada do usuário.
+6. WHEN o Arquivo_Env_Central não existe ou não contém a variável `SUAP_GIT_URL`, THE Script_Prod SHALL solicitar a URL do repositório Git ao usuário via prompt interativo.
 
 ### Requirement 5: Instalação de dependências do sistema (Desenvolvimento)
 
@@ -293,7 +293,7 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 
 1. WHEN o Script_Docker_Dev é executado, THE Script_Docker_Dev SHALL verificar se o Docker e o Docker_Compose estão instalados no sistema.
 2. IF o Docker ou o Docker_Compose não estão instalados, THEN THE Script_Docker_Dev SHALL oferecer ao usuário a opção de instalar o Docker automaticamente usando o Script_Install_Docker conforme definido no Requirement 29, e caso o usuário recuse, exibir uma mensagem de erro informando os pré-requisitos e encerrar com código de saída 1.
-3. WHEN o SUAP_Repo não existe no caminho definido por SUAP_DIR, THE Script_Docker_Dev SHALL clonar o repositório usando a variável GIT_URL do Arquivo_Env_Central.
+3. WHEN o SUAP_Repo não existe no caminho definido por SUAP_DIR, THE Script_Docker_Dev SHALL clonar o repositório usando a variável SUAP_GIT_URL do Arquivo_Env_Central.
 4. WHEN o SUAP_Repo existe no caminho SUAP_DIR, THE Script_Docker_Dev SHALL utilizar o repositório existente sem clonar novamente.
 5. WHEN o SUAP_Repo é verificado, THE Script_Docker_Dev SHALL validar a existência do arquivo `docker/docker-compose.dev.yml` dentro do SUAP_Repo.
 6. IF o arquivo `docker/docker-compose.dev.yml` não existe no SUAP_Repo, THEN THE Script_Docker_Dev SHALL exibir uma mensagem de erro informando que o compose nativo não foi encontrado e encerrar com código de saída 1.
@@ -381,14 +381,14 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 
 #### Acceptance Criteria
 
-1. WHEN o Arquivo_Env_Central não existe e o Wrapper é executado, THE Wizard_Env SHALL exibir um prompt interativo para cada variável na seguinte ordem: PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL.
+1. WHEN o Arquivo_Env_Central não existe e o Wrapper é executado, THE Wizard_Env SHALL exibir um prompt interativo para cada variável na seguinte ordem: PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, SUAP_GIT_URL.
 2. WHEN o Wizard_Env exibe o prompt de uma variável, THE Wizard_Env SHALL mostrar o nome da variável, uma descrição do propósito, exemplos de valores válidos e o valor padrão para ambiente de desenvolvimento.
 3. WHEN o usuário pressiona Enter sem digitar um valor para PYTHON_VERSION, THE Wizard_Env SHALL utilizar o valor padrão `3.12`.
 4. WHEN o usuário pressiona Enter sem digitar um valor para BASE_DIR, THE Wizard_Env SHALL utilizar o valor padrão `$HOME/Projetos`.
 5. WHEN o usuário pressiona Enter sem digitar um valor para SUAP_DIR, THE Wizard_Env SHALL utilizar o valor padrão `${BASE_DIR}/suap`.
 6. WHEN o usuário pressiona Enter sem digitar um valor para VENV_DIR, THE Wizard_Env SHALL utilizar o valor padrão `${SUAP_DIR}/.venv`.
-7. IF o usuário pressiona Enter sem digitar um valor para GIT_URL (valor vazio), THEN THE Wizard_Env SHALL exibir uma mensagem de erro informando que GIT_URL é obrigatória e encerrar com código de saída 1.
-8. WHEN o usuário informa qualquer valor não vazio para GIT_URL, THE Wizard_Env SHALL aceitar a string fornecida e utilizá-la sem validação adicional de formato.
+7. IF o usuário pressiona Enter sem digitar um valor para SUAP_GIT_URL (valor vazio), THEN THE Wizard_Env SHALL exibir uma mensagem de erro informando que SUAP_GIT_URL é obrigatória e encerrar com código de saída 1.
+8. WHEN o usuário informa qualquer valor não vazio para SUAP_GIT_URL, THE Wizard_Env SHALL aceitar a string fornecida e utilizá-la sem validação adicional de formato.
 9. WHEN todos os valores são coletados, THE Wizard_Env SHALL gravar o Arquivo_Env_Central com comentários descritivos acima de cada variável.
 10. WHEN o Arquivo_Env_Central é gravado com sucesso, THE Wizard_Env SHALL exibir uma mensagem de confirmação mostrando o caminho do arquivo criado e um resumo dos valores configurados.
 

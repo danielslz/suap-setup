@@ -28,7 +28,7 @@ if [ "$EUID" -ne 0 ]; then
   exec sudo bash "$0" "$@"
 fi
 
-# --- 4. Resolver GIT_URL ---
+# --- 4. Resolver SUAP_GIT_URL ---
 resolve_git_url "${SCRIPT_DIR}/.env"
 
 # --- 5. Verificar e instalar dependências do sistema ---
@@ -87,7 +87,7 @@ fi
 if [ ! -d "${SUAP_DIR}/.git" ]; then
   msg_action "Baixando código SUAP"
   cd "${BASE_DIR}"
-  git clone --depth 1 "${GIT_URL}"
+  git clone --depth 1 "${SUAP_GIT_URL}"
   cd "${SUAP_DIR}"
 else
   msg_skip "Código SUAP já foi baixado, atualizando..."

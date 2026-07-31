@@ -20,7 +20,7 @@ if [ "$EUID" -ne 0 ]; then
   exec sudo bash "$0" "$@"
 fi
 
-# Garantir GIT_URL disponível
+# Garantir SUAP_GIT_URL disponível
 resolve_git_url "$ENV_FILE"
 
 # Forçar DISTRO_TYPE para RPM (este script é específico para RPM)
@@ -78,7 +78,7 @@ if [ ! -d "$SUAP_DIR/.git" ]; then
     msg_action "Baixando código SUAP"
     mkdir -p "$BASE_DIR"
     cd "$BASE_DIR"
-    git clone --depth 1 "$GIT_URL"
+    git clone --depth 1 "$SUAP_GIT_URL"
     cd "$SUAP_DIR"
 else
     msg_skip "Código SUAP já foi baixado, atualizando..."

@@ -13,10 +13,10 @@ teardown() {
     rm -rf "$TEST_TEMP_DIR"
 }
 
-@test "interactive_env_wizard creates .env with all defaults when GIT_URL provided" {
+@test "interactive_env_wizard creates .env with all defaults when SUAP_GIT_URL provided" {
     local env_file="${TEST_TEMP_DIR}/.env"
 
-    # Simulate: Enter (default) for all fields, then provide GIT_URL
+    # Simulate: Enter (default) for all fields, then provide SUAP_GIT_URL
     printf '\n\n\n\nhttps://github.com/org/suap.git\n' | interactive_env_wizard "$env_file"
 
     # Verify file was created
@@ -35,7 +35,7 @@ teardown() {
     run grep '^VENV_DIR=\${SUAP_DIR}/\.venv$' "$env_file"
     assert_success
 
-    run grep '^GIT_URL=https://github.com/org/suap.git$' "$env_file"
+    run grep '^SUAP_GIT_URL=https://github.com/org/suap.git$' "$env_file"
     assert_success
 }
 
@@ -59,17 +59,17 @@ teardown() {
     run grep "^VENV_DIR=/opt/venv/suap$" "$env_file"
     assert_success
 
-    run grep '^GIT_URL=git@github.com:myorg/suap.git$' "$env_file"
+    run grep '^SUAP_GIT_URL=git@github.com:myorg/suap.git$' "$env_file"
     assert_success
 }
 
-@test "interactive_env_wizard exits 1 when GIT_URL is empty" {
+@test "interactive_env_wizard exits 1 when SUAP_GIT_URL is empty" {
     local env_file="${TEST_TEMP_DIR}/.env"
 
-    # All defaults, but GIT_URL left empty (just Enter)
+    # All defaults, but SUAP_GIT_URL left empty (just Enter)
     run bash -c "source '$COMMON_SH'; printf '\n\n\n\n\n' | interactive_env_wizard '$env_file'"
     assert_failure
-    assert_output --partial "GIT_URL"
+    assert_output --partial "SUAP_GIT_URL"
 }
 
 @test "interactive_env_wizard .env contains descriptive comments" {
@@ -114,6 +114,6 @@ teardown() {
     assert_output --partial '= ${BASE_DIR}/suap'
     assert_output --partial "VENV_DIR"
     assert_output --partial '= ${SUAP_DIR}/.venv'
-    assert_output --partial "GIT_URL"
+    assert_output --partial "SUAP_GIT_URL"
     assert_output --partial "= https://git.example.com/suap.git"
 }

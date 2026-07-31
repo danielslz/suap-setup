@@ -5,7 +5,7 @@ set -u
 # Algoritmo:
 # 1. Source lib/common.sh
 # 2. load_env_file() - carregar variáveis centralizadas
-# 3. resolve_git_url() - garantir GIT_URL disponível
+# 3. resolve_git_url() - garantir SUAP_GIT_URL disponível
 # 4. Verificar e instalar dependências do sistema (pacman -Q / pacman -S)
 # 5. Configurar locale pt_BR.UTF-8 (se necessário)
 # 6. Configurar timezone America/Fortaleza (se necessário)
@@ -39,7 +39,7 @@ BASE_DIR="${HOME}/Projetos"
 SUAP_DIR="${BASE_DIR}/suap"
 VENV_DIR="${SUAP_DIR}/.venv"
 
-### 3. Garantir GIT_URL disponível
+### 3. Garantir SUAP_GIT_URL disponível
 resolve_git_url "${SCRIPT_DIR}/.env"
 
 ### 4. Verificar e instalar dependências do sistema
@@ -114,7 +114,7 @@ if [ ! -d "${SUAP_DIR}/.git" ]; then
   msg_action "Clonando repositório SUAP"
   mkdir -p "${BASE_DIR}"
   cd "${BASE_DIR}"
-  git clone "${GIT_URL}" suap
+  git clone "${SUAP_GIT_URL}" suap
 else
   msg_skip "Repositório SUAP já existe, atualizando..."
   cd "${SUAP_DIR}"

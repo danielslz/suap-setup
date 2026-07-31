@@ -96,7 +96,7 @@ NO_COLOR=$(tput sgr0)
 | `create_default_env(path)` | Cria .env com valores padrão (legado) |
 | `interactive_env_wizard(path)` | Wizard interativo para criação do .env |
 | `ensure_env_for_option(path, option)` | Coleta apenas variáveis necessárias para a opção |
-| `resolve_git_url(path)` | Garante GIT_URL disponível (lê do .env ou solicita) |
+| `resolve_git_url(path)` | Garante SUAP_GIT_URL disponível (lê do .env ou solicita) |
 
 **Fluxo do `ensure_env_for_option`:**
 
@@ -161,11 +161,11 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 
 | Opção | Script | Variáveis necessárias |
 |-------|--------|----------------------|
-| 1 | `{distro}/suap-dev.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL |
+| 1 | `{distro}/suap-dev.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, SUAP_GIT_URL |
 | 2 | `{distro}/suap-prod.sh` | Todas as de dev + GUNICORN_*, CELERY_* |
 | 3 | `{distro}/install-redis.sh` | Nenhuma |
 | 4 | `{distro}/install-nginx.sh` | Nenhuma |
-| 5 | `docker/dev/docker-setup.sh` | SUAP_DIR, GIT_URL, SUAP_IMAGE, SUAP_PDF_IMAGE, SUAP_AI_IMAGE |
+| 5 | `docker/dev/docker-setup.sh` | SUAP_DIR, SUAP_GIT_URL, SUAP_IMAGE, SUAP_PDF_IMAGE, SUAP_AI_IMAGE |
 | 6 | `docker/prod/docker-setup.sh` | SUAP_DEPLOY_DIR, SUAP_DEPLOY_GIT_URL |
 | 7 | `docker/dockhand-setup.sh` | Nenhuma |
 | 8 | `{distro}/suap-update.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR |
@@ -209,7 +209,7 @@ necessárias para compilar e executar o SUAP.
    - SUAP_DIR = $BASE_DIR/suap
    - VENV_DIR = $SUAP_DIR/.venv
    - PYTHON_VERSION = 3.12
-5. resolve_git_url() → garante GIT_URL disponível
+5. resolve_git_url() → garante SUAP_GIT_URL disponível
 ```
 
 #### Etapa 2 — Instalação de Dependências do Sistema
@@ -315,7 +315,7 @@ Define o timezone do sistema para `America/Fortaleza` (UTC-3).
 
 | Cenário | Ação |
 |---------|------|
-| Diretório não existe | `mkdir -p $BASE_DIR && git clone $GIT_URL suap` |
+| Diretório não existe | `mkdir -p $BASE_DIR && git clone $SUAP_GIT_URL suap` |
 | Diretório já tem .git | `git checkout master && git pull` |
 
 #### Etapa 7 — Geração de Arquivos de Configuração
@@ -423,7 +423,7 @@ Idêntico ao ambiente de desenvolvimento (Etapas 3 e 4 da seção anterior).
 
 | Cenário | Ação |
 |---------|------|
-| Primeiro deploy | `git clone --depth 1 $GIT_URL` (clone raso = mais rápido) |
+| Primeiro deploy | `git clone --depth 1 $SUAP_GIT_URL` (clone raso = mais rápido) |
 | Atualização | `git checkout master && git pull` |
 
 > O flag `--depth 1` economiza banda e espaço em disco — em produção o histórico
@@ -856,7 +856,7 @@ O SUAP usa dois Dockerfiles com multi-target build:
 | Variável | Padrão | Descrição |
 |----------|--------|-----------|
 | `SUAP_DIR` | `$HOME/Projetos/suap` | Caminho do código-fonte |
-| `GIT_URL` | — | URL do repositório (para clone) |
+| `SUAP_GIT_URL` | — | URL do repositório (para clone) |
 | `SUAP_IMAGE` | `registry.exemplo.com:5000/org/suap` | Imagem no registry |
 
 ### Comandos Úteis
@@ -1273,7 +1273,7 @@ na primeira execução do `setup.sh`.
 | `BASE_DIR` | Path | `$HOME/Projetos` | Diretório raiz para projetos |
 | `SUAP_DIR` | Path | `${BASE_DIR}/suap` | Diretório do código SUAP |
 | `VENV_DIR` | Path | `${SUAP_DIR}/.venv` | Diretório do virtualenv |
-| `GIT_URL` | URL | *(obrigatório)* | URL do repositório Git |
+| `SUAP_GIT_URL` | URL | *(obrigatório)* | URL do repositório Git |
 
 ### Variáveis de Infraestrutura
 
@@ -1323,7 +1323,7 @@ SUAP_DIR=${BASE_DIR}/suap
 VENV_DIR=${BASE_DIR}/venv
 
 # URL do repositório Git do SUAP
-GIT_URL=git@gitlab.exemplo.com:org/suap.git
+SUAP_GIT_URL=git@gitlab.exemplo.com:org/suap.git
 
 # --- Gunicorn (produção) ---
 GUNICORN_WORKERS=5
@@ -1452,6 +1452,6 @@ um sistema limpo.
 | Código | Significado |
 |--------|-------------|
 | 0 | Sucesso |
-| 1 | Erro genérico (opção inválida, pacote falhou, .env ausente, GIT_URL vazia) |
+| 1 | Erro genérico (opção inválida, pacote falhou, .env ausente, SUAP_GIT_URL vazia) |
 | 2 | Script alvo não encontrado (wrapper) |
 | 3 | Distribuição não suportada ou `/etc/os-release` ausente |
