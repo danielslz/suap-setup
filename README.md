@@ -209,7 +209,7 @@ Os scripts de atualização (`deb/suap-update.sh`, `rpm/suap-update.sh`, `arch/s
 
 Os scripts Docker do suap-setup **não mantêm Dockerfiles nem docker-compose próprios**. Em vez disso, delegam para os repositórios upstream oficiais:
 
-- **Desenvolvimento** → delega para o `docker-compose.dev.yml` nativo do repositório SUAP (suap-ifma)
+- **Desenvolvimento** → delega para o `docker-compose.dev.yml` nativo do repositório SUAP
 - **Produção** → delega para o Makefile do projeto suap_deploy
 
 Isso garante que a configuração de build esteja sempre sincronizada com o upstream.
@@ -411,7 +411,7 @@ suap-setup/
 │   ├── dockhand-setup.sh             # Dockhand
 │   ├── README.md                     # Documentação da arquitetura de delegação
 │   ├── dev/
-│   │   └── docker-setup.sh           # Delegação → suap-ifma (docker-compose.dev.yml)
+│   │   └── docker-setup.sh           # Delegação → suap (docker-compose.dev.yml)
 │   └── prod/
 │       └── docker-setup.sh           # Delegação → suap_deploy (Makefile)
 ├── nginx/
@@ -444,7 +444,7 @@ suap-setup/
 - **Remoção condicional do nginx default** (Debian): o link `sites-enabled/default` só é removido após a config do SUAP ser ativada.
 - **Detecção inteligente de UV**: verifica `~/.cargo/bin/uv` e `~/.local/bin/uv` antes de baixar.
 - **Docker auto-install**: se Docker não estiver disponível, os scripts Docker oferecem instalação automática.
-- **Delegação Docker**: scripts Docker não mantêm Dockerfiles locais — delegam para repositórios upstream (suap-ifma para dev, suap_deploy para prod).
+- **Delegação Docker**: scripts Docker não mantêm Dockerfiles locais — delegam para repositórios upstream (suap para dev, suap_deploy para prod).
 - **Variáveis de imagens Docker** (`SUAP_IMAGE`, `SUAP_PDF_IMAGE`, `SUAP_AI_IMAGE`) são solicitadas pelo wizard e não possuem valores hardcoded no código.
 - As opções Docker funcionam em qualquer sistema com Docker, independente da distribuição.
 
