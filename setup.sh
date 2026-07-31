@@ -77,7 +77,7 @@ fi
 #   3 (redis):      nenhuma
 #   4 (nginx):      nenhuma
 #   5 (docker dev): PYTHON_VERSION, GIT_URL, SUAP_DIR, SUAP_IMAGE
-#   6 (docker prod):DEPLOY_DIR, DEPLOY_GIT_URL
+#   6 (docker prod):SUAP_DEPLOY_DIR, SUAP_DEPLOY_GIT_URL
 #   7 (dockhand):   nenhuma
 #   8 (update):     PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR
 #   9 (postgres):   POSTGRES_VERSION

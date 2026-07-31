@@ -132,7 +132,7 @@ interactive_env_wizard() { ... }
 #   Opção 1-2: PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, GIT_URL
 #   Opção 3-4: Nenhuma
 #   Opção 5: SUAP_DIR, GIT_URL, SUAP_IMAGE
-#   Opção 6: DEPLOY_DIR, DEPLOY_GIT_URL
+#   Opção 6: SUAP_DEPLOY_DIR, SUAP_DEPLOY_GIT_URL
 #   Opção 7: Nenhuma
 # Parâmetros: caminho do .env, número da opção
 ensure_env_for_option() { ... }
@@ -441,18 +441,18 @@ set -u
 # 3. require_env_file() - falha com exit 1 se .env não existe
 # 4. load_env_file() - carregar variáveis centralizadas
 # 5. check_docker_available() - exit 1 se Docker não disponível
-# 6. Determinar DEPLOY_DIR (fallback: dirname(SUAP_DIR)/suap_deploy)
-# 7. Determinar DEPLOY_GIT_URL (fallback: git@gitlab.exemplo.com:org/suap_deploy.git)
-# 8. Se DEPLOY_DIR não existe:
-#    - git clone --recurse-submodules ${DEPLOY_GIT_URL} ${DEPLOY_DIR}
-# 9. Se DEPLOY_DIR já existe (.git presente):
+# 6. Determinar SUAP_DEPLOY_DIR (fallback: dirname(SUAP_DIR)/suap_deploy)
+# 7. Determinar SUAP_DEPLOY_GIT_URL (fallback: git@gitlab.exemplo.com:org/suap_deploy.git)
+# 8. Se SUAP_DEPLOY_DIR não existe:
+#    - git clone --recurse-submodules ${SUAP_DEPLOY_GIT_URL} ${SUAP_DEPLOY_DIR}
+# 9. Se SUAP_DEPLOY_DIR já existe (.git presente):
 #    - git submodule update --init --recursive
-# 10. Validar existência de ${DEPLOY_DIR}/Makefile
+# 10. Validar existência de ${SUAP_DEPLOY_DIR}/Makefile
 #     - Se ausente: msg_error + exit 1
-# 11. Se ${DEPLOY_DIR}/.env não existe:
+# 11. Se ${SUAP_DEPLOY_DIR}/.env não existe:
 #     - Copiar de env.prod.sample (se existir) ou exit 1
 #     - Solicitar ao usuário edição das credenciais (aguarda Enter)
-# 12. cd ${DEPLOY_DIR}
+# 12. cd ${SUAP_DEPLOY_DIR}
 # 13. Apresentar menu interativo:
 #     1) Pull imagens + iniciar (make pull-image, make start-*)
 #     2) Build local (git submodule update --remote, make build)
@@ -655,10 +655,10 @@ SUAP_IMAGE=registry.exemplo.com:5000/org/suap
 # --- Docker Prod (opção 6) ---
 
 # Diretório onde o repositório suap_deploy será clonado
-DEPLOY_DIR=${BASE_DIR}/suap_deploy
+SUAP_DEPLOY_DIR=${BASE_DIR}/suap_deploy
 
 # URL Git do repositório suap_deploy
-DEPLOY_GIT_URL=git@gitlab.exemplo.com:org/suap_deploy.git
+SUAP_DEPLOY_GIT_URL=git@gitlab.exemplo.com:org/suap_deploy.git
 ```
 
 ### Variáveis Necessárias por Opção (`ensure_env_for_option`)
@@ -672,7 +672,7 @@ O wizard coleta apenas as variáveis necessárias para a opção escolhida:
 | 3 | `{distro}/install-redis.sh` | Nenhuma |
 | 4 | `{distro}/install-nginx.sh` | Nenhuma |
 | 5 | `docker/dev/docker-setup.sh` | SUAP_DIR, GIT_URL, SUAP_IMAGE |
-| 6 | `docker/prod/docker-setup.sh` | DEPLOY_DIR, DEPLOY_GIT_URL |
+| 6 | `docker/prod/docker-setup.sh` | SUAP_DEPLOY_DIR, SUAP_DEPLOY_GIT_URL |
 | 7 | `docker/dockhand-setup.sh` | Nenhuma |
 | 8 | `{distro}/suap-update.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR |
 | 9 | `{distro}/install-postgres.sh` | POSTGRES_VERSION |

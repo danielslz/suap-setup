@@ -94,8 +94,8 @@ setup() {
 # Validação de delegação: prod → suap_deploy (Makefile)
 # ============================================================
 
-@test "docker/prod/docker-setup.sh referencia DEPLOY_DIR" {
-    run grep -q 'DEPLOY_DIR' "$PROD_SCRIPT"
+@test "docker/prod/docker-setup.sh referencia SUAP_DEPLOY_DIR" {
+    run grep -q 'SUAP_DEPLOY_DIR' "$PROD_SCRIPT"
     [ "$status" -eq 0 ]
 }
 
@@ -138,13 +138,13 @@ setup() {
     [ "$status" -eq 0 ]
 }
 
-@test "lib/common.sh suporta variável DEPLOY_DIR no wizard" {
-    run grep -q 'DEPLOY_DIR' "$COMMON_LIB"
+@test "lib/common.sh suporta variável SUAP_DEPLOY_DIR no wizard" {
+    run grep -q 'SUAP_DEPLOY_DIR' "$COMMON_LIB"
     [ "$status" -eq 0 ]
 }
 
-@test "lib/common.sh suporta variável DEPLOY_GIT_URL no wizard" {
-    run grep -q 'DEPLOY_GIT_URL' "$COMMON_LIB"
+@test "lib/common.sh suporta variável SUAP_DEPLOY_GIT_URL no wizard" {
+    run grep -q 'SUAP_DEPLOY_GIT_URL' "$COMMON_LIB"
     [ "$status" -eq 0 ]
 }
 
@@ -153,7 +153,7 @@ setup() {
     [ "$status" -eq 0 ]
 }
 
-@test "lib/common.sh grava DEPLOY_DIR no _write_env" {
-    run grep -q "DEPLOY_DIR" "$COMMON_LIB"
+@test "lib/common.sh grava SUAP_DEPLOY_DIR no _write_env" {
+    run grep -q "SUAP_DEPLOY_DIR" "$COMMON_LIB"
     [ "$status" -eq 0 ]
 }

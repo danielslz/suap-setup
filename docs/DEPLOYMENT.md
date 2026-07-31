@@ -244,15 +244,15 @@ Na primeira execução, o wizard solicitará as variáveis principais:
 
 | Variável | Descrição | Exemplo |
 |---|---|---|
-| `DEPLOY_DIR` | Diretório do repositório `suap_deploy` | `/opt/suap_deploy` |
-| `DEPLOY_GIT_URL` | URL Git do `suap_deploy` | `git@gitlab.instituicao.edu.br:org/suap_deploy.git` |
+| `SUAP_DEPLOY_DIR` | Diretório do repositório `suap_deploy` | `/opt/suap_deploy` |
+| `SUAP_DEPLOY_GIT_URL` | URL Git do `suap_deploy` | `git@gitlab.instituicao.edu.br:org/suap_deploy.git` |
 
 > **Nota:** as variáveis de imagem Docker (`SUAP_IMAGE`, `SUAP_PDF_IMAGE`, `SUAP_AI_IMAGE`) são configuradas dentro do `.env` do próprio repositório `suap_deploy` (gerado a partir do `env.prod.sample`), não no `.env` do suap-setup.
 
 O script então:
 
 1. Verifica se o Docker está disponível (oferece instalação automática caso não esteja);
-2. Clona/atualiza o repositório `suap_deploy` em `DEPLOY_DIR`;
+2. Clona/atualiza o repositório `suap_deploy` em `SUAP_DEPLOY_DIR`;
 3. Copia e ajusta o `.env` de produção a partir do sample;
 4. Apresenta o menu de gerenciamento:
 

@@ -312,8 +312,8 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 
 1. WHEN o Script_Docker_Prod é executado, THE Script_Docker_Prod SHALL verificar se o Docker e o Docker_Compose estão instalados no sistema.
 2. IF o Docker ou o Docker_Compose não estão instalados, THEN THE Script_Docker_Prod SHALL oferecer ao usuário a opção de instalar o Docker automaticamente usando o Script_Install_Docker conforme definido no Requirement 29, e caso o usuário recuse, exibir uma mensagem de erro informando os pré-requisitos e encerrar com código de saída 1.
-3. WHEN o Deploy_Repo não existe no caminho definido por DEPLOY_DIR, THE Script_Docker_Prod SHALL clonar o repositório usando a variável DEPLOY_GIT_URL com a flag `--recurse-submodules`.
-4. WHEN o Deploy_Repo existe no caminho DEPLOY_DIR, THE Script_Docker_Prod SHALL atualizar os submodules do repositório existente sem clonar novamente.
+3. WHEN o Deploy_Repo não existe no caminho definido por SUAP_DEPLOY_DIR, THE Script_Docker_Prod SHALL clonar o repositório usando a variável SUAP_DEPLOY_GIT_URL com a flag `--recurse-submodules`.
+4. WHEN o Deploy_Repo existe no caminho SUAP_DEPLOY_DIR, THE Script_Docker_Prod SHALL atualizar os submodules do repositório existente sem clonar novamente.
 5. WHEN o Deploy_Repo é verificado, THE Script_Docker_Prod SHALL validar a existência do arquivo `Makefile` dentro do Deploy_Repo.
 6. IF o arquivo `Makefile` não existe no Deploy_Repo, THEN THE Script_Docker_Prod SHALL exibir uma mensagem de erro informando que o Makefile não foi encontrado e encerrar com código de saída 1.
 7. WHEN o arquivo `.env` não existe no Deploy_Repo, THE Script_Docker_Prod SHALL gerar o `.env` a partir do arquivo `env.prod.sample` do Deploy_Repo e solicitar ao usuário que edite as credenciais antes de prosseguir.

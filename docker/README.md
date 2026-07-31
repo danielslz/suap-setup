@@ -35,14 +35,14 @@ O suap_deploy:
 - Gerencia via Makefile com targets bem definidos
 
 **Fluxo:**
-1. Verifica/clona o repositório suap_deploy em `DEPLOY_DIR`
+1. Verifica/clona o repositório suap_deploy em `SUAP_DEPLOY_DIR`
 2. Configura `.env` de produção
 3. Apresenta menu interativo com opções de gerenciamento
 4. Delega para os targets do Makefile
 
 **Variáveis necessárias no `.env` do suap-setup:**
-- `DEPLOY_DIR` - Caminho para o repositório suap_deploy
-- `DEPLOY_GIT_URL` - URL git do suap_deploy
+- `SUAP_DEPLOY_DIR` - Caminho para o repositório suap_deploy
+- `SUAP_DEPLOY_GIT_URL` - URL git do suap_deploy
 
 ## Dockhand (`docker/dockhand-setup.sh`)
 

@@ -85,7 +85,7 @@ EOF
 #   3 (redis):       nenhuma
 #   4 (nginx):       nenhuma
 #   5 (docker dev):  PYTHON_VERSION, GIT_URL, SUAP_DIR, SUAP_IMAGE
-#   6 (docker prod): DEPLOY_DIR, DEPLOY_GIT_URL
+#   6 (docker prod): SUAP_DEPLOY_DIR, SUAP_DEPLOY_GIT_URL
 #   7 (dockhand):    nenhuma
 #   8 (update):      nenhuma (requer .env já existente do setup de produção)
 #   9 (postgres):    POSTGRES_VERSION
@@ -203,29 +203,29 @@ ensure_env_for_option() {
     return 0
   fi
 
-  # Para Docker prod (6) precisa de DEPLOY_DIR e DEPLOY_GIT_URL
+  # Para Docker prod (6) precisa de SUAP_DEPLOY_DIR e SUAP_DEPLOY_GIT_URL
   if [ "${option}" = "6" ]; then
-    # DEPLOY_DIR (caminho do suap_deploy)
-    if [ -z "${DEPLOY_DIR:-}" ]; then
+    # SUAP_DEPLOY_DIR (caminho do suap_deploy)
+    if [ -z "${SUAP_DEPLOY_DIR:-}" ]; then
       _show_header
-      echo "${GREEN}DEPLOY_DIR${NO_COLOR}"
+      echo "${GREEN}SUAP_DEPLOY_DIR${NO_COLOR}"
       echo "  ${YELLOW}Descrição:${NO_COLOR} Caminho absoluto para o repositório suap_deploy."
       echo "  ${YELLOW}Exemplos:${NO_COLOR} \$HOME/Projetos/suap_deploy, /opt/suap_deploy"
       local _deploy_default="\$HOME/Projetos/suap_deploy"
       read -rp "  Valor [${GREEN}${_deploy_default}${NO_COLOR}]: " _input
-      DEPLOY_DIR="${_input:-$_deploy_default}"
+      SUAP_DEPLOY_DIR="${_input:-$_deploy_default}"
       needs_update=true
       echo ""
     fi
-    # DEPLOY_GIT_URL (URL do repositório suap_deploy)
-    if [ -z "${DEPLOY_GIT_URL:-}" ]; then
+    # SUAP_DEPLOY_GIT_URL (URL do repositório suap_deploy)
+    if [ -z "${SUAP_DEPLOY_GIT_URL:-}" ]; then
       _show_header
-      echo "${GREEN}DEPLOY_GIT_URL${NO_COLOR}"
+      echo "${GREEN}SUAP_DEPLOY_GIT_URL${NO_COLOR}"
       echo "  ${YELLOW}Descrição:${NO_COLOR} URL do repositório Git do suap_deploy."
       echo "  ${YELLOW}Exemplos:${NO_COLOR} git@gitlab.instituicao.edu.br:org/suap_deploy.git"
       local _deploy_git_default="git@gitlab.instituicao.edu.br:org/suap_deploy.git"
       read -rp "  Valor [${GREEN}${_deploy_git_default}${NO_COLOR}]: " _input
-      DEPLOY_GIT_URL="${_input:-$_deploy_git_default}"
+      SUAP_DEPLOY_GIT_URL="${_input:-$_deploy_git_default}"
       needs_update=true
       echo ""
     fi
@@ -427,10 +427,10 @@ _write_env() {
     printf 'SUAP_AI_IMAGE=%s\n' "${SUAP_AI_IMAGE:-gitlab.instituicao.edu.br:4567/org/suap-ai:latest}"
     echo ""
     echo "# Diretório do repositório suap_deploy (produção Docker)"
-    printf 'DEPLOY_DIR=%s\n' "${DEPLOY_DIR:-\$HOME/Projetos/suap_deploy}"
+    printf 'SUAP_DEPLOY_DIR=%s\n' "${SUAP_DEPLOY_DIR:-\$HOME/Projetos/suap_deploy}"
     echo ""
     echo "# URL do repositório Git do suap_deploy"
-    printf 'DEPLOY_GIT_URL=%s\n' "${DEPLOY_GIT_URL:-git@gitlab.instituicao.edu.br:org/suap_deploy.git}"
+    printf 'SUAP_DEPLOY_GIT_URL=%s\n' "${SUAP_DEPLOY_GIT_URL:-git@gitlab.instituicao.edu.br:org/suap_deploy.git}"
     echo ""
     echo "# --- PostgreSQL ---"
     echo "# Versão do PostgreSQL a ser instalada"

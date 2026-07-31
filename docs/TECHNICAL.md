@@ -166,7 +166,7 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 | 3 | `{distro}/install-redis.sh` | Nenhuma |
 | 4 | `{distro}/install-nginx.sh` | Nenhuma |
 | 5 | `docker/dev/docker-setup.sh` | SUAP_DIR, GIT_URL, SUAP_IMAGE, SUAP_PDF_IMAGE, SUAP_AI_IMAGE |
-| 6 | `docker/prod/docker-setup.sh` | DEPLOY_DIR, DEPLOY_GIT_URL |
+| 6 | `docker/prod/docker-setup.sh` | SUAP_DEPLOY_DIR, SUAP_DEPLOY_GIT_URL |
 | 7 | `docker/dockhand-setup.sh` | Nenhuma |
 | 8 | `{distro}/suap-update.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR |
 | 9 | `{distro}/install-postgres.sh` | POSTGRES_VERSION |
@@ -892,7 +892,7 @@ orquestrador oficial de produção. O suap_deploy:
 ### Arquitetura de Delegação
 
 ```
-suap-setup                          suap_deploy (DEPLOY_DIR)
+suap-setup                          suap_deploy (SUAP_DEPLOY_DIR)
 ┌─────────────────────┐             ┌────────────────────────────────────┐
 │ docker/prod/        │             │ Makefile                           │
 │   docker-setup.sh ──┼──delega──▶  │ docker-compose.yml                 │
@@ -940,7 +940,7 @@ O script apresenta um menu de gerenciamento:
 2. require_env_file() → verifica .env do suap-setup
 3. load_env_file() → carrega variáveis
 4. check_docker_available() → verifica Docker
-5. Verificar/clonar repositório suap_deploy em DEPLOY_DIR
+5. Verificar/clonar repositório suap_deploy em SUAP_DEPLOY_DIR
 6. Atualizar submodules (se repositório já existe)
 7. Verificar existência do Makefile
 8. Configurar .env do suap_deploy (a partir do sample se necessário)
@@ -952,13 +952,13 @@ O script apresenta um menu de gerenciamento:
 
 | Variável | Padrão | Descrição |
 |----------|--------|-----------|
-| `DEPLOY_DIR` | `$HOME/Projetos/suap_deploy` | Caminho do suap_deploy |
-| `DEPLOY_GIT_URL` | `git@gitlab.exemplo.com:org/suap_deploy.git` | URL do repositório |
+| `SUAP_DEPLOY_DIR` | `$HOME/Projetos/suap_deploy` | Caminho do suap_deploy |
+| `SUAP_DEPLOY_GIT_URL` | `git@gitlab.exemplo.com:org/suap_deploy.git` | URL do repositório |
 
 ### Comandos de Gerenciamento (via Makefile do suap_deploy)
 
 ```bash
-cd $DEPLOY_DIR
+cd $SUAP_DEPLOY_DIR
 
 # Gerenciamento básico
 make start-web         # Iniciar web + nginx
@@ -1300,8 +1300,8 @@ na primeira execução do `setup.sh`.
 | `SUAP_IMAGE` | String | *(solicitado pelo wizard)* | Imagem Docker principal do SUAP no registry |
 | `SUAP_PDF_IMAGE` | String | *(solicitado pelo wizard)* | Imagem Docker do serviço de geração de PDFs |
 | `SUAP_AI_IMAGE` | String | *(solicitado pelo wizard)* | Imagem Docker do serviço de inteligência artificial |
-| `DEPLOY_DIR` | Path | `$HOME/Projetos/suap_deploy` | Diretório do repositório suap_deploy |
-| `DEPLOY_GIT_URL` | URL | *(solicitado pelo wizard)* | URL do repositório suap_deploy |
+| `SUAP_DEPLOY_DIR` | Path | `$HOME/Projetos/suap_deploy` | Diretório do repositório suap_deploy |
+| `SUAP_DEPLOY_GIT_URL` | URL | *(solicitado pelo wizard)* | URL do repositório suap_deploy |
 
 ### Exemplo Completo de .env
 
@@ -1343,8 +1343,8 @@ POSTGRES_VERSION=16
 SUAP_IMAGE=registry.exemplo.com:5000/org/suap
 SUAP_PDF_IMAGE=registry.exemplo.com:5000/org/suap-pdf:latest
 SUAP_AI_IMAGE=registry.exemplo.com:5000/org/suap-ai:latest
-DEPLOY_DIR=$HOME/Projetos/suap_deploy
-DEPLOY_GIT_URL=git@gitlab.exemplo.com:org/suap_deploy.git
+SUAP_DEPLOY_DIR=$HOME/Projetos/suap_deploy
+SUAP_DEPLOY_GIT_URL=git@gitlab.exemplo.com:org/suap_deploy.git
 ```
 
 ### Carregamento de Variáveis

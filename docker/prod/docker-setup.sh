@@ -29,54 +29,54 @@ load_env_file "${SCRIPT_DIR}/.env"
 # 4. Verificar se Docker e Docker Compose estão disponíveis
 check_docker_available
 
-# 5. Garantir que DEPLOY_DIR está configurado
-if [ -z "${DEPLOY_DIR:-}" ]; then
+# 5. Garantir que SUAP_DEPLOY_DIR está configurado
+if [ -z "${SUAP_DEPLOY_DIR:-}" ]; then
   # Fallback: mesmo diretório pai do SUAP_DIR
   if [ -n "${SUAP_DIR:-}" ]; then
-    DEPLOY_DIR="$(dirname "$(eval echo "${SUAP_DIR}")")/suap_deploy"
+    SUAP_DEPLOY_DIR="$(dirname "$(eval echo "${SUAP_DIR}")")/suap_deploy"
   else
-    DEPLOY_DIR="${HOME}/Projetos/suap_deploy"
+    SUAP_DEPLOY_DIR="${HOME}/Projetos/suap_deploy"
   fi
 fi
-DEPLOY_DIR=$(eval echo "${DEPLOY_DIR}")
+SUAP_DEPLOY_DIR=$(eval echo "${SUAP_DEPLOY_DIR}")
 
-# 6. Garantir que DEPLOY_GIT_URL está configurado
-DEPLOY_GIT_URL="${DEPLOY_GIT_URL:-}"
-if [ -z "${DEPLOY_GIT_URL}" ]; then
-  msg_error "DEPLOY_GIT_URL não está definido no .env"
+# 6. Garantir que SUAP_DEPLOY_GIT_URL está configurado
+SUAP_DEPLOY_GIT_URL="${SUAP_DEPLOY_GIT_URL:-}"
+if [ -z "${SUAP_DEPLOY_GIT_URL}" ]; then
+  msg_error "SUAP_DEPLOY_GIT_URL não está definido no .env"
   msg_error "Execute setup.sh e escolha a opção 6 para configurar."
   exit 1
 fi
 
-# 7. Se DEPLOY_DIR não existe, clonar o repositório
-if [ ! -d "${DEPLOY_DIR}" ]; then
-  msg_action "Repositório suap_deploy não encontrado em ${DEPLOY_DIR}. Clonando..."
-  mkdir -p "$(dirname "${DEPLOY_DIR}")"
-  if ! git clone --recurse-submodules "${DEPLOY_GIT_URL}" "${DEPLOY_DIR}"; then
+# 7. Se SUAP_DEPLOY_DIR não existe, clonar o repositório
+if [ ! -d "${SUAP_DEPLOY_DIR}" ]; then
+  msg_action "Repositório suap_deploy não encontrado em ${SUAP_DEPLOY_DIR}. Clonando..."
+  mkdir -p "$(dirname "${SUAP_DEPLOY_DIR}")"
+  if ! git clone --recurse-submodules "${SUAP_DEPLOY_GIT_URL}" "${SUAP_DEPLOY_DIR}"; then
     msg_error "Falha ao clonar o repositório suap_deploy."
-    msg_error "Verifique se você tem acesso a: ${DEPLOY_GIT_URL}"
+    msg_error "Verifique se você tem acesso a: ${SUAP_DEPLOY_GIT_URL}"
     exit 1
   fi
-  msg_action "Repositório clonado com sucesso em ${DEPLOY_DIR}"
-elif [ -d "${DEPLOY_DIR}/.git" ]; then
+  msg_action "Repositório clonado com sucesso em ${SUAP_DEPLOY_DIR}"
+elif [ -d "${SUAP_DEPLOY_DIR}/.git" ]; then
   # Atualizar submodules se já existe
   msg_action "Atualizando submodules do suap_deploy..."
-  cd "${DEPLOY_DIR}" && git submodule update --init --recursive 2>/dev/null || true
+  cd "${SUAP_DEPLOY_DIR}" && git submodule update --init --recursive 2>/dev/null || true
 fi
 
 # 8. Verificar que o Makefile existe
-if [ ! -f "${DEPLOY_DIR}/Makefile" ]; then
-  msg_error "Makefile não encontrado em ${DEPLOY_DIR}."
+if [ ! -f "${SUAP_DEPLOY_DIR}/Makefile" ]; then
+  msg_error "Makefile não encontrado em ${SUAP_DEPLOY_DIR}."
   msg_error "Verifique se o repositório suap_deploy está correto."
   exit 1
 fi
 
 # 9. Configurar .env do suap_deploy se não existir
-if [ ! -f "${DEPLOY_DIR}/.env" ]; then
-  if [ -f "${DEPLOY_DIR}/env.prod.sample" ]; then
-    msg_action "Gerando ${DEPLOY_DIR}/.env a partir do env.prod.sample..."
-    cp "${DEPLOY_DIR}/env.prod.sample" "${DEPLOY_DIR}/.env"
-    msg_action "ATENÇÃO: Edite ${DEPLOY_DIR}/.env com as credenciais corretas antes de prosseguir."
+if [ ! -f "${SUAP_DEPLOY_DIR}/.env" ]; then
+  if [ -f "${SUAP_DEPLOY_DIR}/env.prod.sample" ]; then
+    msg_action "Gerando ${SUAP_DEPLOY_DIR}/.env a partir do env.prod.sample..."
+    cp "${SUAP_DEPLOY_DIR}/env.prod.sample" "${SUAP_DEPLOY_DIR}/.env"
+    msg_action "ATENÇÃO: Edite ${SUAP_DEPLOY_DIR}/.env com as credenciais corretas antes de prosseguir."
     echo ""
     echo "  Variáveis críticas para configurar:"
     echo "    DATABASE_HOST, DATABASE_USER, DATABASE_PASSWORD"
@@ -86,19 +86,19 @@ if [ ! -f "${DEPLOY_DIR}/.env" ]; then
     echo ""
     read -rp "Pressione Enter após editar o .env, ou Ctrl+C para cancelar... "
   else
-    msg_error "Arquivo .env não encontrado em ${DEPLOY_DIR} e não há sample disponível."
+    msg_error "Arquivo .env não encontrado em ${SUAP_DEPLOY_DIR} e não há sample disponível."
     msg_error "Crie o .env com as configurações de produção antes de prosseguir."
     exit 1
   fi
 fi
 
 # 10. Menu de ações
-cd "${DEPLOY_DIR}"
+cd "${SUAP_DEPLOY_DIR}"
 
 echo ""
 echo "${GREEN}=== Gerenciamento Docker de Produção (suap_deploy) ===${NO_COLOR}"
 echo ""
-echo "  Diretório: ${DEPLOY_DIR}"
+echo "  Diretório: ${SUAP_DEPLOY_DIR}"
 echo ""
 echo "  1) Fazer pull das imagens e iniciar todos os serviços"
 echo "  2) Fazer build local das imagens (a partir do código-fonte)"
@@ -190,7 +190,7 @@ case "${PROD_CHOICE}" in
 esac
 
 echo ""
-msg_action "=== Comandos úteis (executar dentro de ${DEPLOY_DIR}) ==="
+msg_action "=== Comandos úteis (executar dentro de ${SUAP_DEPLOY_DIR}) ==="
 echo ""
 echo "  make start-web        Iniciar web + nginx"
 echo "  make start-celery     Iniciar celery worker"

@@ -127,8 +127,8 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `SUAP_IMAGE` | Imagem Docker do SUAP no registry | — | *(solicitado pelo wizard)* |
 | `SUAP_PDF_IMAGE` | Imagem Docker do serviço de PDF | — | *(solicitado pelo wizard)* |
 | `SUAP_AI_IMAGE` | Imagem Docker do serviço de IA | — | *(solicitado pelo wizard)* |
-| `DEPLOY_DIR` | Diretório do repositório suap_deploy | — | `$HOME/Projetos/suap_deploy` |
-| `DEPLOY_GIT_URL` | URL Git do suap_deploy | — | *(solicitado pelo wizard)* |
+| `SUAP_DEPLOY_DIR` | Diretório do repositório suap_deploy | — | `$HOME/Projetos/suap_deploy` |
+| `SUAP_DEPLOY_GIT_URL` | URL Git do suap_deploy | — | *(solicitado pelo wizard)* |
 
 ## Scripts disponíveis
 
@@ -264,7 +264,7 @@ docker compose -f docker/docker-compose.dev.yml down
 O script `docker/prod/docker-setup.sh` delega para o projeto suap_deploy:
 
 1. Verifica Docker disponível
-2. Clona/verifica o repositório suap_deploy em `DEPLOY_DIR`
+2. Clona/verifica o repositório suap_deploy em `SUAP_DEPLOY_DIR`
 3. Configura `.env` de produção a partir do sample
 4. Apresenta menu interativo de gerenciamento:
 
@@ -287,7 +287,7 @@ O suap_deploy utiliza imagens pré-construídas do registry GitLab, OWASP ModSec
 bash docker/prod/docker-setup.sh
 
 # Ou usar diretamente no diretório do suap_deploy:
-cd $DEPLOY_DIR
+cd $SUAP_DEPLOY_DIR
 make start-web
 make start-celery
 make status

@@ -555,8 +555,8 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
 
   - [x] 23.2 Reescrever `docker/prod/docker-setup.sh` para delegar ao Deploy_Repo
     - Remover lógica de build/compose local
-    - Implementar verificação de DEPLOY_DIR e clone do Deploy_Repo se necessário
-    - Validar existência de `${DEPLOY_DIR}/Makefile`
+    - Implementar verificação de SUAP_DEPLOY_DIR e clone do Deploy_Repo se necessário
+    - Validar existência de `${SUAP_DEPLOY_DIR}/Makefile`
     - Gerar `.env` do Deploy_Repo a partir de `env.prod.sample` se ausente
     - Apresentar menu interativo delegando para targets do Makefile
     - Exibir lista de comandos make úteis
@@ -570,16 +570,16 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     - Garantir que apenas os scripts de delegação permanecem nos diretórios
     - _Requisitos: 32.1, 32.2, 32.3_
 
-  - [x] 23.4 Adicionar variáveis `SUAP_IMAGE`, `DEPLOY_DIR`, `DEPLOY_GIT_URL` ao .env e wizard
+  - [x] 23.4 Adicionar variáveis `SUAP_IMAGE`, `SUAP_DEPLOY_DIR`, `SUAP_DEPLOY_GIT_URL` ao .env e wizard
     - Adicionar `SUAP_IMAGE` ao template do .env com comentário descritivo
-    - Adicionar `DEPLOY_DIR` ao template do .env com comentário descritivo
-    - Adicionar `DEPLOY_GIT_URL` ao template do .env com comentário descritivo
+    - Adicionar `SUAP_DEPLOY_DIR` ao template do .env com comentário descritivo
+    - Adicionar `SUAP_DEPLOY_GIT_URL` ao template do .env com comentário descritivo
     - Atualizar `interactive_env_wizard()` para incluir as novas variáveis quando relevante
     - _Requisitos: 22.3, 22.9, 23.3, 23.4_
 
   - [x] 23.5 Atualizar `ensure_env_for_option()` em `lib/common.sh` para opções 5 e 6
     - Opção 5: coletar SUAP_DIR, GIT_URL, SUAP_IMAGE
-    - Opção 6: coletar DEPLOY_DIR, DEPLOY_GIT_URL
+    - Opção 6: coletar SUAP_DEPLOY_DIR, SUAP_DEPLOY_GIT_URL
     - Solicitar apenas variáveis ausentes via prompt interativo
     - Gravar .env atualizado com comentários descritivos
     - _Requisitos: 22.3, 22.9, 23.3, 23.4_
