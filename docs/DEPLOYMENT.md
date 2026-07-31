@@ -61,13 +61,13 @@ Este documento descreve o planejamento e a execução da implantação do **SUAP
 
 Diferente de tutoriais baseados em instalação manual passo a passo, esta documentação adota como eixo central o **[suap-setup](https://github.com/danielslz/suap-setup)**, um conjunto de scripts de automação criado para eliminar a repetição manual, reduzir erros humanos e padronizar a preparação de ambientes SUAP — seja em instalação nativa (Debian, RHEL/Fedora, Arch) seja via **Docker**.
 
-O objetivo é que qualquer servidor técnico da instituição consiga, com o mínimo de intervenção manual, provisionar um ambiente completo, íntegro e reprodutível, tanto para testes/homologação quanto para produção crítica com múltiplos usuários simultâneos.
+O objetivo é que qualquer desenvolvedor consiga, com o mínimo de intervenção manual, provisionar um ambiente completo, íntegro e reprodutível, tanto para testes/homologação quanto para produção crítica com múltiplos usuários simultâneos.
 
 ---
 
 ## 2. Visão geral do SUAP
 
-O SUAP é uma plataforma de gestão acadêmica e administrativa mantida originalmente pelo IFRN e adotada por dezenas de Institutos Federais. Entre os módulos típicos estão: Ensino, RH, Almoxarifado, Protocolo, Diários Eletrônicos, entre outros. Mais detalhes sobre o produto e seus módulos podem ser consultados no [portal oficial do SUAP](https://portal.suap.ifrn.edu.br).
+O SUAP é uma plataforma de gestão acadêmica e administrativa mantida originalmente pelo IFRN e adotada por dezenas de Institutos Federais. Entre os módulos típicos estão: Ensino, RH, Almoxarifado, Protocolo, Documentos Eletrônicos, entre outros. Mais detalhes sobre o produto e seus módulos podem ser consultados no [portal oficial do SUAP](https://portal.suap.ifrn.edu.br).
 
 Do ponto de vista de infraestrutura, o SUAP é uma aplicação **Django** que depende de:
 
@@ -77,9 +77,9 @@ Do ponto de vista de infraestrutura, o SUAP é uma aplicação **Django** que de
 | **Redis** | Cache, armazenamento de sessão e broker do Celery |
 | **Celery (worker + beat)** | Processamento assíncrono e tarefas agendadas |
 | **Gunicorn** | Servidor WSGI da aplicação Django |
-| **Nginx** | Proxy reverso, terminação SSL, servição de estáticos e mídia |
+| **Nginx** | Proxy reverso, conexões SSL, servidor de arquivos estáticos e mídia |
 | **wkhtmltopdf / LibreOffice** | Geração de PDFs e conversão de documentos |
-| **Repositório de mídia (NFS ou MinIO)** | Armazenamento compartilhado de arquivos |
+| **Repositório de mídia (NFS, MinIO, AWS S3)** | Armazenamento compartilhado de arquivos |
 
 O SUAP pode ser implantado de duas formas:
 
@@ -92,11 +92,11 @@ Ambas as formas são suportadas pelo `suap-setup`.
 
 ## 3. Filosofia de automação: por que usar o suap-setup
 
-Tutoriais manuais anteriores exigiam dezenas de comandos executados manualmente, em sequência estrita, com alto risco de:
+Tutoriais e/ou manuais com dezenas de comandos executados manualmente, em sequência estrita, contém alto risco de:
 
 - Esquecimento de um pacote de dependência do sistema operacional;
-- Configuração divergente de `settings.py` entre servidores;
-- Diferença de versão de Python/Postgres entre ambientes;
+- Configuração divergente entre servidores;
+- Diferença de versão de Python/PostgreSQL entre ambientes;
 - Erros de permissão em diretórios de mídia e logs;
 - Divergência de configuração do Supervisor/Nginx entre nós de um cluster.
 
@@ -149,7 +149,7 @@ Para produção, a recomendação é **segmentar os serviços em VMs distintas**
 | Papel da VM | vCPUs | RAM | Disco | Observação |
 |---|---|---|---|---|
 | **Aplicação (Nginx + Gunicorn)** — 2+ nós | 8 | 16 GB | 100 GB em `/opt` | Escalar horizontalmente conforme carga |
-| **Banco de dados + Redis** | 8 | 16 GB | 100 GB em `/var` (SSD NVMe) | Redis pode ficar junto do banco em porte médio |
+| **Banco de dados + Redis** | 8 | 16 GB | 250 GB em `/var` (SSD NVMe) | Redis pode ficar junto do banco em porte médio |
 | **Tarefas assíncronas (Celery)** | 8 | 16 GB | 100 GB em `/opt` | Isolado para não competir com requisições web |
 | **Balanceador de carga** | 2 | 4 GB | 20 GB | Ponto único de entrada; redundância recomendada |
 | **Servidor de mídia (NFS/MinIO)** | 4 | 8 GB | Conforme volume | Compartilhado entre nós de aplicação |
@@ -182,8 +182,8 @@ Para produção, a recomendação é **segmentar os serviços em VMs distintas**
                      ▼                   ▼                   ▼
              ┌───────────────┐  ┌───────────────┐   ┌───────────────┐
              │  App node 1   │  │  App node 2   │   │  App node N   │
-             │ Nginx+Gunicorn│  │ Nginx+Gunicorn│   │ Nginx+Gunicorn│
-             │    (Django)   │  │    (Django)   │   │    (Django)   │
+             │   Gunicorn    │  │   Gunicorn    │   │   Gunicorn    │
+             │   (Django)    │  │   (Django)    │   │   (Django)    │
              └───────┬───────┘  └───────┬───────┘   └───────┬───────┘
                      └──────────────────┼───────────────────┘
                                         ▼
@@ -194,7 +194,7 @@ Para produção, a recomendação é **segmentar os serviços em VMs distintas**
                ▼                  ▼                 ▼                 ▼
        ┌───────────────┐ ┌────────────────┐ ┌───────────────┐ ┌───────────────┐
        │ PostgreSQL 16 │ │ Redis (cache/  │ │ Celery worker │ │     Mídia     │
-       │   (dados)     │ │ sessão/broker) │ │ + beat        │ │ compartilhada │
+       │   (dados)     │ │ sessão/broker) │ │ + celery beat │ │ compartilhada │
        │               │ │                │ │ (assíncrono)  │ │ (NFS / MinIO) │
        └───────────────┘ └────────────────┘ └───────────────┘ └───────────────┘
 ```
@@ -203,15 +203,15 @@ Para produção, a recomendação é **segmentar os serviços em VMs distintas**
 
 ## 7. Pré-requisitos gerais
 
-Antes de iniciar a implantação em qualquer ambiente:
+Antes de iniciar a implantação em qualquer ambiente, são necessários os seguintes pré-requisitos:
 
-- [ ] Conta no GitLab da instituição de origem do código com acesso de leitura aos projetos `suap` e, se aplicável, `suap_deploy` e `suap-pdf`.
-- [ ] Chave SSH cadastrada no GitLab.
-- [ ] Se optar pela rota Docker: token de acesso pessoal ao registry (escopo `read_registry`).
-- [ ] Acesso `sudo`/root nos servidores de homologação e produção.
-- [ ] DNS configurado apontando para o balanceador (produção) ou para o servidor único (homologação).
-- [ ] Certificado SSL válido (ou processo de emissão automatizada, ex. Let's Encrypt).
-- [ ] Firewall liberando apenas portas necessárias (443/80 no balanceador; portas internas restritas à rede privada).
+- Conta no GitLab da instituição de origem do código com acesso de leitura aos projetos `suap` e, se aplicável, `suap_deploy` e `suap-pdf`.
+- Chave SSH cadastrada no GitLab.
+- Se optar pela rota Docker: token de acesso pessoal ao registry (escopo `read_registry`).
+- Acesso `sudo`/root nos servidores de homologação e produção.
+- DNS configurado apontando para o balanceador (produção) ou para o servidor único (homologação).
+- Certificado SSL válido (ou processo de emissão automatizada, ex. Let's Encrypt).
+- Firewall liberando apenas portas necessárias (443/80 no balanceador; portas internas restritas à rede privada).
 
 Instalar o `suap-setup` em cada servidor:
 
@@ -405,7 +405,7 @@ sudo systemctl enable --now postgresql-16
 
 ### 10.3. Estrutura de diretórios e disco
 
-O diretório de dados deve residir em partição própria, preferencialmente NVMe:
+O diretório de dados deve residir em partição própria, preferencialmente em NVMe:
 
 **Debian/Ubuntu** (datadir padrão: `/var/lib/postgresql/16/main`):
 
@@ -505,7 +505,7 @@ max_client_conn = 500
 default_pool_size = 40
 ```
 
-A aplicação aponta para o endereço do PgBouncer em vez de diretamente para o Postgres.
+A aplicação aponta para o endereço do PgBouncer em vez de diretamente para o PostgreSQL.
 
 ### 10.8. Réplicas de leitura (opcional)
 
@@ -618,16 +618,15 @@ MinIO oferece armazenamento de objetos compatível com S3, com escalabilidade ho
 **Integração com o SUAP (Django via `django-storages`):**
 
 ```python
-DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+DEFAULT_FILE_STORAGE = "djtools.storages.s3.MediaS3Storage"
 
 AWS_ACCESS_KEY_ID = "suap-app"
 AWS_SECRET_ACCESS_KEY = "<senha-do-usuario-app>"
-AWS_STORAGE_BUCKET_NAME = "suap-media"
 AWS_S3_ENDPOINT_URL = "https://minio.instituicao.edu.br"
-AWS_S3_ADDRESSING_STYLE = "path"
-AWS_S3_VERIFY = True
-AWS_DEFAULT_ACL = None
-AWS_QUERYSTRING_AUTH = True
+AWS_MEDIA_BUCKET_NAME='suap-media-bucket'
+AWS_PRIVATE_MEDIA_BUCKET_NAME='suap-private-media-bucket'
+AWS_STATIC_BUCKET_NAME='suap-static-bucket'
+AWS_TEMP_BUCKET_NAME='suap-temp-bucket'
 ```
 
 > Confirme se a versão do SUAP em uso já traz `django-storages` como dependência e se expõe essas variáveis nativamente.
@@ -708,9 +707,8 @@ make start-celery
 - [ ] Armazenamento de mídia compartilhado montado e testado em todos os nós.
 - [ ] Rotina de backup configurada e testada (restauração validada).
 - [ ] Scripts de atualização (`suap-update.sh` ou Makefile) testados em homologação.
-- [ ] Firewall revisado — bancos e Redis não expostos à internet.
+- [ ] Firewall revisado — PostgreSQL e Redis não expostos à internet.
 - [ ] Configurações institucionais (`/comum/configuracao/`) preenchidas.
-- [ ] Comunicação à comunidade acadêmica sobre a data de lançamento.
 
 ---
 
