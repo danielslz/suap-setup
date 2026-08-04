@@ -117,6 +117,36 @@ NO_COLOR=$(tput sgr0)
 | `check_all_packages_installed(...)` | Verifica lista de pacotes |
 | `check_docker_available()` | Verifica Docker + oferece instalação |
 
+### Funções de Gerenciamento de Usuário
+
+| Função | Descrição |
+|--------|-----------|
+| `ensure_www_data_uid_gid()` | Garante que www-data possui UID 33 e GID 33 |
+
+**Algoritmo de `ensure_www_data_uid_gid`:**
+
+```
+1. Se DISTRO_TYPE == "macos" → msg_skip e retornar (não se aplica)
+2. Verificar se outro usuário já usa UID 33:
+   - Se sim → msg_error + exit 1 (conflito)
+3. Verificar se outro grupo já usa GID 33:
+   - Se sim → msg_error + exit 1 (conflito)
+4. Se www-data não existe:
+   - groupadd -g 33 www-data
+   - useradd -u 33 -g www-data -s /usr/sbin/nologin -d /nonexistent www-data
+5. Se www-data existe mas UID ≠ 33 ou GID ≠ 33:
+   - Salvar OLD_UID/OLD_GID
+   - groupmod -g 33 / usermod -u 33
+   - find para atualizar propriedade de arquivos em SUAP_DIR, VENV_DIR, BASE_DIR/logs
+6. Se www-data já possui UID 33 e GID 33 → msg_skip
+```
+
+**Requer variáveis definidas:** `DISTRO_TYPE`, `SUAP_DIR`, `VENV_DIR`, `BASE_DIR`
+
+> **Compatibilidade com suap_deploy:** O UID/GID 33 é exigido para que os volumes
+> compartilhados entre o host e containers Docker (usados pelo suap_deploy) mantenham
+> permissões consistentes.
+
 **Algoritmo de detecção (`detect_distro`):**
 
 ```
@@ -498,7 +528,21 @@ Qual serviço você deseja configurar no Supervisor?
 > **Idempotência do Supervisor:** Se nenhum arquivo foi copiado (tudo já estava
 > no lugar), o `supervisorctl reread/update` é pulado com `msg_skip`.
 
-#### Etapa 8 — Ajuste de Permissões
+#### Etapa 8 — Garantia de UID/GID www-data
+
+```bash
+ensure_www_data_uid_gid()
+```
+
+Garante que o usuário `www-data` possui UID 33 e GID 33, necessários para
+compatibilidade com volumes Docker do suap_deploy. Se o UID/GID estiver
+incorreto, a função corrige e atualiza a propriedade dos arquivos existentes.
+No macOS, a etapa é pulada automaticamente.
+
+> **Exit 1 em conflito:** Se outro usuário/grupo já ocupa UID/GID 33, o script
+> encerra com erro informando o conflito.
+
+#### Etapa 9 — Ajuste de Permissões
 
 ```bash
 chown -R www-data:www-data $SUAP_DIR
@@ -509,7 +553,7 @@ chown -R www-data:www-data $VENV_DIR
 Garante que o Supervisor (que executa como `www-data`) tenha acesso a todos os
 diretórios necessários.
 
-#### Etapa 9 — Mensagem Final
+#### Etapa 10 — Mensagem Final
 
 Exibe comandos de gerenciamento conforme a opção escolhida:
 
@@ -632,7 +676,16 @@ Prompt: "Executar sync_permissions (python manage.py sync_permissions)? [s/N]"
 - Padrão: Não (Enter = pular)
 ```
 
-#### Etapa 9 — Correção de Permissões
+#### Etapa 9 — Garantia de UID/GID www-data
+
+```bash
+ensure_www_data_uid_gid()
+```
+
+Mesma lógica da Etapa 8 do script de produção (garante UID 33 e GID 33 para
+compatibilidade com suap_deploy). Pulada no macOS.
+
+#### Etapa 10 — Correção de Permissões
 
 ```bash
 chown -R www-data:www-data ${SUAP_DIR}
@@ -640,14 +693,14 @@ chown -R www-data:www-data ${BASE_DIR}/logs
 chown -R www-data:www-data ${VENV_DIR}
 ```
 
-#### Etapa 10 — Reinício dos Serviços
+#### Etapa 11 — Reinício dos Serviços
 
 ```bash
 supervisorctl start all
 supervisorctl status
 ```
 
-#### Etapa 11 — Resumo Final
+#### Etapa 12 — Resumo Final
 
 Exibe um resumo com checkmarks das ações realizadas e puladas:
 

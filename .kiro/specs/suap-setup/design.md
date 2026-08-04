@@ -201,6 +201,35 @@ is_pkg_installed() { ... }
 # Retorno: 0 se todos instalados, 1 se algum faltando
 check_all_packages_installed() { ... }
 
+# --- Garantia de UID/GID www-data ---
+
+# ensure_www_data_uid_gid()
+# Garante que o usuário www-data possui UID 33 e GID 33 (compatibilidade com suap_deploy).
+# Algoritmo:
+#   1. Se DISTRO_TYPE == "macos": msg_skip("UID/GID 33 não se aplica ao macOS") e retornar
+#   2. Verificar se já existe outro usuário com UID 33 (que não seja www-data):
+#      - Se sim: msg_error identificando o conflito + exit 1
+#   3. Verificar se já existe outro grupo com GID 33 (que não seja www-data):
+#      - Se sim: msg_error identificando o conflito + exit 1
+#   4. Se o usuário www-data não existe:
+#      - Criar grupo www-data com GID 33 (groupadd -g 33 www-data)
+#      - Criar usuário www-data com UID 33 e grupo primário www-data
+#        (useradd -u 33 -g www-data -s /usr/sbin/nologin -d /nonexistent www-data)
+#      - msg_action("Usuário www-data criado com UID/GID 33")
+#   5. Se www-data existe mas UID != 33 ou GID != 33:
+#      - Salvar OLD_UID e OLD_GID
+#      - Se GID != 33: groupmod -g 33 www-data
+#      - Se UID != 33: usermod -u 33 www-data
+#      - Executar find para atualizar propriedade de arquivos:
+#        find ${SUAP_DIR} ${VENV_DIR} ${BASE_DIR}/logs -user ${OLD_UID} -exec chown www-data {} \;
+#        find ${SUAP_DIR} ${VENV_DIR} ${BASE_DIR}/logs -group ${OLD_GID} -exec chgrp www-data {} \;
+#      - msg_action("UID/GID do www-data corrigido para 33")
+#   6. Se www-data já possui UID 33 e GID 33:
+#      - msg_skip("www-data já possui UID/GID 33")
+# Retorno: 0 se sucesso
+# Exit 1 se conflito de UID/GID com outro usuário/grupo
+ensure_www_data_uid_gid() { ... }
+
 # --- Verificação de Pré-requisitos Docker ---
 
 # check_docker_available()
@@ -330,8 +359,12 @@ set -u
 # 14. Condicionalmente executar supervisorctl:
 #     - Se FILES_COPIED=true: executar `supervisorctl reread && supervisorctl update`
 #     - Se FILES_COPIED=false (idempotência): pular supervisorctl
-# 15. Ajustar permissões (chown www-data)
-# 16. Exibir mensagem final com próximos passos
+# 15. ensure_www_data_uid_gid() - Garantir UID/GID 33 para www-data (Requirement 35)
+#     - Verificar conflitos de UID/GID com outros usuários/grupos (exit 1 se conflito)
+#     - Criar ou corrigir www-data para UID 33 / GID 33
+#     - Se UID/GID foi alterado: find para atualizar propriedade de arquivos antigos
+# 16. Ajustar permissões (chown www-data)
+# 17. Exibir mensagem final com próximos passos
 
 # Diferenças entre deb, rpm e arch:
 # - Lista de pacotes de produção
@@ -375,13 +408,17 @@ set -u
 #    - Se sim: ${VENV_DIR}/bin/python manage.py collectstatic --noinput
 # 10. Perguntar ao usuário: executar sync_permissions? [s/N]
 #     - Se sim: ${VENV_DIR}/bin/python manage.py sync_permissions
-# 11. Corrigir permissões:
+# 11. ensure_www_data_uid_gid() - Garantir UID/GID 33 para www-data (Requirement 35)
+#     - Verificar conflitos de UID/GID com outros usuários/grupos (exit 1 se conflito)
+#     - Criar ou corrigir www-data para UID 33 / GID 33
+#     - Se UID/GID foi alterado: find para atualizar propriedade de arquivos antigos
+# 12. Corrigir permissões:
 #     - chown -R www-data:www-data ${SUAP_DIR}
 #     - chown -R www-data:www-data ${BASE_DIR}/logs
 #     - chown -R www-data:www-data ${VENV_DIR}
-# 12. Reiniciar serviços do Supervisor:
+# 13. Reiniciar serviços do Supervisor:
 #     - supervisorctl start all
-# 13. Exibir status:
+# 14. Exibir status:
 #     - supervisorctl status
 #     - Mensagem de sucesso com resumo das ações realizadas
 
@@ -873,6 +910,12 @@ O Script_Docker_Prod **não mantém** docker-compose nem Dockerfiles. Ele delega
 
 **Validates: Requirements 32.1, 32.2, 32.7**
 
+### Property 10: Garantia de UID/GID 33 para www-data
+
+*Para qualquer* estado do sistema em relação ao usuário www-data (inexistente, existente com UID/GID correto, existente com UID/GID incorreto, ou conflito com outro usuário/grupo), a função `ensure_www_data_uid_gid()` deve: (a) se não há conflito, garantir que www-data termina com UID 33 e GID 33; (b) se o UID/GID foi alterado, executar `find` nos diretórios SUAP_DIR, VENV_DIR e logs para atualizar a propriedade dos arquivos do UID/GID antigo; (c) se há conflito (outro usuário com UID 33 ou outro grupo com GID 33), exibir mensagem de erro identificando o conflito e encerrar com exit 1.
+
+**Validates: Requirements 35.1, 35.2, 35.3, 35.5, 35.7, 35.8**
+
 ## Error Handling
 
 ### Códigos de Saída
@@ -886,6 +929,7 @@ O Script_Docker_Prod **não mantém** docker-compose nem Dockerfiles. Ele delega
 | 1      | Falha na instalação de pacotes                 | apt/dnf/pacman retorna != 0 (Req. 5.3, 11.3) |
 | 1      | Homebrew ausente no macOS                      | Script_Dev_macOS (Req. 31.4) |
 | 1      | Falha na instalação de dependências Python     | uv sync/pip install retorna != 0 (Req. 10.7, 14.6) |
+| 1      | Conflito de UID/GID 33 com outro usuário/grupo | ensure_www_data_uid_gid() (Req. 35.8) |
 | 2      | Script não encontrado                          | Wrapper (arquivo esperado ausente) |
 | 3      | Distribuição não detectada/suportada           | Wrapper (detecção — não deb/rpm/arch e não macOS) |
 
@@ -953,6 +997,7 @@ Dada a natureza do projeto (scripts shell com efeitos colaterais no sistema oper
   - `# Feature: suap-setup, Property 7: Fallback de .env em scripts individuais`
   - `# Feature: suap-setup, Property 8: Mensagens de progresso em verde`
   - `# Feature: suap-setup, Property 9: Delegação Docker — ausência de Dockerfiles locais`
+  - `# Feature: suap-setup, Property 10: Garantia de UID/GID 33 para www-data`
 
 ### Estrutura de Testes
 
@@ -973,7 +1018,8 @@ tests/
 │   ├── test_wizard_roundtrip.bats # Property 6: round-trip Wizard_Env
 │   ├── test_env_fallback.bats    # Property 7: fallback .env em scripts individuais
 │   ├── test_green_messages.bats  # Property 8: mensagens de progresso em verde
-│   └── test_docker_delegation.bats # Property 9: ausência de Dockerfiles locais
+│   ├── test_docker_delegation.bats # Property 9: ausência de Dockerfiles locais
+│   └── test_www_data_uid_gid.bats # Property 10: garantia de UID/GID 33 para www-data
 ├── integration/
 │   ├── Dockerfile.debian         # Container Debian para testes
 │   ├── Dockerfile.fedora         # Container Fedora para testes

@@ -266,6 +266,9 @@ else
 fi
 
 # --- 13. Ajustar permissões ---
+# Garantir UID/GID 33 para www-data (Requirement 35)
+ensure_www_data_uid_gid
+
 chown -R www-data:www-data "${SUAP_DIR}"
 chown -R www-data:www-data "${BASE_DIR}/logs"
 chown -R www-data:www-data "${VENV_DIR}"

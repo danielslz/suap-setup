@@ -701,3 +701,71 @@ check_docker_available() {
     exit 1
   fi
 }
+
+# --- Gerenciamento de Usuário www-data ---
+
+# ensure_www_data_uid_gid()
+# Garante que o usuário www-data possui UID 33 e GID 33 (compatibilidade com suap_deploy).
+# Requer: DISTRO_TYPE, SUAP_DIR, VENV_DIR, BASE_DIR definidos
+# Retorno: 0 se sucesso
+# Exit 1 se conflito de UID/GID com outro usuário/grupo
+ensure_www_data_uid_gid() {
+  # 1. macOS: pular verificação
+  if [ "${DISTRO_TYPE}" = "macos" ]; then
+    msg_skip "UID/GID 33 não se aplica ao macOS"
+    return 0
+  fi
+
+  # 2. Verificar se já existe outro usuário com UID 33 (que não seja www-data)
+  local uid_owner
+  uid_owner=$(getent passwd 33 2>/dev/null | cut -d: -f1 || true)
+  if [ -n "${uid_owner}" ] && [ "${uid_owner}" != "www-data" ]; then
+    msg_error "UID 33 já está em uso pelo usuário '${uid_owner}'. Conflito impede criação/correção do www-data."
+    exit 1
+  fi
+
+  # 3. Verificar se já existe outro grupo com GID 33 (que não seja www-data)
+  local gid_owner
+  gid_owner=$(getent group 33 2>/dev/null | cut -d: -f1 || true)
+  if [ -n "${gid_owner}" ] && [ "${gid_owner}" != "www-data" ]; then
+    msg_error "GID 33 já está em uso pelo grupo '${gid_owner}'. Conflito impede criação/correção do www-data."
+    exit 1
+  fi
+
+  # 4. Se www-data não existe: criar grupo e usuário
+  if ! getent passwd www-data &>/dev/null; then
+    groupadd -g 33 www-data
+    useradd -u 33 -g www-data -s /usr/sbin/nologin -d /nonexistent www-data
+    msg_action "Usuário www-data criado com UID/GID 33"
+    return 0
+  fi
+
+  # www-data existe — verificar UID e GID atuais
+  local current_uid current_gid
+  current_uid=$(id -u www-data)
+  current_gid=$(id -g www-data)
+
+  # 5. Se UID != 33 ou GID != 33: corrigir
+  if [ "${current_uid}" -ne 33 ] || [ "${current_gid}" -ne 33 ]; then
+    local OLD_UID="${current_uid}"
+    local OLD_GID="${current_gid}"
+
+    if [ "${current_gid}" -ne 33 ]; then
+      groupmod -g 33 www-data
+    fi
+    if [ "${current_uid}" -ne 33 ]; then
+      usermod -u 33 www-data
+    fi
+
+    # Atualizar propriedade de arquivos nos diretórios do projeto
+    find "${SUAP_DIR}" "${VENV_DIR}" "${BASE_DIR}/logs" -user "${OLD_UID}" -exec chown www-data {} \;
+    find "${SUAP_DIR}" "${VENV_DIR}" "${BASE_DIR}/logs" -group "${OLD_GID}" -exec chgrp www-data {} \;
+
+    msg_action "UID/GID do www-data corrigido para 33"
+    return 0
+  fi
+
+  # 6. www-data já possui UID 33 e GID 33
+  msg_skip "www-data já possui UID/GID 33"
+  return 0
+}

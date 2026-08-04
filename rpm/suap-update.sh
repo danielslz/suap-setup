@@ -123,6 +123,8 @@ fi
 
 # --- 11. Corrigir permissões de arquivos ---
 echo ""
+# Garantir UID/GID 33 para www-data (Requirement 35)
+ensure_www_data_uid_gid
 msg_action "Corrigindo permissões de acesso aos arquivos..."
 chown -R www-data:www-data "${SUAP_DIR}"
 chown -R www-data:www-data "${BASE_DIR}/logs"

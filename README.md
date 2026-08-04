@@ -181,6 +181,7 @@ Os scripts de produção (requerem root) realizam:
 - Instalação de dependências via `pip install . --group prod` ou `pip install -r requirements/production.txt`
 - Menu interativo para configurar Supervisor (SUAP / Celery / Ambos)
 - Deploy de configurações do Supervisor com recarga condicional
+- Garantia de UID/GID 33 para `www-data` (compatibilidade com suap_deploy)
 - Ajuste de permissões (`chown www-data`)
 
 ### Caminhos do Supervisor por distribuição
@@ -201,9 +202,10 @@ Os scripts de atualização (`deb/suap-update.sh`, `rpm/suap-update.sh`, `arch/s
 4. Executar `migrate` (opcional, pergunta ao usuário)
 5. Executar `collectstatic` (opcional, pergunta ao usuário)
 6. Executar `sync_permissions` (opcional, pergunta ao usuário)
-7. Corrigir permissões dos diretórios (`chown www-data`)
-8. Reiniciar serviços do Supervisor
-9. Exibir status e resumo das ações realizadas
+7. Garantir UID/GID 33 do `www-data` (compatibilidade com suap_deploy)
+8. Corrigir permissões dos diretórios (`chown www-data`)
+9. Reiniciar serviços do Supervisor
+10. Exibir status e resumo das ações realizadas
 
 > **Rollback automático em falhas:** Se o `git pull` ou a instalação de dependências falhar, os serviços são reiniciados automaticamente antes do script encerrar com erro.
 
@@ -381,6 +383,7 @@ O projeto utiliza [bats-core](https://github.com/bats-core/bats-core) como frame
 7. **Fallback de .env** — scripts individuais encerram com exit 1 quando .env não existe
 8. **Mensagens verdes** — todos os scripts usam `msg_action()` para feedback visual
 9. **Delegação Docker** — nenhum Dockerfile ou docker-compose existe em `docker/dev/` ou `docker/prod/`
+10. **UID/GID www-data** — `ensure_www_data_uid_gid()` garante UID 33 e GID 33 (compatibilidade com suap_deploy)
 
 ## Estrutura do repositório
 
@@ -450,6 +453,7 @@ suap-setup/
 - **Detecção inteligente de UV**: verifica `~/.cargo/bin/uv` e `~/.local/bin/uv` antes de baixar.
 - **Docker auto-install**: se Docker não estiver disponível, os scripts Docker oferecem instalação automática.
 - **Delegação Docker**: scripts Docker não mantêm Dockerfiles locais — delegam para repositórios upstream (suap para dev, suap_deploy para prod).
+- **UID/GID 33 do www-data**: scripts de produção e atualização garantem que o usuário `www-data` possui UID/GID 33 para compatibilidade com volumes Docker do suap_deploy. Se outro usuário/grupo ocupa UID/GID 33, o script encerra com erro.
 - **Variáveis de imagens Docker** (`SUAP_IMAGE`, `SUAP_PDF_IMAGE`, `SUAP_AI_IMAGE`) são solicitadas pelo wizard e não possuem valores hardcoded no código.
 - As opções Docker funcionam em qualquer sistema com Docker, independente da distribuição.
 

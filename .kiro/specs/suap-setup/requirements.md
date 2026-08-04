@@ -34,6 +34,7 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 - **Dockhand**: Interface web para gerenciamento de containers Docker (https://dockhand.pro/), executada como container Docker.
 - **Wizard_Env**: Assistente interativo executado pelo Wrapper para criação do Arquivo_Env_Central quando este não existe, solicitando ao usuário os valores de cada variável via prompts no terminal.
 - **Script_Install_Docker**: Script de instalação automatizada do Docker (`docker/install-docker.sh`) que suporta Distribuição_Debian e Distribuição_RPM, adicionando o repositório oficial Docker e instalando o Docker Engine e Docker Compose plugin.
+- **suap_deploy**: Projeto oficial de deploy em produção do SUAP que utiliza containers Docker com o usuário www-data configurado com UID/GID 33, servindo como referência de identidade para compatibilidade de permissões de arquivos entre host e containers.
 
 ## Requirements
 
@@ -521,3 +522,19 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 19. THE Script_Postgres SHALL ser acessível como opção 9 no menu do Wrapper (Linux only), com o rótulo "Instalar PostgreSQL".
 20. THE Script_Postgres SHALL utilizar a variável `POSTGRES_VERSION` do Arquivo_Env_Central (padrão: `16`) para determinar qual versão do PostgreSQL instalar.
 21. WHEN o PostgreSQL já está instalado e em execução, THE Script_Postgres SHALL exibir uma mensagem informativa (msg_skip) e oferecer apenas a opção de criar banco/usuário (pulando a instalação de pacotes).
+
+
+### Requirement 35: Garantia de UID/GID 33 para o usuário www-data (compatibilidade com suap_deploy)
+
+**User Story:** Como administrador de sistemas, eu quero que o usuário www-data tenha UID/GID fixo em 33, para manter compatibilidade com o projeto suap_deploy que utiliza essa mesma identidade nos containers Docker de produção.
+
+#### Acceptance Criteria
+
+1. WHEN o Script_Prod é executado em Distribuição_Debian, Distribuição_RPM ou Distribuição_Arch, THE Script_Prod SHALL verificar se o usuário `www-data` existe no sistema e se possui UID 33 e GID 33.
+2. IF o usuário `www-data` não existe no sistema, THEN THE Script_Prod SHALL criar o grupo `www-data` com GID 33 e o usuário `www-data` com UID 33 e grupo primário `www-data`.
+3. IF o usuário `www-data` existe com UID diferente de 33 ou GID diferente de 33, THEN THE Script_Prod SHALL corrigir o UID para 33 e o GID para 33 utilizando `usermod` e `groupmod`.
+4. WHEN o Script_Update é executado em Distribuição_Debian, Distribuição_RPM ou Distribuição_Arch, THE Script_Update SHALL verificar se o usuário `www-data` possui UID 33 e GID 33 antes de executar o `chown` de permissões.
+5. IF o Script_Update detecta que `www-data` possui UID ou GID diferente de 33, THEN THE Script_Update SHALL corrigir o UID/GID para 33 antes de ajustar as permissões dos arquivos.
+6. WHILE executando em Distribuição_macOS, THE Script_Dev_macOS SHALL pular a verificação de UID/GID do www-data com uma mensagem informativa (msg_skip) indicando que a garantia de UID/GID 33 não se aplica ao macOS.
+7. WHEN o UID ou GID do usuário `www-data` é alterado, THE Script_Prod SHALL executar `find` para atualizar a propriedade dos arquivos previamente pertencentes ao UID/GID antigo nos diretórios SUAP_DIR, VENV_DIR e diretório de logs.
+8. IF já existe outro usuário com UID 33 ou outro grupo com GID 33 no sistema, THEN THE Script_Prod SHALL exibir uma mensagem de erro identificando o conflito e encerrar com código de saída 1.

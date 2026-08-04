@@ -612,6 +612,43 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
 - [x] 24. Checkpoint - Verificar refatoração Docker delegação
   - Garantir que todos os testes passem, perguntar ao usuário se houver dúvidas.
 
+- [x] 25. Implementar garantia de UID/GID 33 para www-data
+  - [x] 25.1 Implementar `ensure_www_data_uid_gid()` em `lib/common.sh`
+    - Implementar função `ensure_www_data_uid_gid()` conforme design:
+    - Se `DISTRO_TYPE == "macos"`: `msg_skip("UID/GID 33 não se aplica ao macOS")` e retornar
+    - Verificar se já existe outro usuário com UID 33 (que não seja www-data): se sim, `msg_error` + exit 1
+    - Verificar se já existe outro grupo com GID 33 (que não seja www-data): se sim, `msg_error` + exit 1
+    - Se www-data não existe: `groupadd -g 33 www-data` + `useradd -u 33 -g www-data -s /usr/sbin/nologin -d /nonexistent www-data` + `msg_action`
+    - Se www-data existe com UID != 33 ou GID != 33: salvar OLD_UID/OLD_GID, `groupmod -g 33 www-data`, `usermod -u 33 www-data`, executar `find` em SUAP_DIR/VENV_DIR/logs para atualizar propriedade + `msg_action`
+    - Se www-data já possui UID 33 e GID 33: `msg_skip("www-data já possui UID/GID 33")`
+    - _Requisitos: 35.1, 35.2, 35.3, 35.6, 35.7, 35.8_
+
+  - [x] 25.2 Atualizar scripts de produção para chamar `ensure_www_data_uid_gid()` antes do chown
+    - Atualizar `deb/suap-prod.sh`: adicionar chamada `ensure_www_data_uid_gid` antes do `chown www-data`
+    - Atualizar `rpm/suap-prod.sh`: adicionar chamada `ensure_www_data_uid_gid` antes do `chown www-data`
+    - Atualizar `arch/suap-prod.sh`: adicionar chamada `ensure_www_data_uid_gid` antes do `chown www-data`
+    - _Requisitos: 35.1, 35.2, 35.3, 35.7, 35.8_
+
+  - [x] 25.3 Atualizar scripts de update para chamar `ensure_www_data_uid_gid()` antes do chown
+    - Atualizar `deb/suap-update.sh`: adicionar chamada `ensure_www_data_uid_gid` antes do `chown www-data`
+    - Atualizar `rpm/suap-update.sh`: adicionar chamada `ensure_www_data_uid_gid` antes do `chown www-data`
+    - Atualizar `arch/suap-update.sh`: adicionar chamada `ensure_www_data_uid_gid` antes do `chown www-data`
+    - _Requisitos: 35.4, 35.5, 35.7_
+
+  - [x] 25.4 Escrever teste de propriedade para UID/GID 33 do www-data
+    - **Property 10: Garantia de UID/GID 33 para www-data**
+    - Criar `tests/property/test_www_data_uid_gid.bats`
+    - Testar cenário: www-data inexistente → criação com UID/GID 33
+    - Testar cenário: www-data existente com UID/GID correto → msg_skip
+    - Testar cenário: www-data existente com UID/GID incorreto → correção + find
+    - Testar cenário: conflito de UID 33 com outro usuário → exit 1
+    - Testar cenário: conflito de GID 33 com outro grupo → exit 1
+    - Testar cenário: macOS → msg_skip sem alterações
+    - **Valida: Requisitos 35.1, 35.2, 35.3, 35.6, 35.7, 35.8**
+
+- [x] 26. Checkpoint - Verificar garantia UID/GID www-data
+  - Garantir que todos os testes passem, perguntar ao usuário se houver dúvidas.
+
 ## Notes
 
 - Tasks marcadas com `*` são opcionais e podem ser puladas para um MVP mais rápido
@@ -651,7 +688,10 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     { "id": 21, "tasks": ["21.2"] },
     { "id": 22, "tasks": ["23.1", "23.2", "23.3"] },
     { "id": 23, "tasks": ["23.4", "23.5"] },
-    { "id": 24, "tasks": ["23.6", "23.7", "23.8"] }
+    { "id": 24, "tasks": ["23.6", "23.7", "23.8"] },
+    { "id": 25, "tasks": ["25.1"] },
+    { "id": 26, "tasks": ["25.2", "25.3"] },
+    { "id": 27, "tasks": ["25.4"] }
   ]
 }
 ```
