@@ -81,9 +81,15 @@ fi
 
 # 9. Configurar .env do suap_deploy se não existir
 if [ ! -f "${SUAP_DEPLOY_DIR}/.env" ]; then
-  if [ -f "${SUAP_DEPLOY_DIR}/env.prod.sample" ]; then
-    msg_action "Gerando ${SUAP_DEPLOY_DIR}/.env a partir do env.prod.sample..."
-    cp "${SUAP_DEPLOY_DIR}/env.prod.sample" "${SUAP_DEPLOY_DIR}/.env"
+  if [ -f "${SUAP_DEPLOY_DIR}/env.prod.sample" ] || [ -f "${SUAP_DEPLOY_DIR}/env.sample" ]; then
+    local _sample_file
+    if [ -f "${SUAP_DEPLOY_DIR}/env.prod.sample" ]; then
+      _sample_file="${SUAP_DEPLOY_DIR}/env.prod.sample"
+    else
+      _sample_file="${SUAP_DEPLOY_DIR}/env.sample"
+    fi
+    msg_action "Gerando ${SUAP_DEPLOY_DIR}/.env a partir de $(basename "${_sample_file}")..."
+    cp "${_sample_file}" "${SUAP_DEPLOY_DIR}/.env"
     msg_action "ATENÇÃO: Edite ${SUAP_DEPLOY_DIR}/.env com as credenciais corretas antes de prosseguir."
     echo ""
     echo "  Variáveis críticas para configurar:"
