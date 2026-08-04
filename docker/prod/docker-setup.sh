@@ -51,7 +51,10 @@ fi
 # 7. Se SUAP_DEPLOY_DIR não existe, clonar o repositório
 if [ ! -d "${SUAP_DEPLOY_DIR}" ]; then
   msg_action "Repositório suap_deploy não encontrado em ${SUAP_DEPLOY_DIR}. Clonando..."
-  mkdir -p "$(dirname "${SUAP_DEPLOY_DIR}")"
+  if ! mkdir -p "$(dirname "${SUAP_DEPLOY_DIR}")" 2>/dev/null; then
+    sudo mkdir -p "$(dirname "${SUAP_DEPLOY_DIR}")"
+    sudo chown "${USER}:${USER}" "$(dirname "${SUAP_DEPLOY_DIR}")"
+  fi
   if ! git clone --recurse-submodules "${SUAP_DEPLOY_GIT_URL}" "${SUAP_DEPLOY_DIR}"; then
     msg_error "Falha ao clonar o repositório suap_deploy."
     msg_error "Verifique se você tem acesso a: ${SUAP_DEPLOY_GIT_URL}"
