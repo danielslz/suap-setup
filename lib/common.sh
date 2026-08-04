@@ -651,7 +651,7 @@ check_docker_available() {
           msg_action "Docker não está instalado."
           read -rp "Deseja instalar o Docker agora? [s/N]: " _resposta
           if [[ "${_resposta}" =~ ^[sS]$ ]]; then
-            bash "${install_script}"
+            sudo bash "${install_script}"
             if ! command -v docker &>/dev/null; then
               msg_error "Falha ao instalar Docker. Verifique os erros acima."
               exit 1
