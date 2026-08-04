@@ -79,31 +79,46 @@ if [ ! -f "${SUAP_DEPLOY_DIR}/Makefile" ]; then
   exit 1
 fi
 
-# 9. Configurar .env do suap_deploy se não existir
-if [ ! -f "${SUAP_DEPLOY_DIR}/.env" ]; then
-  if [ -f "${SUAP_DEPLOY_DIR}/env.prod.sample" ] || [ -f "${SUAP_DEPLOY_DIR}/env.sample" ]; then
-    local _sample_file
-    if [ -f "${SUAP_DEPLOY_DIR}/env.prod.sample" ]; then
-      _sample_file="${SUAP_DEPLOY_DIR}/env.prod.sample"
-    else
-      _sample_file="${SUAP_DEPLOY_DIR}/env.sample"
-    fi
-    msg_action "Gerando ${SUAP_DEPLOY_DIR}/.env a partir de $(basename "${_sample_file}")..."
-    cp "${_sample_file}" "${SUAP_DEPLOY_DIR}/.env"
-    msg_action "ATENÇÃO: Edite ${SUAP_DEPLOY_DIR}/.env com as credenciais corretas antes de prosseguir."
-    echo ""
-    echo "  Variáveis críticas para configurar:"
-    echo "    DATABASE_HOST, DATABASE_USER, DATABASE_PASSWORD"
-    echo "    SUAP_IMAGE (imagem do registry)"
-    echo "    REDIS_LOCATION, CELERY_BROKER_URL"
-    echo "    SECRET_KEY"
-    echo ""
-    read -rp "Pressione Enter após editar o .env, ou Ctrl+C para cancelar... "
-  else
-    msg_error "Arquivo .env não encontrado em ${SUAP_DEPLOY_DIR} e não há sample disponível."
-    msg_error "Crie o .env com as configurações de produção antes de prosseguir."
+# 8.1 Garantir que 'make' está instalado
+if ! command -v make &>/dev/null; then
+  msg_action "Comando 'make' não encontrado. Instalando..."
+  case "${DISTRO_TYPE}" in
+    deb)
+      sudo apt-get update && sudo apt-get install -y make
+      ;;
+    rpm)
+      sudo dnf install -y make
+      ;;
+    arch)
+      sudo pacman -S --needed --noconfirm make
+      ;;
+    *)
+      msg_error "'make' não está instalado e não foi possível instalar automaticamente."
+      msg_error "Instale o pacote 'make' manualmente e tente novamente."
+      exit 1
+      ;;
+  esac
+  if ! command -v make &>/dev/null; then
+    msg_error "Falha ao instalar 'make'. Verifique os erros acima."
     exit 1
   fi
+fi
+
+# 9. Configurar .env do suap_deploy se não existir
+if [ ! -f "${SUAP_DEPLOY_DIR}/.env" ]; then
+  msg_action "Arquivo .env não encontrado em ${SUAP_DEPLOY_DIR}. Executando 'make setup' para gerar..."
+  cd "${SUAP_DEPLOY_DIR}"
+  if ! make setup; then
+    msg_error "Falha ao executar 'make setup' no suap_deploy."
+    msg_error "Execute manualmente: cd ${SUAP_DEPLOY_DIR} && make setup"
+    exit 1
+  fi
+  if [ ! -f "${SUAP_DEPLOY_DIR}/.env" ]; then
+    msg_error "O comando 'make setup' não gerou o arquivo .env esperado."
+    msg_error "Crie o .env manualmente em ${SUAP_DEPLOY_DIR} antes de prosseguir."
+    exit 1
+  fi
+  msg_action ".env gerado com sucesso via 'make setup'."
 fi
 
 # 10. Menu de ações

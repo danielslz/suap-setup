@@ -237,10 +237,11 @@ ensure_www_data_uid_gid() { ... }
 # Em macOS: verifica se Docker Desktop está instalado (docker CLI via /usr/local/bin/docker ou /opt/homebrew/bin/docker).
 # Em Linux: verifica binários docker e docker compose no PATH.
 # Se não disponível, oferece instalar automaticamente via Script_Install_Docker:
-#   - Debian: adiciona repositório oficial + instala via apt
-#   - RPM: adiciona repositório oficial + instala via dnf
-#   - Arch: instala via pacman -S --needed --noconfirm docker docker-compose
+#   - Debian/RPM: executa `sudo bash "${install_script}"` (requer permissão de root
+#     para adicionar repositório e instalar pacotes)
+#   - Arch: instala via `sudo pacman -S --needed --noconfirm docker docker-compose`
 #   - macOS: exibe URL do Docker Desktop, sem instalação automática
+# Após Docker presente, verifica Docker Compose (docker compose version).
 # Exit 1 com mensagem de erro se não disponíveis e usuário recusa instalar
 check_docker_available() { ... }
 ```
@@ -479,16 +480,29 @@ set -u
 # 4. load_env_file() - carregar variáveis centralizadas
 # 5. check_docker_available() - exit 1 se Docker não disponível
 # 6. Determinar SUAP_DEPLOY_DIR (fallback: dirname(SUAP_DIR)/suap_deploy)
-# 7. Determinar SUAP_DEPLOY_GIT_URL (fallback: git@gitlab.exemplo.com:org/suap_deploy.git)
+# 7. Garantir SUAP_DEPLOY_GIT_URL está definido no .env
+#    - Se vazio: msg_error orientando executar setup.sh opção 6 + exit 1
 # 8. Se SUAP_DEPLOY_DIR não existe:
-#    - git clone --recurse-submodules ${SUAP_DEPLOY_GIT_URL} ${SUAP_DEPLOY_DIR}
+#    a. Determinar diretório pai (_parent_dir = dirname(SUAP_DEPLOY_DIR))
+#    b. Se _parent_dir não existe:
+#       - Tentar `mkdir -p "${_parent_dir}"` (sem sudo)
+#       - Se falhar: fallback com `sudo mkdir -p "${_parent_dir}"`
+#    c. Se _parent_dir não é gravável pelo usuário atual:
+#       - Executar `sudo chown "${USER}:${USER}" "${_parent_dir}"`
+#    d. git clone --recurse-submodules ${SUAP_DEPLOY_GIT_URL} ${SUAP_DEPLOY_DIR}
 # 9. Se SUAP_DEPLOY_DIR já existe (.git presente):
 #    - git submodule update --init --recursive
 # 10. Validar existência de ${SUAP_DEPLOY_DIR}/Makefile
 #     - Se ausente: msg_error + exit 1
+# 10.1 Garantir que 'make' está instalado:
+#     - Verificar `command -v make`
+#     - Se ausente: instalar via apt-get (deb), dnf (rpm) ou pacman (arch)
+#     - Se plataforma desconhecida (ex: macOS) ou instalação falha: msg_error + exit 1
+#     - Verificar novamente após instalação; se ainda ausente: msg_error + exit 1
 # 11. Se ${SUAP_DEPLOY_DIR}/.env não existe:
-#     - Copiar de env.prod.sample (se existir) ou exit 1
-#     - Solicitar ao usuário edição das credenciais (aguarda Enter)
+#     - Executar `make setup` no diretório suap_deploy para gerar o .env
+#     - Se `make setup` falha: msg_error + exit 1
+#     - Se .env ainda não existe após `make setup`: msg_error + exit 1
 # 12. cd ${SUAP_DEPLOY_DIR}
 # 13. Apresentar menu interativo:
 #     1) Pull imagens + iniciar (make pull-image, make start-*)
@@ -850,7 +864,7 @@ O Script_Docker_Prod **não mantém** docker-compose nem Dockerfiles. Ele delega
 | Instalador           | `apt install -y`                    | `dnf install -y`           | `pacman -S --needed --noconfirm` | `brew install`            |
 | Locale               | `update-locale LANG=pt_BR.UTF-8`   | `localectl set-locale LANG=pt_BR.UTF-8` | `localectl set-locale LANG=pt_BR.UTF-8` | Pular (msg_skip) |
 | Timezone             | `timedatectl set-timezone`          | `timedatectl set-timezone` | `timedatectl set-timezone`   | `sudo systemsetup -settimezone` |
-| Docker install       | Repo oficial + apt                  | Repo oficial + dnf         | `pacman -S docker docker-compose` | Docker Desktop (URL advisory) |
+| Docker install       | `sudo bash install-docker.sh` (repo oficial + apt) | `sudo bash install-docker.sh` (repo oficial + dnf) | `pacman -S docker docker-compose` | Docker Desktop (URL advisory) |
 
 ## Correctness Properties
 
@@ -930,6 +944,9 @@ O Script_Docker_Prod **não mantém** docker-compose nem Dockerfiles. Ele delega
 | 1      | Homebrew ausente no macOS                      | Script_Dev_macOS (Req. 31.4) |
 | 1      | Falha na instalação de dependências Python     | uv sync/pip install retorna != 0 (Req. 10.7, 14.6) |
 | 1      | Conflito de UID/GID 33 com outro usuário/grupo | ensure_www_data_uid_gid() (Req. 35.8) |
+| 1      | Falha ao instalar `make`                       | docker-setup.sh prod (etapa 8.1) |
+| 1      | `make setup` falha ou não gera .env            | docker-setup.sh prod (etapa 9) |
+| 1      | Falha ao clonar suap_deploy (permissão ou rede) | docker-setup.sh prod (etapa 7) |
 | 2      | Script não encontrado                          | Wrapper (arquivo esperado ausente) |
 | 3      | Distribuição não detectada/suportada           | Wrapper (detecção — não deb/rpm/arch e não macOS) |
 
@@ -945,6 +962,10 @@ O Script_Docker_Prod **não mantém** docker-compose nem Dockerfiles. Ele delega
 8. **Fallback de .env em scripts individuais**: Scripts executados diretamente (sem o wrapper) verificam a existência do .env com `require_env_file()` e abortam com exit 1 se ausente, orientando o usuário a executar `setup.sh` primeiro.
 9. **Homebrew obrigatório no macOS**: Script macOS verifica presença do `brew` no início; se ausente, exibe instruções de instalação (https://brew.sh) e faz exit 1.
 10. **Docker Desktop advisory no macOS**: Em macOS, se Docker não está disponível, exibe URL de download do Docker Desktop sem tentar instalação automatizada.
+11. **Escalonamento de permissões para clone**: Ao criar o diretório pai de SUAP_DEPLOY_DIR (e.g., `/opt`), tenta sem sudo primeiro; se falhar, usa `sudo mkdir -p`. Se o diretório existe mas não é gravável pelo usuário, usa `sudo chown "${USER}:${USER}"` no diretório pai.
+12. **Instalação de Docker com sudo**: Em distros deb/rpm, o script `install-docker.sh` é invocado com `sudo bash` para garantir permissões de root necessárias para adicionar repositórios e instalar pacotes.
+13. **Garantia de `make` disponível**: Antes de delegar para o Makefile do suap_deploy, verifica se `make` está instalado; se não, instala automaticamente via gerenciador de pacotes da distro (apt-get/dnf/pacman). Se a plataforma não é suportada ou a instalação falha, faz exit 1.
+14. **Delegação de .env para `make setup`**: Em vez de copiar manualmente de arquivos sample, delega a geração do .env para `make setup` do suap_deploy, respeitando o workflow próprio do projeto upstream.
 
 ### Fluxo de Erro - Exemplo
 

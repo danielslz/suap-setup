@@ -267,8 +267,9 @@ O script `docker/prod/docker-setup.sh` delega para o projeto suap_deploy:
 
 1. Verifica Docker disponível
 2. Clona/verifica o repositório suap_deploy em `SUAP_DEPLOY_DIR`
-3. Configura `.env` de produção a partir do sample
-4. Apresenta menu interativo de gerenciamento:
+3. Garante que `make` está instalado (instala automaticamente se ausente)
+4. Configura `.env` de produção via `make setup` (se necessário)
+5. Apresenta menu interativo de gerenciamento:
 
 ```
 1) Fazer pull das imagens e iniciar todos os serviços

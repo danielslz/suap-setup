@@ -996,9 +996,12 @@ O script apresenta um menu de gerenciamento:
 5. Verificar/clonar repositório suap_deploy em SUAP_DEPLOY_DIR
 6. Atualizar submodules (se repositório já existe)
 7. Verificar existência do Makefile
-8. Configurar .env do suap_deploy (a partir do sample se necessário)
-9. Exibir menu interativo de gerenciamento
-10. Executar target do Makefile conforme opção escolhida
+8. Garantir que 'make' está instalado:
+   - Se ausente: instalar via apt-get (deb), dnf (rpm) ou pacman (arch)
+   - Se plataforma desconhecida ou falha na instalação: exit 1
+9. Configurar .env do suap_deploy via `make setup` (se não existir)
+10. Exibir menu interativo de gerenciamento
+11. Executar target do Makefile conforme opção escolhida
 ```
 
 ### Variáveis Necessárias
