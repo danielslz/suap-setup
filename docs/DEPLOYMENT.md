@@ -318,6 +318,28 @@ make bash          # Shell no container web
 make backup        # Backup do banco
 ```
 
+**Atribuição de `COMPOSE_PROFILES` por papel (rota Docker multi-nó):**
+
+| Papel da VM | `COMPOSE_PROFILES` |
+|---|---|
+| Nó único (tudo junto) | `default,celery-beat,celery-flower` |
+| Aplicação (web + nginx) | `web` |
+| Tarefas assíncronas (nó primário) | `celery,celery-beat,celery-flower,pdfprinter` |
+| Tarefas assíncronas (nós adicionais) | `celery` |
+| Homologação (com DB/Redis locais) | `default,celery-beat,celery-flower,local-db,local-redis` |
+
+> **Importante:** `celery-beat` e `celery-flower` devem rodar em **apenas um nó** do cluster. Duplicar o `celery-beat` faz com que tarefas agendadas executem em dobro. O profile `cron` é legado — o agendamento atual é feito pelo `celery-beat`.
+
+Para DB e Redis externos (recomendado em produção), use `host.docker.internal` (resolve para o host via `extra_hosts: host-gateway`, já configurado no compose) ou o IP/hostname do servidor:
+
+```ini
+DATABASE_HOST=host.docker.internal
+REDIS_URL=redis://host.docker.internal:6379/2
+CELERY_BROKER_URL=redis://host.docker.internal:6379/1
+```
+
+Para detalhes completos sobre arquitetura multi-servidor, Vault, drain protocol e cert TLS, consulte a documentação do suap_deploy em `docs/ADVANCED.md`.
+
 **Rota nativa (alternativa):** o script `suap-prod.sh` realiza:
 
 - Instalação de dependências do sistema (halt em falha);
@@ -632,18 +654,20 @@ Exemplo para rota nativa:
 Exemplo para rota Docker:
 
 ```
-<IP_NFS>:/var/opt/suap/media  /opt/suap_deploy/deploy/media  nfs  nfsvers=4,rw,hard,intr  0  0
+<IP_NFS>:/var/opt/suap/media  /opt/suap_deploy/deploy/media  nfs  nfsvers=3,rw,sync,hard,intr,rsize=65536,wsize=65536,nolock  0  0
 ```
 
 ```bash
 mount -a
 ```
 
-> **Nota:** prefira NFSv4 ao invés de NFSv3 em implantações novas — oferece melhor segurança (Kerberos), performance (compound operations) e firewall simplificado (porta única 2049).
+> **Nota:** para a rota nativa, prefira NFSv4 (melhor segurança e firewall simplificado). Para a rota Docker, o suap_deploy recomenda NFSv3 com opções otimizadas (`rsize=65536,wsize=65536,nolock`). Garanta que o ponto de montagem pertence ao UID/GID 33 (`www-data`).
 
 ### 12.2. MinIO (alternativa escalável)
 
-MinIO oferece armazenamento de objetos compatível com S3, com escalabilidade horizontal e tolerância a falhas nativa via erasure coding.
+MinIO oferece armazenamento de objetos compatível com S3, com escalabilidade horizontal e tolerância a falhas nativa via erasure coding. Na rota Docker, é a opção recomendada pelo suap_deploy — não exige mount NFS e configura-se via variáveis `S3_*` no `.env`.
+
+**Instalação de referência:** [cosinf/suap-minio](https://gitlab.ifrn.edu.br/cosinf/suap-minio)
 
 **Topologia mínima para produção:** 4 nós (tolera perda de até 2 discos/nós).
 

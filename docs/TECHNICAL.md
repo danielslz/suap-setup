@@ -1052,11 +1052,6 @@ Os serviços disponíveis são controlados pela variável `COMPOSE_PROFILES` no 
 | Profile | Serviços |
 |---------|----------|
 | `default` | web + nginx + pdfprinter + celery |
-| `celery-beat` | scheduler (apenas UM nó) |
-| `celery-flower` | UI em :5555 (apenas UM nó) |
-| `ai` | serviço de IA |
-| `local-db` | PostgreSQL em container (só homologação) |
-| `local-redis` | Redis em container (só homologação) |
 | `celery-beat` | scheduler (apenas UM nó em todo o cluster) |
 | `celery-flower` | UI de monitoramento em :5555 (apenas UM nó) |
 | `ai` | serviço de IA |
@@ -1065,6 +1060,27 @@ Os serviços disponíveis são controlados pela variável `COMPOSE_PROFILES` no 
 | `local-redis` | Redis em container (só homologação) |
 
 Exemplo para nó único: `COMPOSE_PROFILES=default,celery-beat,celery-flower`
+
+### Cert TLS
+
+O `make setup` gera um certificado auto-assinado via `scripts/gen-cert.sh` se SSL
+está habilitado e nenhum cert existe. Em produção, substitua por um certificado válido:
+
+- Certificado: `/etc/ssl/suap/nginx/fullchain.crt`
+- Chave privada: `/etc/ssl/suap/nginx/privkey.key` (chmod 600)
+
+O container nginx monta `/etc/ssl/suap/` como volume read-only.
+
+### Logrotate
+
+O suap_deploy inclui configs de logrotate em `logrotate/` (suap_access, suap_error,
+suap_email, suap_history). Copie para `/etc/logrotate.d/` no host para rotacionar
+os logs em `deploy/logs/`.
+
+### Documentação Avançada do suap_deploy
+
+Para arquitetura multi-servidor, Vault, drain protocol, media compartilhada (NFS/MinIO)
+e outras configurações avançadas, consulte `docs/ADVANCED.md` no repositório suap_deploy.
 
 ---
 
