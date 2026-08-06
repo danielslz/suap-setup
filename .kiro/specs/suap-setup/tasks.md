@@ -649,6 +649,78 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
 - [x] 26. Checkpoint - Verificar garantia UID/GID www-data
   - Garantir que todos os testes passem, perguntar ao usuário se houver dúvidas.
 
+- [x] 27. Implementar script de instalação do MinIO via Docker
+  - [x] 27.1 Criar `docker/minio-setup.sh` (delegação para suap-minio)
+    - Criar arquivo `docker/minio-setup.sh` com `set -u`
+    - Fazer source de `lib/common.sh`
+    - Chamar `require_env_file()` e `load_env_file()` para carregar variáveis centralizadas
+    - Chamar `check_docker_available()` para verificar pré-requisitos Docker
+    - Verificar `SUAP_MINIO_DIR` (padrão: `/opt/suap-minio`)
+    - Verificar `SUAP_MINIO_GIT_URL` definido (exit 1 se vazio)
+    - Se `SUAP_MINIO_DIR` não existe: clonar repositório (com criação de diretório pai e permissões)
+    - Se já existe: `msg_skip`
+    - Validar existência do Makefile (exit 1 se ausente)
+    - Garantir `make` instalado (apt/dnf/pacman conforme distro)
+    - Configurar `.env` do suap-minio se não existir (copiar env.sample + solicitar credenciais interativamente)
+    - Apresentar menu interativo: (1) Iniciar, (2) Parar, (3) Status, (4) Logs, (5) Atualizar
+    - Delegar para targets do Makefile (make up, make stop, make status, make logs, make update)
+    - Exibir instruções de pós-instalação (criar buckets, Access Key, configurar SUAP)
+    - _Requisitos: 36.1, 36.2, 36.3, 36.4, 36.5, 36.6, 36.7, 36.8, 36.9, 36.10, 36.11, 36.12, 36.13, 36.14, 36.17_
+
+  - [x] 27.2 Adicionar variáveis `SUAP_MINIO_DIR` e `SUAP_MINIO_GIT_URL` ao wizard e _write_env
+    - Atualizar `ensure_env_for_option()` para tratar opção 10 (SUAP_MINIO_DIR + SUAP_MINIO_GIT_URL)
+    - SUAP_MINIO_DIR: padrão `/opt/suap-minio`
+    - SUAP_MINIO_GIT_URL: obrigatório (sem valor padrão, exit 1 se vazio)
+    - Atualizar `_write_env()` para incluir seção MinIO no .env gerado
+    - _Requisitos: 36.15, 36.16_
+
+  - [x] 27.3 Atualizar `setup.sh` para incluir opção 10 (MinIO)
+    - Adicionar opção "10) Instalar MinIO (via Docker)" no menu Linux
+    - Adicionar opção "5) Instalar MinIO (via Docker)" no menu macOS (remapeada para opção interna 10)
+    - Adicionar case `10)` no roteamento que executa `docker/minio-setup.sh`
+    - Atualizar validação de entrada para aceitar 1-10 (Linux) e 1-5 (macOS)
+    - _Requisitos: 3.1, 36.14_
+
+  - [x] 27.4 Atualizar documentação (README.md, docker/README.md, docs/DEPLOYMENT.md)
+    - Atualizar README: menu, tabela de scripts, tabela de variáveis, árvore de diretórios
+    - Atualizar docker/README.md: nova seção "MinIO" com fluxo e instruções
+    - Atualizar docs/DEPLOYMENT.md: seção 12.2 com instalação via suap-setup e pós-instalação
+    - _Requisitos: 36.13, 36.14_
+
+- [x] 28. Atualizar compatibilidade com AlmaLinux/Rocky Linux
+  - [x] 28.1 Atualizar regex de detecção em `detect_distro()`
+    - Adicionar `alma|rocky` ao regex de detecção RPM em `lib/common.sh`
+    - Atualizar `tests/property/test_distro_paths.bats` para incluir `alma|rocky`
+    - Atualizar `tests/integration/test_dev_rpm.bats` assertion para incluir `alma|rocky`
+    - _Requisitos: 2.2_
+
+  - [x] 28.2 Atualizar cabeçalhos e documentação com nomes de distros
+    - Atualizar headers dos scripts RPM para mencionar AlmaLinux/Rocky
+    - Atualizar README, DEPLOYMENT.md, TECHNICAL.md com nomes completos
+    - _Requisitos: 2.2_
+
+- [x] 29. Atualizar compatibilidade com suap_deploy (novos Makefile targets)
+  - [x] 29.1 Reescrever `docker/prod/docker-setup.sh` para novos targets
+    - Substituir targets antigos (pull-image, start-web, start-celery, stop) por novos (up, down, restart, build, backup, restore)
+    - Expandir menu de 8 para 11 opções (incluindo restart, restore, setup)
+    - Remover referências a submodules (suap_deploy não usa mais)
+    - Usar `docker compose pull` para modo registry (em vez de `make pull-image`)
+    - _Requisitos: 23.1, 23.9, 23.10_
+
+  - [x] 29.2 Atualizar testes de fumaça para novos targets
+    - Atualizar `tests/smoke/test_docker.bats` para verificar `make up`, `docker compose pull`, `make setup`
+    - Remover verificações de targets antigos (`make start-web`, `make pull-image`, `--recurse-submodules`)
+    - _Requisitos: 23.10, 32.2_
+
+  - [x] 29.3 Atualizar documentação para novos targets do suap_deploy
+    - Atualizar README, DEPLOYMENT.md, TECHNICAL.md com novos comandos e profiles
+    - Documentar COMPOSE_PROFILES por papel de VM
+    - Documentar `host.docker.internal` para DB/Redis externos
+    - _Requisitos: 23.9, 23.10, 23.12_
+
+- [x] 30. Checkpoint final - Verificar todas as atualizações
+  - Garantir que todos os testes passem (93 smoke tests OK)
+
 ## Notes
 
 - Tasks marcadas com `*` são opcionais e podem ser puladas para um MVP mais rápido
@@ -691,7 +763,9 @@ Implementação dos scripts de automação do ambiente SUAP, partindo da bibliot
     { "id": 24, "tasks": ["23.6", "23.7", "23.8"] },
     { "id": 25, "tasks": ["25.1"] },
     { "id": 26, "tasks": ["25.2", "25.3"] },
-    { "id": 27, "tasks": ["25.4"] }
+    { "id": 27, "tasks": ["25.4"] },
+    { "id": 28, "tasks": ["27.1", "27.2", "27.3", "28.1", "29.1"] },
+    { "id": 29, "tasks": ["27.4", "28.2", "29.2", "29.3"] }
   ]
 }
 ```

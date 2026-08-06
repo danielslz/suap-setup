@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Este documento define os requisitos para o projeto **suap-setup**, uma coleção de scripts shell que automatizam a configuração do ambiente da aplicação SUAP em sistemas Linux e macOS. Os scripts suportam distribuições Debian-like (Debian/Ubuntu), RPM-like (Fedora/RHEL/CentOS), Arch Linux (Arch/Manjaro/EndeavourOS) e macOS (via Homebrew), cobrindo ambientes de desenvolvimento, produção, instalação de serviços de infraestrutura (Redis e Nginx) e ambientes containerizados com Docker.
+Este documento define os requisitos para o projeto **suap-setup**, uma coleção de scripts shell que automatizam a configuração do ambiente da aplicação SUAP em sistemas Linux e macOS. Os scripts suportam distribuições Debian-like (Debian/Ubuntu), RPM-like (Fedora/RHEL/CentOS/AlmaLinux/Rocky Linux), Arch Linux (Arch/Manjaro/EndeavourOS) e macOS (via Homebrew), cobrindo ambientes de desenvolvimento, produção, instalação de serviços de infraestrutura (Redis, Nginx, PostgreSQL e MinIO) e ambientes containerizados com Docker.
 
 ## Glossary
 
@@ -19,7 +19,7 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 - **Deploy_Repo**: Repositório suap_deploy que é o orquestrador oficial de produção, contendo Makefile, configurações de containers, WAF e integração com registry GitLab.
 - **Delegação_Docker**: Princípio arquitetural no qual suap-setup não mantém Dockerfiles ou docker-compose próprios, delegando para os repositórios oficiais upstream (suap para dev, suap_deploy para prod).
 - **Distribuição_Debian**: Família de distribuições baseadas em Debian (Debian, Ubuntu e derivados).
-- **Distribuição_RPM**: Família de distribuições baseadas em RPM (Fedora, RHEL, CentOS e derivados).
+- **Distribuição_RPM**: Família de distribuições baseadas em RPM (Fedora, RHEL, CentOS, AlmaLinux, Rocky Linux e derivados).
 - **Distribuição_Arch**: Família de distribuições baseadas em Arch Linux (Arch, Manjaro, EndeavourOS e derivados).
 - **Distribuição_macOS**: Sistema operacional macOS da Apple, utilizando Homebrew como gerenciador de pacotes.
 - **Script_Dev_Arch**: Script de configuração de ambiente de desenvolvimento para Arch Linux (`arch/suap-dev.sh`).
@@ -35,6 +35,8 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 - **Wizard_Env**: Assistente interativo executado pelo Wrapper para criação do Arquivo_Env_Central quando este não existe, solicitando ao usuário os valores de cada variável via prompts no terminal.
 - **Script_Install_Docker**: Script de instalação automatizada do Docker (`docker/install-docker.sh`) que suporta Distribuição_Debian e Distribuição_RPM, adicionando o repositório oficial Docker e instalando o Docker Engine e Docker Compose plugin.
 - **suap_deploy**: Projeto oficial de deploy em produção do SUAP que utiliza containers Docker com o usuário www-data configurado com UID/GID 33, servindo como referência de identidade para compatibilidade de permissões de arquivos entre host e containers.
+- **Script_Minio**: Script de setup do MinIO (`docker/minio-setup.sh`) que clona, configura e gerencia o projeto suap-minio para provisionamento de object storage S3-compatível via Docker.
+- **Minio_Repo**: Repositório suap-minio contendo o docker-compose e configuração Nginx para execução do MinIO como serviço de object storage.
 
 ## Requirements
 
@@ -62,10 +64,11 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 #### Acceptance Criteria
 
 1. WHEN o arquivo `/etc/os-release` está presente, THE Wrapper SHALL identificar a família da distribuição como Distribuição_Debian, Distribuição_RPM ou Distribuição_Arch com base nos campos `ID` e `ID_LIKE`.
-2. WHEN o campo `ID` é "arch" ou o campo `ID_LIKE` contém "arch" no `/etc/os-release`, THE Wrapper SHALL classificar a distribuição como Distribuição_Arch.
-3. WHEN o comando `uname -s` retorna "Darwin", THE Wrapper SHALL classificar o sistema operacional como Distribuição_macOS independentemente da presença do `/etc/os-release`.
-4. IF o arquivo `/etc/os-release` não está presente e o sistema não é Distribuição_macOS, THEN THE Wrapper SHALL exibir uma mensagem de erro e encerrar a execução com código de saída 3.
-5. IF a distribuição identificada não pertence à família Distribuição_Debian, Distribuição_RPM, Distribuição_Arch nem é Distribuição_macOS, THEN THE Wrapper SHALL exibir uma mensagem informando a distribuição não suportada e encerrar com código de saída 3.
+2. WHEN o campo `ID` ou `ID_LIKE` contém "rhel", "fedora", "centos", "alma" ou "rocky", THE Wrapper SHALL classificar a distribuição como Distribuição_RPM.
+3. WHEN o campo `ID` é "arch" ou o campo `ID_LIKE` contém "arch" no `/etc/os-release`, THE Wrapper SHALL classificar a distribuição como Distribuição_Arch.
+4. WHEN o comando `uname -s` retorna "Darwin", THE Wrapper SHALL classificar o sistema operacional como Distribuição_macOS independentemente da presença do `/etc/os-release`.
+5. IF o arquivo `/etc/os-release` não está presente e o sistema não é Distribuição_macOS, THEN THE Wrapper SHALL exibir uma mensagem de erro e encerrar a execução com código de saída 3.
+6. IF a distribuição identificada não pertence à família Distribuição_Debian, Distribuição_RPM, Distribuição_Arch nem é Distribuição_macOS, THEN THE Wrapper SHALL exibir uma mensagem informando a distribuição não suportada e encerrar com código de saída 3.
 
 ### Requirement 3: Menu interativo do wrapper
 
@@ -73,9 +76,9 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 
 #### Acceptance Criteria
 
-1. WHEN a detecção da distribuição é concluída com sucesso, THE Wrapper SHALL exibir um menu com as opções: (1) Configurar ambiente dev, (2) Configurar ambiente prod, (3) Instalar Redis, (4) Instalar Nginx, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker, (7) Iniciar Dockhand, (8) Atualizar SUAP (produção), (9) Instalar PostgreSQL.
-2. WHILE executando em Distribuição_macOS, THE Wrapper SHALL exibir apenas as opções (1) Configurar ambiente dev, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker e (7) Iniciar Dockhand, ocultando as opções 2, 3, 4, 8 e 9 com uma mensagem "não suportado no macOS".
-3. WHEN o usuário seleciona uma opção válida (1 a 9), THE Wrapper SHALL executar o script correspondente à distribuição detectada, ao ambiente Docker ou ao Dockhand.
+1. WHEN a detecção da distribuição é concluída com sucesso, THE Wrapper SHALL exibir um menu com as opções: (1) Configurar ambiente dev, (2) Configurar ambiente prod, (3) Instalar Redis, (4) Instalar Nginx, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker, (7) Iniciar Dockhand, (8) Atualizar SUAP (produção), (9) Instalar PostgreSQL, (10) Instalar MinIO (via Docker).
+2. WHILE executando em Distribuição_macOS, THE Wrapper SHALL exibir apenas as opções (1) Configurar ambiente dev, (2) Configurar ambiente dev via Docker, (3) Configurar ambiente prod via Docker, (4) Iniciar Dockhand e (5) Instalar MinIO (via Docker), ocultando as opções de produção nativa, Redis, Nginx, PostgreSQL e atualização.
+3. WHEN o usuário seleciona uma opção válida (1 a 10 no Linux, 1 a 5 no macOS), THE Wrapper SHALL executar o script correspondente à distribuição detectada, ao ambiente Docker, ao Dockhand ou ao MinIO.
 4. IF o usuário informa uma opção inválida, THEN THE Wrapper SHALL exibir uma mensagem de erro e encerrar com código de saída 1.
 5. IF o arquivo do script correspondente não é encontrado no diretório, THEN THE Wrapper SHALL exibir uma mensagem de erro e encerrar com código de saída 2.
 
@@ -449,7 +452,7 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 7. WHEN a configuração de locale é solicitada em Distribuição_macOS, THE Script_Dev_macOS SHALL pular a etapa com uma mensagem informativa (msg_skip) indicando que a configuração de locale não é necessária no macOS.
 8. WHEN a configuração de timezone é solicitada em Distribuição_macOS, THE Script_Dev_macOS SHALL configurar o timezone usando `sudo systemsetup -settimezone America/Fortaleza`.
 9. WHEN a função `is_pkg_installed()` é chamada em Distribuição_macOS, THE Script_Dev_macOS SHALL verificar a instalação do pacote usando `brew list --formula | grep -q`.
-10. WHILE executando em Distribuição_macOS, THE Wrapper SHALL exibir no menu apenas as opções (1) Configurar ambiente dev, (5) Configurar ambiente dev via Docker, (6) Configurar ambiente prod via Docker e (7) Iniciar Dockhand; as opções 2, 3 e 4 SHALL ser ocultadas com mensagem "não suportado no macOS".
+10. WHILE executando em Distribuição_macOS, THE Wrapper SHALL exibir no menu apenas as opções (1) Configurar ambiente dev, (2) Configurar ambiente dev via Docker, (3) Configurar ambiente prod via Docker, (4) Iniciar Dockhand e (5) Instalar MinIO (via Docker); as opções de produção nativa, Redis, Nginx, PostgreSQL e atualização SHALL ser ocultadas.
 11. WHEN a função `check_docker_available()` é executada em Distribuição_macOS, THE Script_Install_Docker SHALL verificar se o Docker Desktop está instalado no sistema.
 12. IF o Docker Desktop não está instalado em Distribuição_macOS, THEN THE Script_Install_Docker SHALL exibir a URL de download (https://docs.docker.com/desktop/install/mac-install/) e informar que o Docker Desktop é obrigatório, sem realizar instalação automatizada via brew.
 
@@ -538,3 +541,28 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 6. WHILE executando em Distribuição_macOS, THE Script_Dev_macOS SHALL pular a verificação de UID/GID do www-data com uma mensagem informativa (msg_skip) indicando que a garantia de UID/GID 33 não se aplica ao macOS.
 7. WHEN o UID ou GID do usuário `www-data` é alterado, THE Script_Prod SHALL executar `find` para atualizar a propriedade dos arquivos previamente pertencentes ao UID/GID antigo nos diretórios SUAP_DIR, VENV_DIR e diretório de logs.
 8. IF já existe outro usuário com UID 33 ou outro grupo com GID 33 no sistema, THEN THE Script_Prod SHALL exibir uma mensagem de erro identificando o conflito e encerrar com código de saída 1.
+
+
+### Requirement 36: Instalação e gerenciamento do MinIO via Docker
+
+**User Story:** Como administrador de sistemas, eu quero instalar e gerenciar o MinIO (object storage S3-compatível) de forma automatizada via Docker, para que eu possa provisionar armazenamento de mídia escalável para o SUAP sem configuração manual.
+
+#### Acceptance Criteria
+
+1. WHEN o Script_Minio é executado, THE Script_Minio SHALL verificar se o Docker e o Docker_Compose estão instalados no sistema.
+2. IF o Docker ou o Docker_Compose não estão instalados, THEN THE Script_Minio SHALL oferecer ao usuário a opção de instalar o Docker automaticamente usando o Script_Install_Docker conforme definido no Requirement 29, e caso o usuário recuse, exibir uma mensagem de erro e encerrar com código de saída 1.
+3. WHEN o Minio_Repo não existe no caminho definido por SUAP_MINIO_DIR, THE Script_Minio SHALL clonar o repositório usando a variável SUAP_MINIO_GIT_URL.
+4. WHEN o Minio_Repo existe no caminho SUAP_MINIO_DIR, THE Script_Minio SHALL exibir msg_skip indicando que o repositório já existe.
+5. WHEN o Minio_Repo é verificado, THE Script_Minio SHALL validar a existência do arquivo `Makefile` dentro do Minio_Repo.
+6. IF o arquivo `Makefile` não existe no Minio_Repo, THEN THE Script_Minio SHALL exibir uma mensagem de erro e encerrar com código de saída 1.
+7. WHEN o arquivo `.env` não existe no Minio_Repo, THE Script_Minio SHALL copiar o `env.sample` e solicitar interativamente ao usuário: credenciais root do MinIO (usuário e senha) e URL de redirecionamento do browser.
+8. IF a senha informada pelo usuário tiver menos de 8 caracteres, THEN THE Script_Minio SHALL utilizar um valor padrão e exibir um aviso orientando o usuário a alterar em produção.
+9. WHEN o `.env` já existe no Minio_Repo, THE Script_Minio SHALL exibir msg_skip e não sobrescrever o arquivo existente.
+10. WHEN o ambiente está preparado, THE Script_Minio SHALL apresentar um menu interativo com as opções: (1) Iniciar MinIO (make up), (2) Parar MinIO (make stop), (3) Ver status, (4) Ver logs, (5) Atualizar imagem (make update).
+11. WHEN o usuário seleciona uma opção válida, THE Script_Minio SHALL delegar a execução para os targets correspondentes do Makefile no Minio_Repo.
+12. IF o usuário informa uma opção inválida, THEN THE Script_Minio SHALL exibir uma mensagem de erro e encerrar com código de saída 1.
+13. WHEN a operação é concluída, THE Script_Minio SHALL exibir instruções de pós-instalação: criar buckets (media, temp), criar Access Key no console, e configurar variáveis de integração no .env do suap_deploy (DEFAULT_FILE_STORAGE, AWS_S3_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY).
+14. THE Script_Minio SHALL ser acessível como opção 10 no menu do Wrapper (Linux) e opção 5 no menu do macOS.
+15. WHEN o Wizard_Env é executado para a opção 10 (MinIO), THE Wizard_Env SHALL solicitar SUAP_MINIO_DIR (padrão: `/opt/suap-minio`) e SUAP_MINIO_GIT_URL (obrigatório, sem valor padrão).
+16. IF o usuário não informa um valor para SUAP_MINIO_GIT_URL, THEN THE Wizard_Env SHALL exibir uma mensagem de erro informando que a URL é obrigatória e encerrar com código de saída 1.
+17. THE Script_Minio SHALL delegar integralmente a definição de serviços Docker e configurações de containers para o Minio_Repo, sem manter Dockerfiles ou docker-compose próprios.

@@ -134,6 +134,9 @@ interactive_env_wizard() { ... }
 #   Opção 5: SUAP_DIR, SUAP_GIT_URL, SUAP_IMAGE
 #   Opção 6: SUAP_DEPLOY_DIR, SUAP_DEPLOY_GIT_URL
 #   Opção 7: Nenhuma
+#   Opção 8: Nenhuma
+#   Opção 9: POSTGRES_VERSION
+#   Opção 10: SUAP_MINIO_DIR, SUAP_MINIO_GIT_URL
 # Parâmetros: caminho do .env, número da opção
 ensure_env_for_option() { ... }
 
@@ -150,6 +153,7 @@ resolve_git_url() { ... }
 # detect_distro()
 # Primeiro verifica uname -s: se "Darwin" → classifica como "macos".
 # Caso contrário, lê /etc/os-release e classifica em "deb", "rpm" ou "arch".
+# RPM match: ID ou ID_LIKE contém "rhel", "fedora", "centos", "alma" ou "rocky".
 # Retorno: define DISTRO_TYPE ("deb"|"rpm"|"arch"|"macos") e DISTRO_NAME
 # Exit 3 se:
 #   - não é macOS E /etc/os-release não existe
@@ -263,8 +267,8 @@ set -u
 #    a. Verificar uname -s == "Darwin" → DISTRO_TYPE="macos"
 #    b. Caso contrário, ler /etc/os-release → "deb", "rpm" ou "arch"
 # 5. Exibir menu:
-#    - macOS: menu restrito (opções 1, 5, 6, 7 — ocultar 2, 3, 4, 8, 9 com msg "não suportado no macOS")
-#    - Linux: menu completo com 9 opções
+#    - macOS: menu restrito (opções 1-5: dev, docker dev, docker prod, dockhand, MinIO)
+#    - Linux: menu completo com 10 opções
 # 6. Validar entrada do usuário
 # 7. Coletar variáveis via ensure_env_for_option(env_path, opção)
 #    - Coleta apenas variáveis necessárias para a opção selecionada
@@ -282,6 +286,7 @@ set -u
 # 7 → docker/dockhand-setup.sh
 # 8 → ${DISTRO_TYPE}/suap-update.sh (com sudo) [Linux only]
 # 9 → ${DISTRO_TYPE}/install-postgres.sh (com sudo) [Linux only]
+# 10 → docker/minio-setup.sh (delega para Minio_Repo)
 ```
 
 ### 3. Scripts de Desenvolvimento (`deb/suap-dev.sh`, `rpm/suap-dev.sh`, `arch/suap-dev.sh`, `macos/suap-dev.sh`)
@@ -524,6 +529,47 @@ set -u
 # O script APENAS prepara o ambiente e delega para o Makefile do suap_deploy.
 ```
 
+#### 5.3 MinIO (`docker/minio-setup.sh`) — Delega para Minio_Repo
+
+```bash
+#!/usr/bin/env bash
+set -u
+# Algoritmo do script MinIO (delegação para suap-minio):
+#
+# 1. Determinar SCRIPT_DIR (raiz do suap-setup)
+# 2. Source lib/common.sh
+# 3. require_env_file() - falha com exit 1 se .env não existe
+# 4. load_env_file() - carregar variáveis centralizadas
+# 5. check_docker_available() - exit 1 se Docker não disponível
+# 6. Determinar SUAP_MINIO_DIR (padrão: /opt/suap-minio)
+# 7. Garantir SUAP_MINIO_GIT_URL está definido no .env
+#    - Se vazio: msg_error orientando executar setup.sh opção 10 + exit 1
+# 8. Se SUAP_MINIO_DIR não existe:
+#    - git clone ${SUAP_MINIO_GIT_URL} ${SUAP_MINIO_DIR}
+# 9. Se SUAP_MINIO_DIR já existe (.git presente):
+#    - msg_skip (repositório já existe)
+# 10. Validar existência de ${SUAP_MINIO_DIR}/Makefile
+#     - Se ausente: msg_error + exit 1
+# 10.1 Garantir que 'make' está instalado (mesmo padrão do docker-prod)
+# 11. Se ${SUAP_MINIO_DIR}/.env não existe:
+#     - Copiar env.sample → .env
+#     - Solicitar credenciais root (usuário, senha) e URL de redirecionamento
+#     - Atualizar .env com valores informados via sed
+# 12. cd ${SUAP_MINIO_DIR}
+# 13. Apresentar menu interativo:
+#     1) Iniciar MinIO (make up)
+#     2) Parar MinIO (make stop)
+#     3) Ver status (make status)
+#     4) Ver logs (make logs)
+#     5) Atualizar imagem (make update)
+#     0) Sair
+# 14. Delegar para targets do Makefile conforme opção
+# 15. Exibir instruções de pós-instalação e comandos úteis
+#
+# PRINCÍPIO: Nenhum Dockerfile ou docker-compose existe no suap-setup.
+# O script APENAS prepara o ambiente e delega para o Makefile do suap-minio.
+```
+
 **Decisões de Design da Delegação Docker:**
 
 - **Evita drift**: Quando o upstream muda dependências, Dockerfiles locais ficariam desatualizados silenciosamente.
@@ -709,10 +755,18 @@ SUAP_IMAGE=registry.exemplo.com:5000/org/suap
 # --- Docker Prod (opção 6) ---
 
 # Diretório onde o repositório suap_deploy será clonado
-SUAP_DEPLOY_DIR=${BASE_DIR}/suap_deploy
+SUAP_DEPLOY_DIR=/opt/suap_deploy
 
 # URL Git do repositório suap_deploy
 SUAP_DEPLOY_GIT_URL=git@gitlab.exemplo.com:org/suap_deploy.git
+
+# --- MinIO (opção 10) ---
+
+# Diretório onde o repositório suap-minio será clonado
+SUAP_MINIO_DIR=/opt/suap-minio
+
+# URL Git do repositório suap-minio (obrigatório, solicitado pelo wizard)
+SUAP_MINIO_GIT_URL=
 ```
 
 ### Variáveis Necessárias por Opção (`ensure_env_for_option`)
@@ -730,6 +784,7 @@ O wizard coleta apenas as variáveis necessárias para a opção escolhida:
 | 7 | `docker/dockhand-setup.sh` | Nenhuma |
 | 8 | `{distro}/suap-update.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR |
 | 9 | `{distro}/install-postgres.sh` | POSTGRES_VERSION |
+| 10 | `docker/minio-setup.sh` | SUAP_MINIO_DIR, SUAP_MINIO_GIT_URL |
 
 ### Estrutura de Diretórios do Projeto (após refatoração)
 
@@ -768,7 +823,8 @@ suap-setup/
 │   ├── prod/
 │   │   └── docker-setup.sh      # Script de delegação → Deploy_Repo (suap_deploy)
 │   ├── install-docker.sh        # Script de instalação do Docker
-│   └── dockhand-setup.sh        # Script de setup Dockhand
+│   ├── dockhand-setup.sh        # Script de setup Dockhand
+│   └── minio-setup.sh           # Script de setup MinIO (delega para Minio_Repo)
 ├── nginx/
 │   └── suap                     # Configuração Nginx proxy reverso
 ├── supervisor/
@@ -857,6 +913,7 @@ O Script_Docker_Prod **não mantém** docker-compose nem Dockerfiles. Ele delega
 | 9     | rpm    | `rpm/install-postgres.sh`           | Sim  | Instalação do PostgreSQL         |
 | 9     | arch   | `arch/install-postgres.sh`          | Sim  | Instalação do PostgreSQL         |
 | 9     | macos  | —                                   | —    | Não suportado (oculto no menu) |
+| 10    | *      | `docker/minio-setup.sh`             | Não  | Delega para Minio_Repo           |
 
 ### Tabela de Caminhos por Distribuição/OS
 
