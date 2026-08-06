@@ -12,6 +12,11 @@ Repositório de scripts de automação para preparar ambientes SUAP em Linux e m
 
 Os scripts automatizam instalação de dependências, configuração de ambiente Python, download/atualização do código SUAP, implantação de serviços de produção via Supervisor e orquestração de containers Docker.
 
+## Documentação
+
+- [Guia de Implantação (Deploy)](docs/DEPLOYMENT.md) — planejamento, dimensionamento, passo a passo de homologação e produção
+- [Documentação Técnica](docs/TECHNICAL.md) — arquitetura interna, fluxo de cada script, variáveis de ambiente, testes
+
 ## Pré-requisitos
 
 - Acesso ao repositório Git do SUAP
