@@ -32,7 +32,7 @@ Os scripts automatizam instalação de dependências, configuração de ambiente
 ```bash
 git clone https://github.com/danielslz/suap-setup.git
 cd suap-setup
-git submodule update --init --recursive  # Necessário para framework de testes
+git submodule update --init --recursive  # Necessário apenas para framework de testes
 ```
 
 ### 2. Executar o wrapper interativo
