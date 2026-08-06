@@ -49,6 +49,34 @@ O suap_deploy:
 Instala e inicia o Dockhand (interface web para gerenciamento Docker).
 Este é um utilitário independente e não depende dos projetos acima.
 
+## MinIO (`docker/minio-setup.sh`)
+
+Utiliza o projeto **suap-minio** para provisionar um servidor de object storage
+S3-compatível via Docker. O suap-minio:
+
+- Executa MinIO como container Docker com Nginx na frente (proxy)
+- Expõe API S3 na porta 80 e console de administração na porta 9001
+- Gerencia via Makefile com targets: `up`, `stop`, `status`, `logs`, `update`
+
+**Fluxo:**
+1. Verifica/clona o repositório suap-minio em `SUAP_MINIO_DIR`
+2. Configura `.env` (credenciais root, URL de redirecionamento)
+3. Apresenta menu interativo de gerenciamento
+4. Delega para os targets do Makefile
+
+**Variáveis necessárias no `.env` do suap-setup:**
+- `SUAP_MINIO_DIR` - Caminho para o repositório suap-minio
+- `SUAP_MINIO_GIT_URL` - URL git do suap-minio
+
+**Após iniciar o MinIO:**
+1. Acesse o console (`http://servidor:9001`) e crie os buckets `media` e `temp`
+2. Crie um Access Key no console
+3. Configure no `.env` do suap_deploy:
+   - `DEFAULT_FILE_STORAGE=djtools.storages.s3.MediaS3Storage`
+   - `AWS_S3_ENDPOINT_URL=http://<ip-do-minio>`
+   - `AWS_ACCESS_KEY_ID=<access-key>`
+   - `AWS_SECRET_ACCESS_KEY=<secret-key>`
+
 ## Por que não manter Dockerfiles locais?
 
 1. **Evita drift**: Quando o upstream muda dependências (ex: nova lib Python),

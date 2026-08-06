@@ -74,6 +74,7 @@ bash docker/dev/docker-setup.sh
 bash docker/prod/docker-setup.sh
 bash docker/dockhand-setup.sh
 bash docker/install-docker.sh
+bash docker/minio-setup.sh
 ```
 
 > Scripts individuais exigem que o `.env` já exista. Se não existir, o script encerra com erro orientando a executar `setup.sh` primeiro.
@@ -95,6 +96,7 @@ O `setup.sh` detecta automaticamente o sistema operacional e exibe apenas as op�
 7) Iniciar Dockhand (via Docker)
 8) Atualizar ambiente de produção
 9) Instalar PostgreSQL
+10) Instalar MinIO (via Docker)
 0) Sair
 ```
 
@@ -106,6 +108,7 @@ O `setup.sh` detecta automaticamente o sistema operacional e exibe apenas as op�
 2) Configurar ambiente dev via Docker
 3) Configurar ambiente prod via Docker
 4) Iniciar Dockhand (via Docker)
+5) Instalar MinIO (via Docker)
 0) Sair
 ```
 
@@ -134,6 +137,8 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `SUAP_AI_IMAGE` | Imagem Docker do serviço de IA | — | *(solicitado pelo wizard)* |
 | `SUAP_DEPLOY_DIR` | Diretório do repositório suap_deploy | — | `$HOME/Projetos/suap_deploy` |
 | `SUAP_DEPLOY_GIT_URL` | URL Git do suap_deploy | — | *(solicitado pelo wizard)* |
+| `SUAP_MINIO_DIR` | Diretório do repositório suap-minio | — | `/opt/suap-minio` |
+| `SUAP_MINIO_GIT_URL` | URL do repositório Git do suap-minio | — | *(obrigatório, solicitado pelo wizard)* |
 
 ## Scripts disponíveis
 
@@ -161,6 +166,7 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `docker/dev/docker-setup.sh` | Todas | Ambiente dev via Docker |
 | `docker/prod/docker-setup.sh` | Todas | Ambiente prod via Docker |
 | `docker/dockhand-setup.sh` | Todas | Interface web para gerenciamento Docker |
+| `docker/minio-setup.sh` | Todas | Setup do MinIO (object storage S3-compatível) via Docker |
 
 ## Ambiente de desenvolvimento
 
@@ -329,6 +335,38 @@ O [Dockhand](https://dockhand.pro/) é uma interface web para gerenciamento de c
 
 O script é idempotente: se o container já estiver em execução, apenas exibe a URL.
 
+### MinIO (Object Storage)
+
+O [MinIO](https://min.io/) é um servidor de object storage compatível com a API S3, utilizado pelo SUAP para armazenamento de arquivos de mídia e temporários. O script `docker/minio-setup.sh` delega para o projeto `suap-minio`, que fornece MinIO + Nginx como proxy.
+
+| Propriedade | Valor |
+|-------------|-------|
+| Porta API S3 | `http://localhost:80` (via Nginx) |
+| Porta Console | `http://localhost:9001` |
+| Gerenciamento | Makefile (`make up`, `make stop`, `make status`, `make logs`, `make update`) |
+
+O script:
+
+1. Verifica Docker disponível
+2. Clona o repositório `suap-minio` em `SUAP_MINIO_DIR` (padrão: `/opt/suap-minio`)
+3. Garante que `make` está instalado
+4. Configura `.env` do suap-minio (credenciais e URL de redirect)
+5. Apresenta menu interativo de gerenciamento
+
+Após iniciar, crie os buckets `media` e `temp` no console e configure o SUAP com as variáveis `AWS_S3_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY`.
+
+```bash
+# Iniciar
+bash docker/minio-setup.sh
+
+# Ou usar diretamente no diretório do suap-minio:
+cd $SUAP_MINIO_DIR
+make up
+make status
+make logs
+make stop
+```
+
 ## Configuração Nginx
 
 ### Instalação nativa (`nginx/suap`)
@@ -425,6 +463,7 @@ suap-setup/
 ├── docker/
 │   ├── install-docker.sh             # Instalação do Docker
 │   ├── dockhand-setup.sh             # Dockhand
+│   ├── minio-setup.sh               # Setup do MinIO (suap-minio)
 │   ├── README.md                     # Documentação da arquitetura de delegação
 │   ├── dev/
 │   │   └── docker-setup.sh           # Delegação → suap (docker-compose.dev.yml)

@@ -671,7 +671,57 @@ MinIO oferece armazenamento de objetos compatível com S3, com escalabilidade ho
 
 **Topologia mínima para produção:** 4 nós (tolera perda de até 2 discos/nós).
 
-**Integração com o SUAP (Django via `django-storages`):**
+#### Instalação via suap-setup
+
+O `suap-setup` oferece instalação automatizada do MinIO via a opção **10) Instalar MinIO (via Docker)** do menu (ou opção 5 no macOS):
+
+```bash
+cd suap-setup
+bash setup.sh
+# Selecione: 10) Instalar MinIO (via Docker)
+```
+
+Na primeira execução, o wizard solicita:
+
+| Variável | Descrição |
+|---|---|
+| `SUAP_MINIO_DIR` | Diretório onde o repositório suap-minio será clonado (padrão: `/opt/suap-minio`) |
+| `SUAP_MINIO_GIT_URL` | URL Git do repositório suap-minio (obrigatório) |
+
+O script então:
+
+1. Clona o repositório `suap-minio` em `SUAP_MINIO_DIR`;
+2. Configura o `.env` interativamente (credenciais root do MinIO e URL de redirecionamento);
+3. Apresenta menu de gerenciamento:
+
+```
+1) Iniciar MinIO (make up)
+2) Parar MinIO (make stop)
+3) Ver status dos containers
+4) Ver logs
+5) Atualizar imagem do MinIO (make update)
+0) Sair
+```
+
+Após iniciar o MinIO:
+
+1. Acesse o console de administração em `http://<servidor>:9001`;
+2. Crie os buckets necessários: `media` e `temp`;
+3. Crie um Access Key no console (guarde o Access Key e Secret Key);
+4. Configure a integração no `.env` do suap_deploy (ver abaixo).
+
+#### Integração com o SUAP
+
+No `.env` do suap_deploy (ou nas settings do SUAP para instalação nativa):
+
+```ini
+DEFAULT_FILE_STORAGE=djtools.storages.s3.MediaS3Storage
+AWS_S3_ENDPOINT_URL=http://<ip-do-servidor-minio>
+AWS_ACCESS_KEY_ID=<access-key-criada-no-console>
+AWS_SECRET_ACCESS_KEY=<secret-key-criada-no-console>
+```
+
+**Integração completa (Django via `django-storages`):**
 
 ```python
 DEFAULT_FILE_STORAGE = "djtools.storages.s3.MediaS3Storage"
@@ -686,6 +736,17 @@ AWS_TEMP_BUCKET_NAME='suap-temp-bucket'
 ```
 
 > Confirme se a versão do SUAP em uso já traz `django-storages` como dependência e se expõe essas variáveis nativamente.
+
+#### Migração de NFS para MinIO
+
+Se a instituição já utiliza NFS e deseja migrar para MinIO:
+
+1. No servidor NFS, exporte o diretório de mídia para o servidor MinIO (`/etc/exports`);
+2. No servidor MinIO, monte o NFS em `/opt/media`;
+3. Instale o cliente `mc` (MinIO Client);
+4. Execute o mirror: `mc mirror /opt/media suap-minio/media`.
+
+Detalhes completos na documentação do projeto suap-minio.
 
 **Recomendação:** se a instituição ainda não tem maturidade operacional em MinIO, comece com NFS e migre quando o volume justificar.
 

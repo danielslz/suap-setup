@@ -23,9 +23,10 @@ if [ "${DISTRO_TYPE}" = "macos" ]; then
   echo "2) Configurar ambiente dev via Docker"
   echo "3) Configurar ambiente prod via Docker"
   echo "4) Iniciar Dockhand (via Docker)"
+  echo "5) Instalar MinIO (via Docker)"
   echo "0) Sair"
   echo ""
-  read -rp "Escolha uma opção [0-4]: " CHOICE
+  read -rp "Escolha uma opção [0-5]: " CHOICE
 else
   echo "1) Configurar ambiente de desenvolvimento"
   echo "2) Configurar ambiente de produção"
@@ -36,9 +37,10 @@ else
   echo "7) Iniciar Dockhand (via Docker)"
   echo "8) Atualizar SUAP (produção)"
   echo "9) Instalar PostgreSQL"
+  echo "10) Instalar MinIO (via Docker)"
   echo "0) Sair"
   echo ""
-  read -rp "Escolha uma opção [0-9]: " CHOICE
+  read -rp "Escolha uma opção [0-10]: " CHOICE
 fi
 
 # Sair imediatamente se opção 0
@@ -54,16 +56,17 @@ if [ "${DISTRO_TYPE}" = "macos" ]; then
     2) INTERNAL_CHOICE="5" ;;  # docker dev
     3) INTERNAL_CHOICE="6" ;;  # docker prod
     4) INTERNAL_CHOICE="7" ;;  # dockhand
+    5) INTERNAL_CHOICE="10" ;; # minio
     *)
-      msg_error "Opção inválida: use 0, 1, 2, 3 ou 4."
+      msg_error "Opção inválida: use 0, 1, 2, 3, 4 ou 5."
       exit 1
       ;;
   esac
 else
   case "${CHOICE}" in
-    1|2|3|4|5|6|7|8|9) INTERNAL_CHOICE="${CHOICE}" ;;
+    1|2|3|4|5|6|7|8|9|10) INTERNAL_CHOICE="${CHOICE}" ;;
     *)
-      msg_error "Opção inválida: use 0, 1, 2, 3, 4, 5, 6, 7, 8 ou 9."
+      msg_error "Opção inválida: use 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ou 10."
       exit 1
       ;;
   esac
@@ -81,6 +84,7 @@ fi
 #   7 (dockhand):   nenhuma
 #   8 (update):     PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR
 #   9 (postgres):   POSTGRES_VERSION
+#   10 (minio):     SUAP_MINIO_DIR, SUAP_MINIO_GIT_URL
 
 ensure_env_for_option "${ENV_FILE}" "${INTERNAL_CHOICE}"
 
@@ -100,6 +104,7 @@ case "${INTERNAL_CHOICE}" in
   7) TARGET_SCRIPT="${SCRIPT_DIR}/docker/dockhand-setup.sh" ;;
   8) TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/suap-update.sh" ;;
   9) TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/install-postgres.sh" ;;
+  10) TARGET_SCRIPT="${SCRIPT_DIR}/docker/minio-setup.sh" ;;
 esac
 
 # Verificar existência do script antes de executar

@@ -89,6 +89,7 @@ EOF
 #   7 (dockhand):    nenhuma
 #   8 (update):      nenhuma (requer .env já existente do setup de produção)
 #   9 (postgres):    POSTGRES_VERSION
+#   10 (minio):      SUAP_MINIO_DIR, SUAP_MINIO_GIT_URL
 ensure_env_for_option() {
   local env_path="${1}"
   local option="${2}"
@@ -226,6 +227,41 @@ ensure_env_for_option() {
       local _deploy_git_default="git@gitlab.instituicao.edu.br:org/suap_deploy.git"
       read -rp "  Valor [${GREEN}${_deploy_git_default}${NO_COLOR}]: " _input
       SUAP_DEPLOY_GIT_URL="${_input:-$_deploy_git_default}"
+      needs_update=true
+      echo ""
+    fi
+    if [ "$needs_update" = "true" ]; then
+      _write_env "${env_path}"
+    fi
+    return 0
+  fi
+
+  # Para MinIO (10) precisa de SUAP_MINIO_DIR e SUAP_MINIO_GIT_URL
+  if [ "${option}" = "10" ]; then
+    # SUAP_MINIO_DIR (caminho do suap-minio)
+    if [ -z "${SUAP_MINIO_DIR:-}" ]; then
+      _show_header
+      echo "${GREEN}SUAP_MINIO_DIR${NO_COLOR}"
+      echo "  ${YELLOW}Descrição:${NO_COLOR} Caminho absoluto para o repositório suap-minio."
+      echo "  ${YELLOW}Exemplos:${NO_COLOR} /opt/suap-minio, \$HOME/Projetos/suap-minio"
+      local _minio_default="/opt/suap-minio"
+      read -rp "  Valor [${GREEN}${_minio_default}${NO_COLOR}]: " _input
+      SUAP_MINIO_DIR="${_input:-$_minio_default}"
+      needs_update=true
+      echo ""
+    fi
+    # SUAP_MINIO_GIT_URL (URL do repositório suap-minio)
+    if [ -z "${SUAP_MINIO_GIT_URL:-}" ]; then
+      _show_header
+      echo "${GREEN}SUAP_MINIO_GIT_URL${NO_COLOR}"
+      echo "  ${YELLOW}Descrição:${NO_COLOR} URL do repositório Git do suap-minio (${RED}obrigatório${NO_COLOR})."
+      echo "  ${YELLOW}Exemplos:${NO_COLOR} git@gitlab.ifrn.edu.br:cosinf/suap-minio.git"
+      read -rp "  Valor (${RED}obrigatório${NO_COLOR}): " _input
+      if [ -z "${_input}" ]; then
+        msg_error "SUAP_MINIO_GIT_URL é obrigatória. Não é possível continuar sem a URL do repositório."
+        exit 1
+      fi
+      SUAP_MINIO_GIT_URL="${_input}"
       needs_update=true
       echo ""
     fi
@@ -435,6 +471,13 @@ _write_env() {
     echo "# --- PostgreSQL ---"
     echo "# Versão do PostgreSQL a ser instalada"
     printf 'POSTGRES_VERSION=%s\n' "${POSTGRES_VERSION:-16}"
+    echo ""
+    echo "# --- MinIO ---"
+    echo "# Diretório do repositório suap-minio"
+    printf 'SUAP_MINIO_DIR=%s\n' "${SUAP_MINIO_DIR:-/opt/suap-minio}"
+    echo ""
+    echo "# URL do repositório Git do suap-minio"
+    printf 'SUAP_MINIO_GIT_URL=%s\n' "${SUAP_MINIO_GIT_URL:-}"
   } > "${env_path}"
 
   echo ""

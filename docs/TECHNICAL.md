@@ -14,10 +14,11 @@
 10. [Ambiente Docker — Produção](#ambiente-docker-produção)
 11. [Instalação do Docker](#instalação-do-docker)
 12. [Dockhand — Gerenciamento Docker via Web](#dockhand)
-13. [Configuração Nginx Detalhada](#configuração-nginx-detalhada)
-14. [Configuração Supervisor Detalhada](#configuração-supervisor-detalhada)
-15. [Variáveis de Ambiente](#variáveis-de-ambiente)
-16. [Testes Automatizados](#testes-automatizados)
+13. [MinIO — Object Storage S3-compatível](#minio-object-storage)
+14. [Configuração Nginx Detalhada](#configuração-nginx-detalhada)
+15. [Configuração Supervisor Detalhada](#configuração-supervisor-detalhada)
+16. [Variáveis de Ambiente](#variáveis-de-ambiente)
+17. [Testes Automatizados](#testes-automatizados)
 
 ---
 
@@ -174,8 +175,8 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 2. Source lib/common.sh (carrega todas as funções utilitárias)
 3. Detecta distribuição/OS via detect_distro()
 4. Exibe menu adaptativo conforme plataforma:
-   - Linux: 9 opções (dev, prod, redis, nginx, docker dev, docker prod, dockhand, update, postgresql)
-   - macOS: 4 opções (dev, docker dev, docker prod, dockhand)
+   - Linux: 10 opções (dev, prod, redis, nginx, docker dev, docker prod, dockhand, update, postgresql, minio)
+   - macOS: 5 opções (dev, docker dev, docker prod, dockhand, minio)
 5. Valida entrada do usuário
 6. Remapeia opções do macOS para índices internos
 7. Coleta variáveis via ensure_env_for_option (wizard se necessário)
@@ -200,6 +201,7 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 | 7 | `docker/dockhand-setup.sh` | Nenhuma |
 | 8 | `{distro}/suap-update.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR |
 | 9 | `{distro}/install-postgres.sh` | POSTGRES_VERSION |
+| 10 | `docker/minio-setup.sh` | SUAP_MINIO_DIR, SUAP_MINIO_GIT_URL |
 
 **macOS (com remapeamento):**
 
@@ -209,6 +211,7 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 | 2 | 5 | `docker/dev/docker-setup.sh` |
 | 3 | 6 | `docker/prod/docker-setup.sh` |
 | 4 | 7 | `docker/dockhand-setup.sh` |
+| 5 | 10 | `docker/minio-setup.sh` |
 
 ---
 
@@ -1187,6 +1190,126 @@ containers através do navegador.
 
 ---
 
+## MinIO — Object Storage S3-compatível {#minio-object-storage}
+
+**Arquivo:** `docker/minio-setup.sh`
+
+### O que é
+
+O [MinIO](https://min.io/) é um servidor de object storage compatível com a API
+Amazon S3. No contexto do SUAP, é utilizado para armazenamento de arquivos de mídia
+e temporários, substituindo o armazenamento local em disco.
+
+O script `docker/minio-setup.sh` **delega para o projeto `suap-minio`**, que fornece
+MinIO + Nginx como proxy reverso em containers Docker gerenciados via Makefile.
+
+### Arquitetura de Delegação
+
+```
+suap-setup                          suap-minio (SUAP_MINIO_DIR)
+┌─────────────────────┐             ┌────────────────────────────────────┐
+│ docker/             │             │ Makefile                           │
+│   minio-setup.sh ──┼──delega──▶  │ docker-compose.yml                 │
+│                     │             │ nginx/ (proxy reverso)             │
+│                     │             │ env.sample                         │
+└─────────────────────┘             └────────────────────────────────────┘
+```
+
+### Especificações Técnicas
+
+| Propriedade | Valor |
+|-------------|-------|
+| Porta API S3 | 80 (via Nginx) |
+| Porta Console de administração | 9001 |
+| Gerenciamento | Makefile (up, stop, down, status, logs, pull, update) |
+| Repositório upstream | `suap-minio` |
+
+### Variáveis Necessárias
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `SUAP_MINIO_DIR` | `/opt/suap-minio` | Diretório do repositório suap-minio |
+| `SUAP_MINIO_GIT_URL` | *(obrigatório)* | URL do repositório |
+
+### Etapas do Script
+
+```
+1. Source lib/common.sh
+2. require_env_file() → verifica .env do suap-setup
+3. load_env_file() → carrega variáveis
+4. check_docker_available() → verifica Docker + Docker Compose
+5. Definir SUAP_MINIO_DIR (padrão: /opt/suap-minio)
+6. Validar SUAP_MINIO_GIT_URL (exit 1 se não definida)
+7. Verificar/clonar repositório suap-minio em SUAP_MINIO_DIR:
+   - Se não existe: criar diretório pai + git clone
+   - Se já existe: msg_skip
+8. Verificar existência do Makefile (exit 1 se ausente)
+8.1. Garantir que 'make' está instalado:
+   - Se ausente: instalar via apt-get (deb), dnf (rpm) ou pacman (arch)
+   - Se plataforma desconhecida ou falha: exit 1
+9. Configurar .env do suap-minio (se não existir):
+   - Copiar env.sample → .env
+   - Solicitar credenciais (usuário root, senha, URL de redirect)
+   - Aplicar valores via sed no .env
+   - Se env.sample não encontrado: exit 1
+10. Exibir menu interativo de gerenciamento (5 opções + sair)
+11. Executar target do Makefile conforme opção escolhida
+12. Exibir comandos úteis e instruções de integração com SUAP
+```
+
+### Menu Interativo
+
+```
+=== Gerenciamento do MinIO (suap-minio) ===
+
+  Diretório: /opt/suap-minio
+  API S3:    http://localhost:80
+  Console:   http://localhost:9001
+
+  1) Iniciar MinIO (make up)
+  2) Parar MinIO (make stop)
+  3) Ver status dos containers
+  4) Ver logs
+  5) Atualizar imagem do MinIO (make update)
+  0) Sair
+```
+
+### Configuração do .env do suap-minio
+
+Na primeira execução, o script solicita interativamente:
+
+| Prompt | Variável no .env | Padrão |
+|--------|-----------------|--------|
+| Usuário root do MinIO | `MINIO_ROOT_USER` | `admin` |
+| Senha root do MinIO (mín. 8 caracteres) | `MINIO_ROOT_PASSWORD` | `miniopassword` (fallback) |
+| URL de redirecionamento do browser | `MINIO_BROWSER_REDIRECT_URL` | `https://suap.instituicao.edu.br` |
+
+> **Segurança:** Se a senha informada tem menos de 8 caracteres, o script usa
+> `miniopassword` como fallback e exibe aviso para alterar em produção.
+
+### Integração com o SUAP
+
+Após iniciar o MinIO, os próximos passos para integrar com o SUAP são:
+
+1. Acessar o console (`http://localhost:9001`) e criar os buckets: `media`, `temp`
+2. Criar um Access Key no console
+3. Configurar no `.env` do suap_deploy:
+
+```ini
+DEFAULT_FILE_STORAGE=djtools.storages.s3.MediaS3Storage
+AWS_S3_ENDPOINT_URL=http://<ip-do-servidor-minio>
+AWS_ACCESS_KEY_ID=<access-key>
+AWS_SECRET_ACCESS_KEY=<secret-key>
+```
+
+### Idempotência
+
+- **Clone:** Se o diretório já contém um repositório git, o clone é pulado
+- **Configuração .env:** Se `.env` já existe no suap-minio, a configuração é pulada
+- **make:** Se instalação do `make` falha, o script encerra com erro informativo
+
+---
+
 ## Configuração Nginx Detalhada
 
 **Arquivo:** `nginx/suap`
@@ -1400,6 +1523,13 @@ na primeira execução do `setup.sh`.
 | `SUAP_DEPLOY_DIR` | Path | `$HOME/Projetos/suap_deploy` | Diretório do repositório suap_deploy |
 | `SUAP_DEPLOY_GIT_URL` | URL | *(solicitado pelo wizard)* | URL do repositório suap_deploy |
 
+### Variáveis MinIO
+
+| Variável | Tipo | Padrão | Descrição |
+|----------|------|--------|-----------|
+| `SUAP_MINIO_DIR` | Path | `/opt/suap-minio` | Diretório do repositório suap-minio |
+| `SUAP_MINIO_GIT_URL` | URL | *(obrigatório)* | URL do repositório Git do suap-minio |
+
 ### Exemplo Completo de .env
 
 ```ini
@@ -1443,6 +1573,13 @@ SUAP_PDF_IMAGE=registry.exemplo.com:5000/org/suap-pdf:latest
 SUAP_AI_IMAGE=registry.exemplo.com:5000/org/suap-ai:latest
 SUAP_DEPLOY_DIR=$HOME/Projetos/suap_deploy
 SUAP_DEPLOY_GIT_URL=git@gitlab.exemplo.com:org/suap_deploy.git
+
+# --- MinIO ---
+# Diretório do repositório suap-minio
+SUAP_MINIO_DIR=/opt/suap-minio
+
+# URL do repositório Git do suap-minio (obrigatório, sem valor padrão)
+SUAP_MINIO_GIT_URL=git@gitlab.ifrn.edu.br:cosinf/suap-minio.git
 ```
 
 ### Carregamento de Variáveis
