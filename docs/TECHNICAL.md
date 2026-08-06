@@ -58,7 +58,7 @@ de separação de responsabilidades:
 | Plataforma | Desenvolvimento | Produção | Redis | Nginx | Docker |
 |------------|:-:|:-:|:-:|:-:|:-:|
 | Debian/Ubuntu | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Fedora/RHEL/CentOS | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Fedora/RHEL/CentOS/AlmaLinux/Rocky | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Arch/Manjaro/EndeavourOS | ✅ | ✅ | ✅ | ✅ | ✅ |
 | macOS (Homebrew) | ✅ | ❌ | ❌ | ❌ | ✅ |
 
@@ -153,7 +153,7 @@ NO_COLOR=$(tput sgr0)
 1. uname -s == "Darwin" → DISTRO_TYPE="macos"
 2. Caso contrário, ler /etc/os-release:
    - ID ou ID_LIKE contém "debian" ou "ubuntu" → "deb"
-   - ID ou ID_LIKE contém "rhel", "fedora" ou "centos" → "rpm"
+   - ID ou ID_LIKE contém "rhel", "fedora", "centos", "alma" ou "rocky" → "rpm"
    - ID ou ID_LIKE contém "arch" → "arch"
    - Nenhum match → exit 3 (não suportada)
 3. Se /etc/os-release não existe e não é macOS → exit 3
@@ -260,7 +260,7 @@ gerenciador de pacotes. Se ao menos um pacote estiver faltando, instala todos.
 | PDF tools | `poppler-utils` |
 | Python headers | `python3-dev` |
 
-**Pacotes equivalentes (Fedora/RHEL via dnf):**
+**Pacotes equivalentes (Fedora/RHEL/Alma/Rocky via dnf):**
 
 | Categoria | Pacotes |
 |-----------|---------|
@@ -309,7 +309,7 @@ de datas, moedas e ordenação de texto em português).
 | Plataforma | Comando |
 |------------|---------|
 | Debian/Ubuntu | `sudo locale-gen pt_BR.UTF-8 && sudo update-locale LANG=pt_BR.UTF-8` |
-| Fedora/RHEL | `sudo localectl set-locale LANG=pt_BR.UTF-8` |
+| Fedora/RHEL/Alma/Rocky | `sudo localectl set-locale LANG=pt_BR.UTF-8` |
 | Arch Linux | `sudo localectl set-locale LANG=pt_BR.UTF-8` |
 | macOS | Pulado com `msg_skip` (locale não necessário) |
 
@@ -516,7 +516,7 @@ Qual serviço você deseja configurar no Supervisor?
 | Distribuição | Diretório de configuração | Serviço |
 |-------------|--------------------------|---------|
 | Debian/Ubuntu | `/etc/supervisor/conf.d/` | `supervisor` |
-| Fedora/RHEL | `/etc/supervisord.d/` | `supervisord` |
+| Fedora/RHEL/Alma/Rocky | `/etc/supervisord.d/` | `supervisord` |
 | Arch Linux | `/etc/supervisor.d/` | `supervisord` |
 
 **Pós-cópia:**
@@ -1088,7 +1088,7 @@ não está instalado e o usuário confirma a instalação.
 5. apt-get install docker-ce docker-ce-cli containerd.io docker-compose-plugin
 ```
 
-**Fedora/RHEL:**
+**Fedora/RHEL/Alma/Rocky:**
 
 ```
 1. Instalar dnf-plugins-core

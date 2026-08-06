@@ -1,7 +1,7 @@
 #!/bin/bash
 set -u
 
-# rpm/suap-update.sh - Atualização do SUAP em ambiente de produção (Fedora/RHEL/CentOS)
+# rpm/suap-update.sh - Atualização do SUAP em ambiente de produção (Fedora/RHEL/CentOS/AlmaLinux/Rocky)
 # Para serviços, atualiza código, opcionalmente executa migrate/collectstatic/sync_permissions,
 # corrige permissões e reinicia serviços.
 

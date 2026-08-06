@@ -122,7 +122,7 @@ _detect_distro_from_file() {
     if echo "${id} ${id_like}" | grep -qiE '(debian|ubuntu)'; then
         DISTRO_TYPE="deb"
         DISTRO_NAME="${id}"
-    elif echo "${id} ${id_like}" | grep -qiE '(rhel|fedora|centos)'; then
+    elif echo "${id} ${id_like}" | grep -qiE '(rhel|fedora|centos|alma|rocky)'; then
         DISTRO_TYPE="rpm"
         DISTRO_NAME="${id}"
     elif echo "${id} ${id_like}" | grep -qiE '(arch)'; then
@@ -329,7 +329,7 @@ _detect_distro_with_uname() {
             family="rpm"
             id="$(random_rpm_id)"
             # Ensure it classifies correctly by adding proper ID_LIKE
-            if ! echo "$id" | grep -qiE '(rhel|fedora|centos)'; then
+            if ! echo "$id" | grep -qiE '(rhel|fedora|centos|alma|rocky)'; then
                 create_os_release "$os_release_file" "$id" "$(random_rpm_id_like)"
             else
                 create_os_release "$os_release_file" "$id" ""

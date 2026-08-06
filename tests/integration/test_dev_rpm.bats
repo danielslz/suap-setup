@@ -45,7 +45,7 @@ teardown() {
 }
 
 @test "[rpm-dev] sistema detectado como família RPM" {
-    run grep -i "fedora\|rhel\|centos" /etc/os-release
+    run grep -i "fedora\|rhel\|centos\|alma\|rocky" /etc/os-release
     assert_success
 }
 

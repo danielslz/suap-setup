@@ -59,7 +59,7 @@
 
 Este documento descreve o planejamento e a execução da implantação do **SUAP** (Sistema Unificado de Administração Pública) em ambientes de **homologação** e **produção**.
 
-Diferente de tutoriais baseados em instalação manual passo a passo, esta documentação adota como eixo central o **[suap-setup](https://github.com/danielslz/suap-setup)**, um conjunto de scripts de automação criado para eliminar a repetição manual, reduzir erros humanos e padronizar a preparação de ambientes SUAP — seja em instalação nativa (Debian, RHEL/Fedora, Arch) seja via **Docker**.
+Diferente de tutoriais baseados em instalação manual passo a passo, esta documentação adota como eixo central o **[suap-setup](https://github.com/danielslz/suap-setup)**, um conjunto de scripts de automação criado para eliminar a repetição manual, reduzir erros humanos e padronizar a preparação de ambientes SUAP — seja em instalação nativa (Debian, RHEL/Fedora/AlmaLinux, Arch) seja via **Docker**.
 
 O objetivo é que qualquer desenvolvedor consiga, com o mínimo de intervenção manual, provisionar um ambiente completo, íntegro e reprodutível, tanto para testes/homologação quanto para produção crítica com múltiplos usuários simultâneos.
 
@@ -103,7 +103,7 @@ Tutoriais e/ou manuais com dezenas de comandos executados manualmente, em sequê
 O `suap-setup` resolve esses problemas por meio de:
 
 - **Wizard interativo** (`setup.sh`) que gera um `.env` centralizado, com prompts descritivos e valores padrão para cada variável.
-- **Suporte multiplataforma**: Debian/Ubuntu (`apt`), Fedora/RHEL/CentOS (`dnf`), Arch/Manjaro (`pacman`), macOS (Homebrew, apenas dev) e Docker.
+- **Suporte multiplataforma**: Debian/Ubuntu (`apt`), Fedora/RHEL/CentOS/AlmaLinux/Rocky (`dnf`), Arch/Manjaro (`pacman`), macOS (Homebrew, apenas dev) e Docker.
 - **Idempotência**: reexecutar um script pula etapas já concluídas sem corromper o que já está pronto.
 - **Halt em falhas críticas**: se uma dependência falha ao instalar, o script interrompe imediatamente.
 - **Separação de responsabilidades por script**: `suap-dev.sh`, `suap-prod.sh`, `suap-update.sh`, `install-redis.sh`, `install-nginx.sh`.
@@ -209,6 +209,7 @@ Antes de iniciar a implantação em qualquer ambiente, são necessários os segu
 - Chave SSH cadastrada no GitLab.
 - Se optar pela rota Docker: token de acesso pessoal ao registry (escopo `read_registry`).
 - Acesso `sudo`/root nos servidores de homologação e produção.
+- Sistema operacional suportado: **Debian 12+**, **AlmaLinux 9** (ou qualquer RHEL-like 9+: Rocky Linux, CentOS Stream, Fedora), **Arch Linux**.
 - DNS configurado apontando para o balanceador (produção) ou para o servidor único (homologação).
 - Certificado SSL válido (ou processo de emissão automatizada, ex. Let's Encrypt).
 - Firewall liberando apenas portas necessárias (443/80 no balanceador; portas internas restritas à rede privada).
@@ -332,7 +333,7 @@ Caminhos do Supervisor por distribuição:
 | Distribuição | Diretório de configuração |
 |---|---|
 | Debian/Ubuntu | `/etc/supervisor/conf.d/` |
-| Fedora/RHEL | `/etc/supervisord.d/` |
+| Fedora/RHEL/AlmaLinux/Rocky | `/etc/supervisord.d/` |
 | Arch Linux | `/etc/supervisor.d/` |
 
 ### 9.2. Instalação do Nginx (rota nativa)

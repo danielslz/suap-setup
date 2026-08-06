@@ -1,7 +1,7 @@
 #!/bin/bash
 set -u
 
-# rpm/install-postgres.sh - Instalação do PostgreSQL (Fedora/RHEL/CentOS/AlmaLinux)
+# rpm/install-postgres.sh - Instalação do PostgreSQL (Fedora/RHEL/CentOS/AlmaLinux/Rocky)
 # Instala o PostgreSQL a partir do repositório oficial PGDG, inicializa o cluster,
 # e opcionalmente cria banco/usuário de aplicação para o SUAP.
 

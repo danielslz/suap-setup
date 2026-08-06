@@ -1,7 +1,7 @@
 #!/bin/bash
 set -u
 
-# rpm/suap-dev.sh - Configuração do ambiente de desenvolvimento SUAP (RPM/Fedora/RHEL/CentOS)
+# rpm/suap-dev.sh - Configuração do ambiente de desenvolvimento SUAP (RPM/Fedora/RHEL/CentOS/AlmaLinux/Rocky)
 # Algoritmo:
 # 1. Source lib/common.sh
 # 2. load_env_file() - carregar variáveis centralizadas

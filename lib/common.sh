@@ -542,7 +542,7 @@ detect_distro() {
   if echo "${id} ${id_like}" | grep -qiE '(debian|ubuntu)'; then
     DISTRO_TYPE="deb"
     DISTRO_NAME="${id}"
-  elif echo "${id} ${id_like}" | grep -qiE '(rhel|fedora|centos)'; then
+  elif echo "${id} ${id_like}" | grep -qiE '(rhel|fedora|centos|alma|rocky)'; then
     DISTRO_TYPE="rpm"
     DISTRO_NAME="${id}"
   elif echo "${id} ${id_like}" | grep -qiE '(arch)'; then

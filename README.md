@@ -5,7 +5,7 @@
 Repositório de scripts de automação para preparar ambientes SUAP em Linux e macOS, com suporte para:
 
 - **Debian/Ubuntu** (apt)
-- **Fedora/RHEL/CentOS** (dnf)
+- **Fedora/RHEL/CentOS/AlmaLinux/Rocky Linux** (dnf)
 - **Arch/Manjaro/EndeavourOS** (pacman)
 - **macOS** (Homebrew)
 - **Docker** (qualquer sistema com Docker Engine)
@@ -43,7 +43,7 @@ Na primeira execução, um **wizard interativo** guia a criação do arquivo `.e
 ```bash
 # Desenvolvimento nativo
 bash deb/suap-dev.sh      # Debian/Ubuntu
-bash rpm/suap-dev.sh      # Fedora/RHEL
+bash rpm/suap-dev.sh      # Fedora/RHEL/Alma/Rocky
 bash arch/suap-dev.sh     # Arch Linux
 bash macos/suap-dev.sh    # macOS
 
@@ -136,21 +136,21 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 |--------|------------|-----------|
 | `setup.sh` | Todas | Wrapper interativo com detecção de OS |
 | `deb/suap-dev.sh` | Debian/Ubuntu | Ambiente de desenvolvimento |
-| `rpm/suap-dev.sh` | Fedora/RHEL | Ambiente de desenvolvimento |
+| `rpm/suap-dev.sh` | Fedora/RHEL/Alma/Rocky | Ambiente de desenvolvimento |
 | `arch/suap-dev.sh` | Arch Linux | Ambiente de desenvolvimento |
 | `macos/suap-dev.sh` | macOS | Ambiente de desenvolvimento |
 | `deb/suap-prod.sh` | Debian/Ubuntu | Ambiente de produção |
-| `rpm/suap-prod.sh` | Fedora/RHEL | Ambiente de produção |
+| `rpm/suap-prod.sh` | Fedora/RHEL/Alma/Rocky | Ambiente de produção |
 | `arch/suap-prod.sh` | Arch Linux | Ambiente de produção |
 | `deb/suap-update.sh` | Debian/Ubuntu | Atualização de ambiente de produção |
-| `rpm/suap-update.sh` | Fedora/RHEL | Atualização de ambiente de produção |
+| `rpm/suap-update.sh` | Fedora/RHEL/Alma/Rocky | Atualização de ambiente de produção |
 | `arch/suap-update.sh` | Arch Linux | Atualização de ambiente de produção |
 | `deb/install-redis.sh` | Debian/Ubuntu | Instala e habilita Redis |
-| `rpm/install-redis.sh` | Fedora/RHEL | Instala e habilita Redis |
+| `rpm/install-redis.sh` | Fedora/RHEL/Alma/Rocky | Instala e habilita Redis |
 | `arch/install-redis.sh` | Arch Linux | Instala e habilita Redis |
 | `deb/install-nginx.sh` | Debian/Ubuntu | Instala Nginx e configura proxy SUAP |
 | `deb/install-postgres.sh` | Debian/Ubuntu | Instala PostgreSQL via repositório PGDG |
-| `rpm/install-nginx.sh` | Fedora/RHEL | Instala Nginx e configura proxy SUAP |
+| `rpm/install-nginx.sh` | Fedora/RHEL/Alma/Rocky | Instala Nginx e configura proxy SUAP |
 | `arch/install-nginx.sh` | Arch Linux | Instala Nginx e configura proxy SUAP |
 | `docker/install-docker.sh` | Linux | Instala Docker Engine e Compose |
 | `docker/dev/docker-setup.sh` | Todas | Ambiente dev via Docker |
@@ -189,7 +189,7 @@ Os scripts de produção (requerem root) realizam:
 | Distribuição | Diretório de configuração |
 |-------------|--------------------------|
 | Debian/Ubuntu | `/etc/supervisor/conf.d/` |
-| Fedora/RHEL | `/etc/supervisord.d/` |
+| Fedora/RHEL/Alma/Rocky | `/etc/supervisord.d/` |
 | Arch Linux | `/etc/supervisor.d/` |
 
 ## Atualização de produção
@@ -305,7 +305,7 @@ make down
 O script `docker/install-docker.sh` instala Docker Engine e Docker Compose automaticamente:
 
 - **Debian/Ubuntu**: adiciona repositório oficial Docker e instala via apt
-- **Fedora/RHEL**: adiciona repositório oficial Docker e instala via dnf
+- **Fedora/RHEL/Alma/Rocky**: adiciona repositório oficial Docker e instala via dnf
 - **Arch Linux**: instala via `pacman -S docker docker-compose`
 - **macOS**: exibe URL para download do Docker Desktop
 
@@ -344,7 +344,7 @@ O caminho de destino varia por distribuição:
 | Distribuição | Destino |
 |-------------|---------|
 | Debian/Ubuntu | `/etc/nginx/sites-available/suap` + link em `sites-enabled` |
-| Fedora/RHEL | `/etc/nginx/conf.d/suap.conf` |
+| Fedora/RHEL/Alma/Rocky | `/etc/nginx/conf.d/suap.conf` |
 | Arch Linux | `/etc/nginx/conf.d/suap.conf` |
 
 ### Docker (`nginx/suap.docker`)
@@ -403,7 +403,7 @@ suap-setup/
 │   ├── install-redis.sh
 │   ├── install-nginx.sh
 │   └── install-postgres.sh
-├── rpm/                              # Fedora/RHEL/CentOS
+├── rpm/                              # Fedora/RHEL/CentOS/Alma/Rocky
 │   ├── suap-dev.sh
 │   ├── suap-prod.sh
 │   ├── suap-update.sh
