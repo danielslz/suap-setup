@@ -508,4 +508,4 @@ suap-setup/
 
 ## Licença
 
-Veja o arquivo [LICENSE](LICENSE).
+Este projeto é licenciado sob a [PolyForm Noncommercial License 1.0.0](LICENSE). Uso comercial não é permitido. Uso por instituições de ensino, organizações governamentais, pesquisa e fins pessoais é permitido.
