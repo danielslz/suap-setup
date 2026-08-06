@@ -1325,7 +1325,7 @@ na primeira execução do `setup.sh`.
 
 | Variável | Tipo | Padrão | Descrição |
 |----------|------|--------|-----------|
-| `PYTHON_VERSION` | String | `3.12` | Versão do Python a instalar/usar |
+| `PYTHON_VERSION` | String | `3.12` | Versão do Python a instalar/usar (compatível: 3.12+ ou conforme recomendação do IFRN à época) |
 | `BASE_DIR` | Path | `$HOME/Projetos` | Diretório raiz para projetos |
 | `SUAP_DIR` | Path | `${BASE_DIR}/suap` | Diretório do código SUAP |
 | `VENV_DIR` | Path | `${SUAP_DIR}/.venv` | Diretório do virtualenv |
@@ -1335,7 +1335,7 @@ na primeira execução do `setup.sh`.
 
 | Variável | Tipo | Padrão | Descrição |
 |----------|------|--------|-----------|
-| `POSTGRES_VERSION` | String | `16` | Versão do PostgreSQL a instalar (repositório PGDG) |
+| `POSTGRES_VERSION` | String | `15` | Versão do PostgreSQL a instalar via repositório PGDG (compatível: 15+ ou conforme recomendação do IFRN à época) |
 
 ### Variáveis de Produção (adicionais)
 
@@ -1366,7 +1366,7 @@ na primeira execução do `setup.sh`.
 # Configuração centralizada do suap-setup
 # =============================================================
 
-# Versão do Python a ser utilizada
+# Versão do Python a ser utilizada (compatível: 3.12+ ou conforme recomendação do IFRN à época)
 PYTHON_VERSION=3.12
 
 # Diretório base para instalação
@@ -1393,7 +1393,8 @@ CELERY_MIN_WORKERS=2
 CELERY_QUEUE=geral,celery_beat
 
 # --- PostgreSQL ---
-POSTGRES_VERSION=16
+# Versão do PostgreSQL a instalar (compatível: 15+ ou conforme recomendação do IFRN à época)
+POSTGRES_VERSION=15
 
 # --- Docker ---
 SUAP_IMAGE=registry.exemplo.com:5000/org/suap

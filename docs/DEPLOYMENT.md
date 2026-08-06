@@ -193,8 +193,8 @@ Para produção, a recomendação é **segmentar os serviços em VMs distintas**
                │                  │                 │                 │
                ▼                  ▼                 ▼                 ▼
        ┌───────────────┐ ┌────────────────┐ ┌───────────────┐ ┌───────────────┐
-       │ PostgreSQL 16 │ │ Redis (cache/  │ │ Celery worker │ │     Mídia     │
-       │   (dados)     │ │ sessão/broker) │ │ + celery beat │ │ compartilhada │
+       │   PostgreSQL  │ │ Redis (cache/  │ │ Celery worker │ │     Mídia     │
+       │    (dados)    │ │ sessão/broker) │ │ + celery beat │ │ compartilhada │
        │               │ │                │ │ (assíncrono)  │ │ (NFS / MinIO) │
        └───────────────┘ └────────────────┘ └───────────────┘ └───────────────┘
 ```
@@ -316,7 +316,7 @@ make stop
 - Instalação de dependências do sistema (halt em falha);
 - Configuração de locale (`pt_BR.UTF-8`) e timezone;
 - Clone raso do código (`git clone --depth 1`) ou atualização;
-- Criação de virtualenv Python 3.12 e instalação de dependências;
+- Criação de virtualenv Python 3.12+ (versão configurável via `PYTHON_VERSION` no `.env`) e instalação de dependências;
 - Menu interativo para configurar o Supervisor (SUAP / Celery / Ambos);
 - Deploy das configurações do Supervisor com recarga condicional;
 - Ajuste de permissões (`chown www-data`).
@@ -397,7 +397,7 @@ Variáveis relevantes no `.env`:
 
 ### 10.1. Escolha da versão
 
-As documentações do IFRN citam PostgreSQL 15 (instalação nativa) e 16 (Docker). Recomenda-se adotar a **versão mais recente suportada oficialmente pela versão do SUAP em uso** — confirme com a equipe de desenvolvimento qual versão é homologada.
+As documentações do IFRN citam PostgreSQL 15 (instalação nativa) e 16 (Docker). A versão compatível é **15+** (ou a que o IFRN recomendar à época). Recomenda-se adotar a **versão mais recente suportada oficialmente pela versão do SUAP em uso** — confirme com a equipe de desenvolvimento qual versão é homologada. O valor pode ser ajustado via a variável `POSTGRES_VERSION` no `.env` do suap-setup.
 
 ### 10.2. Instalação
 

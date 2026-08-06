@@ -112,8 +112,8 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 
 | Variável | Descrição | Padrão (dev) | Padrão (prod) |
 |----------|-----------|--------------|---------------|
-| `PYTHON_VERSION` | Versão do Python | `3.12` | `3.12` |
-| `POSTGRES_VERSION` | Versão do PostgreSQL a instalar | `16` | `16` |
+| `PYTHON_VERSION` | Versão do Python (compatível: 3.12+ ou conforme recomendação do IFRN à época) | `3.12` | `3.12` |
+| `POSTGRES_VERSION` | Versão do PostgreSQL (compatível: 15+ ou conforme recomendação do IFRN à época) | `15` | `15` |
 | `BASE_DIR` | Diretório base para instalação | `$HOME/Projetos` | `/opt` |
 | `SUAP_DIR` | Diretório do código SUAP | `${BASE_DIR}/suap` | `${BASE_DIR}/suap` |
 | `VENV_DIR` | Diretório do virtualenv | `${SUAP_DIR}/.venv` | `/opt/venv` |
@@ -167,7 +167,7 @@ Os scripts de desenvolvimento realizam:
 - Instalação do [UV](https://docs.astral.sh/uv/) (com detecção em `~/.cargo/bin` e `~/.local/bin`)
 - Clone ou atualização do código SUAP
 - Geração de `settings.py` e `.env` a partir dos samples
-- Criação de virtualenv com Python 3.12
+- Criação de virtualenv com Python 3.12+ (versão configurável via `PYTHON_VERSION` no `.env`)
 - Instalação de dependências via `uv sync --group dev` ou `uv pip install -r requirements/development.txt`
 
 ## Ambiente de produção
@@ -447,6 +447,8 @@ suap-setup/
 
 ## Observações
 
+- As versões compatíveis de **Python** são **3.12+** (ou a que o IFRN recomendar à época). O valor é configurável via `PYTHON_VERSION` no `.env`.
+- As versões compatíveis de **PostgreSQL** são **15+** (ou a que o IFRN recomendar à época). O valor é configurável via `POSTGRES_VERSION` no `.env`.
 - Scripts são **idempotentes**: etapas já concluídas são puladas com mensagens amarelas.
 - **Halt em falhas críticas**: se a instalação de pacotes ou dependências Python falhar, o script encerra imediatamente.
 - **Supervisorctl condicional**: `supervisorctl reread/update` só executa quando arquivos foram efetivamente copiados.
