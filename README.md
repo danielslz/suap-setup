@@ -113,7 +113,7 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | Variável | Descrição | Padrão (dev) | Padrão (prod) |
 |----------|-----------|--------------|---------------|
 | `PYTHON_VERSION` | Versão do Python (compatível: 3.12+ ou conforme recomendação do IFRN à época) | `3.12` | `3.12` |
-| `POSTGRES_VERSION` | Versão do PostgreSQL (compatível: 15+ ou conforme recomendação do IFRN à época) | `15` | `15` |
+| `POSTGRES_VERSION` | Versão do PostgreSQL (compatível: 16+ ou conforme recomendação do IFRN à época) | `16` | `16` |
 | `BASE_DIR` | Diretório base para instalação | `$HOME/Projetos` | `/opt` |
 | `SUAP_DIR` | Diretório do código SUAP | `${BASE_DIR}/suap` | `${BASE_DIR}/suap` |
 | `VENV_DIR` | Diretório do virtualenv | `${SUAP_DIR}/.venv` | `/opt/venv` |
@@ -272,18 +272,21 @@ O script `docker/prod/docker-setup.sh` delega para o projeto suap_deploy:
 5. Apresenta menu interativo de gerenciamento:
 
 ```
-1) Fazer pull das imagens e iniciar todos os serviços
-2) Fazer build local das imagens (a partir do código-fonte)
-3) Apenas iniciar serviços (sem pull/build)
-4) Parar todos os serviços
-5) Ver status dos containers
-6) Ver logs
-7) Acessar shell do container web
-8) Executar backup do banco
+1) Fazer pull das imagens e iniciar serviços (modo registry)
+2) Fazer build local das imagens e iniciar (modo local)
+3) Apenas iniciar serviços (make up)
+4) Parar todos os serviços (make down)
+5) Reiniciar serviços (make restart)
+6) Ver status dos containers
+7) Ver logs
+8) Acessar shell do container web
+9) Executar backup do banco
+10) Executar restore do banco
+11) Executar setup interativo (make setup)
 0) Sair
 ```
 
-O suap_deploy utiliza imagens pré-construídas do registry GitLab, OWASP ModSecurity CRS como WAF no Nginx, e resource limits por container.
+O suap_deploy suporta dois modos de imagem: **registry** (pull de imagens pré-construídas) e **local** (build a partir do código-fonte clonado em `./src/suap`). Os serviços ativos são controlados pela variável `COMPOSE_PROFILES` no `.env` do suap_deploy. Inclui OWASP ModSecurity CRS como WAF no Nginx e resource limits por container.
 
 ```bash
 # Iniciar
@@ -291,11 +294,10 @@ bash docker/prod/docker-setup.sh
 
 # Ou usar diretamente no diretório do suap_deploy:
 cd $SUAP_DEPLOY_DIR
-make start-web
-make start-celery
+make up
 make status
 make logs
-make stop
+make down
 ```
 
 ### Instalação do Docker
@@ -448,7 +450,7 @@ suap-setup/
 ## Observações
 
 - As versões compatíveis de **Python** são **3.12+** (ou a que o IFRN recomendar à época). O valor é configurável via `PYTHON_VERSION` no `.env`.
-- As versões compatíveis de **PostgreSQL** são **15+** (ou a que o IFRN recomendar à época). O valor é configurável via `POSTGRES_VERSION` no `.env`.
+- As versões compatíveis de **PostgreSQL** são **16+** (ou a que o IFRN recomendar à época). O valor é configurável via `POSTGRES_VERSION` no `.env`.
 - Scripts são **idempotentes**: etapas já concluídas são puladas com mensagens amarelas.
 - **Halt em falhas críticas**: se a instalação de pacotes ou dependências Python falhar, o script encerra imediatamente.
 - **Supervisorctl condicional**: `supervisorctl reread/update` só executa quando arquivos foram efetivamente copiados.
@@ -457,7 +459,7 @@ suap-setup/
 - **Docker auto-install**: se Docker não estiver disponível, os scripts Docker oferecem instalação automática.
 - **Delegação Docker**: scripts Docker não mantêm Dockerfiles locais — delegam para repositórios upstream (suap para dev, suap_deploy para prod).
 - **UID/GID 33 do www-data**: scripts de produção e atualização garantem que o usuário `www-data` possui UID/GID 33 para compatibilidade com volumes Docker do suap_deploy. Se outro usuário/grupo ocupa UID/GID 33, o script encerra com erro.
-- **Variáveis de imagens Docker** (`SUAP_IMAGE`, `SUAP_PDF_IMAGE`, `SUAP_AI_IMAGE`) são solicitadas pelo wizard e não possuem valores hardcoded no código.
+- **Variáveis de imagens Docker** (`SUAP_IMAGE`, `SUAP_PDF_IMAGE`, `SUAP_AI_IMAGE`) são solicitadas pelo wizard do suap-setup para Docker dev (opção 5). Para Docker prod (opção 6), essas variáveis são gerenciadas pelo `.env` do próprio suap_deploy (via `make setup`).
 - As opções Docker funcionam em qualquer sistema com Docker, independente da distribuição.
 
 ## Licença

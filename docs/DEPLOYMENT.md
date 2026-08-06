@@ -247,28 +247,31 @@ Na primeira execução, o wizard solicitará as variáveis principais:
 | `SUAP_DEPLOY_DIR` | Diretório do repositório `suap_deploy` | `/opt/suap_deploy` |
 | `SUAP_DEPLOY_GIT_URL` | URL Git do `suap_deploy` | `git@gitlab.instituicao.edu.br:org/suap_deploy.git` |
 
-> **Nota:** as variáveis de imagem Docker (`SUAP_IMAGE`, `SUAP_PDF_IMAGE`, `SUAP_AI_IMAGE`) são configuradas dentro do `.env` do próprio repositório `suap_deploy` (gerado a partir do `env.prod.sample`), não no `.env` do suap-setup.
+> **Nota:** as variáveis de imagem Docker (`SUAP_IMAGE`, `SUAP_PDF_IMAGE`, `SUAP_AI_IMAGE`) são configuradas dentro do `.env` do próprio repositório `suap_deploy` (gerado pelo `make setup` a partir do `env.sample`), não no `.env` do suap-setup.
 
 O script então:
 
 1. Verifica se o Docker está disponível (oferece instalação automática caso não esteja);
-2. Clona/atualiza o repositório `suap_deploy` em `SUAP_DEPLOY_DIR`;
-3. Copia e ajusta o `.env` de produção a partir do sample;
+2. Clona o repositório `suap_deploy` em `SUAP_DEPLOY_DIR`;
+3. Executa `make setup` interativo (escolhe modo de imagem, gera `.env`, ativa template nginx, gera cert SSL);
 4. Apresenta o menu de gerenciamento:
 
 ```
-1) Fazer pull das imagens e iniciar todos os serviços
-2) Fazer build local das imagens
-3) Apenas iniciar serviços (sem pull/build)
-4) Parar todos os serviços
-5) Ver status dos containers
-6) Ver logs
-7) Acessar shell do container web
-8) Executar backup do banco
+1) Fazer pull das imagens e iniciar serviços (modo registry)
+2) Fazer build local das imagens e iniciar (modo local)
+3) Apenas iniciar serviços (make up)
+4) Parar todos os serviços (make down)
+5) Reiniciar serviços (make restart)
+6) Ver status dos containers
+7) Ver logs
+8) Acessar shell do container web
+9) Executar backup do banco
+10) Executar restore do banco
+11) Executar setup interativo (make setup)
 0) Sair
 ```
 
-Para o primeiro provisionamento, selecione **1) Fazer pull das imagens e iniciar todos os serviços**.
+Para o primeiro provisionamento, selecione **1)** (modo registry) ou **2)** (modo local/build).
 
 ### 8.2. Ajustes específicos de homologação
 
@@ -296,19 +299,22 @@ Selecione **6) Configurar ambiente prod via Docker** (recomendado) ou **2) Confi
 
 **Rota Docker (recomendada):** delega para o Makefile do `suap_deploy`, que já traz:
 
-- Imagens pré-construídas e versionadas do registry;
+- Dois modos de imagem: **registry** (pull de imagens pré-construídas) e **local** (build a partir do código-fonte);
 - **OWASP ModSecurity CRS** como WAF integrado ao Nginx;
-- Resource limits por container.
+- Resource limits por container;
+- Controle de serviços via `COMPOSE_PROFILES` no `.env`.
 
 Gerenciamento via Makefile:
 
 ```bash
 cd /opt/suap_deploy
-make start-web
-make start-celery
-make status
-make logs
-make stop
+make up            # Iniciar serviços (respeita COMPOSE_PROFILES)
+make status        # Ver status
+make logs          # Ver logs
+make down          # Parar serviços
+make restart       # Reiniciar (down + up)
+make bash          # Shell no container web
+make backup        # Backup do banco
 ```
 
 **Rota nativa (alternativa):** o script `suap-prod.sh` realiza:
@@ -397,7 +403,7 @@ Variáveis relevantes no `.env`:
 
 ### 10.1. Escolha da versão
 
-As documentações do IFRN citam PostgreSQL 15 (instalação nativa) e 16 (Docker). A versão compatível é **15+** (ou a que o IFRN recomendar à época). Recomenda-se adotar a **versão mais recente suportada oficialmente pela versão do SUAP em uso** — confirme com a equipe de desenvolvimento qual versão é homologada. O valor pode ser ajustado via a variável `POSTGRES_VERSION` no `.env` do suap-setup.
+A versão compatível é **16+** (ou a que o IFRN recomendar à época). Recomenda-se adotar a **versão mais recente suportada oficialmente pela versão do SUAP em uso** — confirme com a equipe de desenvolvimento qual versão é homologada. O valor pode ser ajustado via a variável `POSTGRES_VERSION` no `.env` do suap-setup.
 
 ### 10.2. Instalação
 
@@ -688,10 +694,18 @@ Fluxo executado automaticamente:
 
 ```bash
 cd /opt/suap_deploy
-make pull-image
-make pull-pdf-image
-make start-web
-make start-celery
+docker compose pull    # Pull das imagens atualizadas do registry
+make down              # Parar serviços atuais
+make up                # Iniciar com as novas imagens
+```
+
+Ou, para modo local (build a partir do código-fonte):
+
+```bash
+cd /opt/suap_deploy
+cd src/suap && git pull && cd ../..
+make build             # Rebuild das imagens
+make restart           # Reiniciar serviços
 ```
 
 ### 13.3. Política de atualização recomendada

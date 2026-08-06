@@ -27,16 +27,16 @@ aplicação). Isso garante que:
 Utiliza o projeto **suap_deploy** que é o orquestrador oficial de produção.
 O suap_deploy:
 
-- Puxa imagens pré-construídas do registry GitLab
+- Suporta dois modos: **registry** (pull de imagens) e **local** (build a partir do código em `./src/suap`)
 - Usa OWASP ModSecurity CRS como WAF no Nginx
 - Suporta resource limits por container
-- Integra com Vault para gerenciamento de segredos
-- Inclui serviços auxiliares (pdfprinter, ai)
-- Gerencia via Makefile com targets bem definidos
+- Controla serviços ativos via `COMPOSE_PROFILES` no `.env`
+- Inclui serviços auxiliares (pdfprinter, ai, celery-beat, celery-flower)
+- Gerencia via Makefile com targets: `setup`, `build`, `up`, `down`, `restart`, `status`, `logs`, `bash`, `backup`, `restore`
 
 **Fluxo:**
 1. Verifica/clona o repositório suap_deploy em `SUAP_DEPLOY_DIR`
-2. Configura `.env` de produção
+2. Executa `make setup` (interativo: modo imagem, .env, nginx, certs)
 3. Apresenta menu interativo com opções de gerenciamento
 4. Delega para os targets do Makefile
 

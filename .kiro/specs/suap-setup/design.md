@@ -489,9 +489,9 @@ set -u
 #       - Se falhar: fallback com `sudo mkdir -p "${_parent_dir}"`
 #    c. Se _parent_dir não é gravável pelo usuário atual:
 #       - Executar `sudo chown "${USER}:${USER}" "${_parent_dir}"`
-#    d. git clone --recurse-submodules ${SUAP_DEPLOY_GIT_URL} ${SUAP_DEPLOY_DIR}
+#    d. git clone ${SUAP_DEPLOY_GIT_URL} ${SUAP_DEPLOY_DIR}
 # 9. Se SUAP_DEPLOY_DIR já existe (.git presente):
-#    - git submodule update --init --recursive
+#    - msg_skip (repositório já existe)
 # 10. Validar existência de ${SUAP_DEPLOY_DIR}/Makefile
 #     - Se ausente: msg_error + exit 1
 # 10.1 Garantir que 'make' está instalado:
@@ -505,14 +505,17 @@ set -u
 #     - Se .env ainda não existe após `make setup`: msg_error + exit 1
 # 12. cd ${SUAP_DEPLOY_DIR}
 # 13. Apresentar menu interativo:
-#     1) Pull imagens + iniciar (make pull-image, make start-*)
-#     2) Build local (git submodule update --remote, make build)
-#     3) Apenas iniciar (make start-*)
-#     4) Parar (make stop)
-#     5) Status (make status)
-#     6) Logs (make logs)
-#     7) Shell (make bash)
-#     8) Backup (make backup)
+#     1) Pull imagens + iniciar (docker compose pull, make up)
+#     2) Build local + iniciar (make build, make up)
+#     3) Apenas iniciar (make up)
+#     4) Parar (make down)
+#     5) Reiniciar (make restart)
+#     6) Status (make status)
+#     7) Logs (make logs)
+#     8) Shell (make bash)
+#     9) Backup (make backup)
+#     10) Restore (make restore DUMP=...)
+#     11) Setup interativo (make setup)
 #     0) Sair
 # 14. Delegar para targets do Makefile conforme opção
 # 15. Exibir lista de comandos make úteis
@@ -526,7 +529,7 @@ set -u
 - **Evita drift**: Quando o upstream muda dependências, Dockerfiles locais ficariam desatualizados silenciosamente.
 - **Single source of truth**: Os Dockerfiles do suap são os que o CI/CD constrói e publica — são os "oficiais".
 - **Completude**: O compose do suap inclui todos os serviços necessários (minio, ai, pdf) que um setup local precisaria duplicar.
-- **Produção real**: O suap_deploy tem configurações battle-tested (WAF, limits, Vault, SSL) que não fazem sentido recriar.
+- **Produção real**: O suap_deploy tem configurações battle-tested (WAF, limits, SSL) que não fazem sentido recriar.
 - **Facilidade de atualização**: Um `git pull` no repo upstream atualiza toda a configuração de containers sem alterar nada no suap-setup.
 
 ### 6. Scripts de Redis e Nginx
@@ -798,26 +801,30 @@ As variáveis exportadas pelo script (`SUAP_IMAGE`, `CELERY_QUEUE`, `CELERY_BROK
 
 O Script_Docker_Prod **não mantém** docker-compose nem Dockerfiles. Ele delega para o Makefile do Deploy_Repo. O suap_deploy:
 
-- Puxa imagens pré-construídas do registry GitLab
+- Suporta modo "registry" (pull de imagens pré-construídas) e "local" (build a partir do código)
 - Usa OWASP ModSecurity CRS como WAF no Nginx
 - Suporta resource limits por container
-- Integra com Vault para gerenciamento de segredos (opcional)
-- Inclui serviços auxiliares (pdfprinter, ai)
+- Controla serviços via COMPOSE_PROFILES no .env
+- Inclui serviços auxiliares (pdfprinter, ai, celery-beat, celery-flower)
 - Gerencia via Makefile com targets bem definidos:
 
 | Target | Descrição |
 |--------|-----------|
-| `make pull-image` | Pull da imagem principal do registry |
-| `make build` | Build local a partir do código-fonte |
-| `make start-web` | Iniciar web + nginx |
-| `make start-celery` | Iniciar celery worker |
-| `make start-celery-beat` | Iniciar celery beat |
-| `make start-flower` | Iniciar celery flower |
-| `make stop` | Parar todos os serviços |
+| `make help` | Listar todos os targets disponíveis |
+| `make setup` | Setup interativo (modo imagem, .env, nginx, certs) |
+| `make build` | Build local das imagens (base + app + pdf) |
+| `make up` | Iniciar serviços (respeita COMPOSE_PROFILES do .env) |
+| `make down` | Parar serviços |
+| `make restart` | Reiniciar (down + up) |
 | `make status` | Ver status dos containers |
-| `make logs` | Ver logs |
+| `make logs` | Ver logs (SERVICES="web nginx" para filtrar) |
 | `make bash` | Shell no container web |
-| `make backup` | Backup do banco de dados |
+| `make shell` | Django manage.py shell |
+| `make exec COMMAND=...` | Comando arbitrário no container web |
+| `make begin` | Criar DB + carga inicial (banco novo) |
+| `make backup` | Dump do banco em deploy/backup/ |
+| `make restore DUMP=...` | Restaurar dump |
+| `make psql` | Abrir psql usando credenciais do .env |
 
 ### Tabela de Roteamento do Wrapper
 

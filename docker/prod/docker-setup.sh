@@ -5,11 +5,11 @@ set -u
 # Delega para o projeto suap_deploy, que é o orquestrador oficial de produção.
 #
 # O suap_deploy:
-#   - Puxa imagens pré-construídas do registry GitLab
+#   - Suporta modo "registry" (pull de imagens pré-construídas) e "local" (build a partir do código)
 #   - Usa OWASP ModSecurity CRS como WAF no Nginx
 #   - Suporta resource limits por container
-#   - Integra com Vault para segredos (opcional)
-#   - Inclui serviços auxiliares (pdfprinter, ai)
+#   - Controla serviços via COMPOSE_PROFILES no .env
+#   - Inclui serviços auxiliares (pdfprinter, ai, celery-beat, celery-flower)
 #
 # Este script automatiza o clone/configuração do suap_deploy e delega
 # o gerenciamento dos containers para o Makefile dele.
@@ -51,7 +51,6 @@ fi
 # 7. Se SUAP_DEPLOY_DIR não existe, clonar o repositório
 if [ ! -d "${SUAP_DEPLOY_DIR}" ]; then
   msg_action "Repositório suap_deploy não encontrado em ${SUAP_DEPLOY_DIR}. Clonando..."
-  local _parent_dir
   _parent_dir="$(dirname "${SUAP_DEPLOY_DIR}")"
   # Criar diretório pai se não existir e garantir permissão de escrita
   if [ ! -d "${_parent_dir}" ]; then
@@ -60,16 +59,14 @@ if [ ! -d "${SUAP_DEPLOY_DIR}" ]; then
   if [ ! -w "${_parent_dir}" ]; then
     sudo chown "${USER}:${USER}" "${_parent_dir}"
   fi
-  if ! git clone --recurse-submodules "${SUAP_DEPLOY_GIT_URL}" "${SUAP_DEPLOY_DIR}"; then
+  if ! git clone "${SUAP_DEPLOY_GIT_URL}" "${SUAP_DEPLOY_DIR}"; then
     msg_error "Falha ao clonar o repositório suap_deploy."
     msg_error "Verifique se você tem acesso a: ${SUAP_DEPLOY_GIT_URL}"
     exit 1
   fi
   msg_action "Repositório clonado com sucesso em ${SUAP_DEPLOY_DIR}"
 elif [ -d "${SUAP_DEPLOY_DIR}/.git" ]; then
-  # Atualizar submodules se já existe
-  msg_action "Atualizando submodules do suap_deploy..."
-  cd "${SUAP_DEPLOY_DIR}" && git submodule update --init --recursive 2>/dev/null || true
+  msg_skip "Repositório suap_deploy já existe em ${SUAP_DEPLOY_DIR}"
 fi
 
 # 8. Verificar que o Makefile existe
@@ -82,7 +79,7 @@ fi
 # 8.1 Garantir que 'make' está instalado
 if ! command -v make &>/dev/null; then
   msg_action "Comando 'make' não encontrado. Instalando..."
-  case "${DISTRO_TYPE}" in
+  case "${DISTRO_TYPE:-}" in
     deb)
       sudo apt-get update && sudo apt-get install -y make
       ;;
@@ -119,6 +116,8 @@ if [ ! -f "${SUAP_DEPLOY_DIR}/.env" ]; then
     exit 1
   fi
   msg_action ".env gerado com sucesso via 'make setup'."
+else
+  msg_skip ".env já existe em ${SUAP_DEPLOY_DIR}"
 fi
 
 # 10. Menu de ações
@@ -129,84 +128,92 @@ echo "${GREEN}=== Gerenciamento Docker de Produção (suap_deploy) ===${NO_COLOR
 echo ""
 echo "  Diretório: ${SUAP_DEPLOY_DIR}"
 echo ""
-echo "  1) Fazer pull das imagens e iniciar todos os serviços"
-echo "  2) Fazer build local das imagens (a partir do código-fonte)"
-echo "  3) Apenas iniciar serviços (sem pull/build)"
-echo "  4) Parar todos os serviços"
-echo "  5) Ver status dos containers"
-echo "  6) Ver logs"
-echo "  7) Acessar shell do container web"
-echo "  8) Executar backup do banco"
+echo "  1) Fazer pull das imagens e iniciar serviços (modo registry)"
+echo "  2) Fazer build local das imagens e iniciar (modo local)"
+echo "  3) Apenas iniciar serviços (make up)"
+echo "  4) Parar todos os serviços (make down)"
+echo "  5) Reiniciar serviços (make restart)"
+echo "  6) Ver status dos containers"
+echo "  7) Ver logs"
+echo "  8) Acessar shell do container web"
+echo "  9) Executar backup do banco"
+echo "  10) Executar restore do banco"
+echo "  11) Executar setup interativo (make setup)"
 echo "  0) Sair"
 echo ""
-read -rp "Escolha uma opção [0-8]: " PROD_CHOICE
+read -rp "Escolha uma opção [0-11]: " PROD_CHOICE
 
 case "${PROD_CHOICE}" in
   1)
     msg_action "Fazendo pull das imagens..."
-    make pull-image
-    make pull-pdf-image 2>/dev/null || true
-    make pull-ai-image 2>/dev/null || true
+    docker compose pull
     msg_action "Iniciando serviços..."
-    make start-web
-    make start-celery
-    make start-celery-beat
-    make start-flower
-    make start-cron
-    make start-pdf 2>/dev/null || true
-    make start-ai 2>/dev/null || true
+    make up
     echo ""
-    msg_action "Todos os serviços iniciados."
+    msg_action "Serviços iniciados."
     make status
     ;;
   2)
     msg_action "Fazendo build das imagens a partir do código-fonte..."
-    msg_action "Isso requer que os submodules estejam atualizados."
-    git submodule update --remote
     make build
-    msg_action "Build concluído. Deseja iniciar os serviços? [s/N]"
-    read -rp "" _start
-    if [[ "${_start}" =~ ^[sS]$ ]]; then
-      make start-web
-      make start-celery
-      make start-celery-beat
-      make start-flower
-      make start-cron
-      echo ""
-      msg_action "Serviços iniciados."
-      make status
-    fi
+    msg_action "Iniciando serviços..."
+    make up
+    echo ""
+    msg_action "Serviços iniciados."
+    make status
     ;;
   3)
     msg_action "Iniciando serviços..."
-    make start-web
-    make start-celery
-    make start-celery-beat
-    make start-flower
-    make start-cron
-    make start-pdf 2>/dev/null || true
-    make start-ai 2>/dev/null || true
+    make up
     echo ""
     make status
     ;;
   4)
     msg_action "Parando todos os serviços..."
-    make stop
+    make down
     msg_action "Serviços parados."
     ;;
   5)
+    msg_action "Reiniciando serviços..."
+    make restart
+    echo ""
     make status
     ;;
   6)
-    make logs
+    make status
     ;;
   7)
-    make bash
+    make logs
     ;;
   8)
+    make bash
+    ;;
+  9)
     msg_action "Executando backup do banco..."
     make backup
-    msg_action "Backup concluído."
+    msg_action "Backup concluído. Arquivos em ${SUAP_DEPLOY_DIR}/deploy/backup/"
+    ;;
+  10)
+    echo ""
+    echo "  Dumps disponíveis em ${SUAP_DEPLOY_DIR}/deploy/backup/:"
+    ls -1 "${SUAP_DEPLOY_DIR}/deploy/backup/"*.sql 2>/dev/null || echo "  (nenhum dump encontrado)"
+    echo ""
+    read -rp "Caminho do dump (ex: deploy/backup/dump_2024-01-01+12-00-00.sql): " DUMP_PATH
+    if [ -z "${DUMP_PATH}" ]; then
+      msg_error "Nenhum arquivo informado. Operação cancelada."
+      exit 1
+    fi
+    if [ ! -f "${DUMP_PATH}" ]; then
+      msg_error "Arquivo não encontrado: ${DUMP_PATH}"
+      exit 1
+    fi
+    msg_action "Executando restore do banco..."
+    make restore DUMP="${DUMP_PATH}"
+    msg_action "Restore concluído."
+    ;;
+  11)
+    msg_action "Executando setup interativo do suap_deploy..."
+    make setup
     ;;
   0)
     echo "Saindo..."
@@ -221,13 +228,27 @@ esac
 echo ""
 msg_action "=== Comandos úteis (executar dentro de ${SUAP_DEPLOY_DIR}) ==="
 echo ""
-echo "  make start-web        Iniciar web + nginx"
-echo "  make start-celery     Iniciar celery worker"
-echo "  make stop             Parar todos os serviços"
+echo "  make help             Listar todos os targets disponíveis"
+echo "  make setup            Setup interativo (modo imagem, .env, nginx, certs)"
+echo "  make build            Build local das imagens (base + app + pdf)"
+echo "  make up               Iniciar serviços (respeita COMPOSE_PROFILES do .env)"
+echo "  make down             Parar serviços"
+echo "  make restart          Reiniciar (down + up)"
 echo "  make status           Ver status dos containers"
-echo "  make logs             Ver logs"
-echo "  make bash             Acessar shell do container web"
-echo "  make backup           Fazer backup do banco"
-echo "  make build            Build local das imagens"
-echo "  make push-image       Push da imagem para o registry"
+echo "  make logs             Ver logs (SERVICES=\"web nginx\" para filtrar)"
+echo "  make bash             Shell no container web"
+echo "  make shell            Django manage.py shell"
+echo "  make exec COMMAND=... Comando arbitrário no container web"
+echo "  make begin            Criar DB + carga inicial (banco novo)"
+echo "  make backup           Dump do banco em deploy/backup/"
+echo "  make restore DUMP=... Restaurar dump"
+echo "  make psql             Abrir psql usando credenciais do .env"
+echo ""
+echo "  Profiles controlam quais serviços sobem (variável COMPOSE_PROFILES no .env):"
+echo "    default             = web + nginx + pdfprinter + celery"
+echo "    celery-beat         = scheduler (apenas UM nó)"
+echo "    celery-flower       = UI em :5555 (apenas UM nó)"
+echo "    ai                  = serviço de IA"
+echo "    local-db            = PostgreSQL em container (só homologação)"
+echo "    local-redis         = Redis em container (só homologação)"
 echo ""

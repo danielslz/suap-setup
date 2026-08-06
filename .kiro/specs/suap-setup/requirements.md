@@ -313,14 +313,14 @@ Este documento define os requisitos para o projeto **suap-setup**, uma coleção
 
 1. WHEN o Script_Docker_Prod é executado, THE Script_Docker_Prod SHALL verificar se o Docker e o Docker_Compose estão instalados no sistema.
 2. IF o Docker ou o Docker_Compose não estão instalados, THEN THE Script_Docker_Prod SHALL oferecer ao usuário a opção de instalar o Docker automaticamente usando o Script_Install_Docker conforme definido no Requirement 29, e caso o usuário recuse, exibir uma mensagem de erro informando os pré-requisitos e encerrar com código de saída 1.
-3. WHEN o Deploy_Repo não existe no caminho definido por SUAP_DEPLOY_DIR, THE Script_Docker_Prod SHALL clonar o repositório usando a variável SUAP_DEPLOY_GIT_URL com a flag `--recurse-submodules`.
-4. WHEN o Deploy_Repo existe no caminho SUAP_DEPLOY_DIR, THE Script_Docker_Prod SHALL atualizar os submodules do repositório existente sem clonar novamente.
+3. WHEN o Deploy_Repo não existe no caminho definido por SUAP_DEPLOY_DIR, THE Script_Docker_Prod SHALL clonar o repositório usando a variável SUAP_DEPLOY_GIT_URL.
+4. WHEN o Deploy_Repo existe no caminho SUAP_DEPLOY_DIR, THE Script_Docker_Prod SHALL exibir msg_skip indicando que o repositório já existe.
 5. WHEN o Deploy_Repo é verificado, THE Script_Docker_Prod SHALL validar a existência do arquivo `Makefile` dentro do Deploy_Repo.
 6. IF o arquivo `Makefile` não existe no Deploy_Repo, THEN THE Script_Docker_Prod SHALL exibir uma mensagem de erro informando que o Makefile não foi encontrado e encerrar com código de saída 1.
-7. WHEN o arquivo `.env` não existe no Deploy_Repo, THE Script_Docker_Prod SHALL gerar o `.env` a partir do arquivo `env.prod.sample` do Deploy_Repo e solicitar ao usuário que edite as credenciais antes de prosseguir.
-8. IF o arquivo `.env` não existe no Deploy_Repo e o `env.prod.sample` também não existe, THEN THE Script_Docker_Prod SHALL exibir uma mensagem de erro e encerrar com código de saída 1.
-9. WHEN o ambiente está preparado, THE Script_Docker_Prod SHALL apresentar um menu interativo com as opções: (1) fazer pull das imagens e iniciar serviços, (2) fazer build local das imagens, (3) apenas iniciar serviços, (4) parar serviços, (5) ver status, (6) ver logs, (7) acessar shell do container web, (8) executar backup do banco.
-10. WHEN o usuário seleciona uma opção válida, THE Script_Docker_Prod SHALL delegar a execução para os targets correspondentes do Makefile no Deploy_Repo (make pull-image, make build, make start-web, make start-celery, make stop, make status, make logs, make bash, make backup).
+7. WHEN o arquivo `.env` não existe no Deploy_Repo, THE Script_Docker_Prod SHALL executar `make setup` para gerar o `.env` interativamente (modo de imagem, SECRET_KEY, nginx, permissões).
+8. IF o `make setup` falhar ou não gerar o `.env`, THEN THE Script_Docker_Prod SHALL exibir uma mensagem de erro e encerrar com código de saída 1.
+9. WHEN o ambiente está preparado, THE Script_Docker_Prod SHALL apresentar um menu interativo com as opções: (1) pull + iniciar (registry), (2) build + iniciar (local), (3) apenas iniciar (make up), (4) parar (make down), (5) reiniciar (make restart), (6) status, (7) logs, (8) shell, (9) backup, (10) restore, (11) setup interativo.
+10. WHEN o usuário seleciona uma opção válida, THE Script_Docker_Prod SHALL delegar a execução para os targets correspondentes do Makefile no Deploy_Repo (docker compose pull, make build, make up, make down, make restart, make status, make logs, make bash, make backup, make restore, make setup).
 11. IF o usuário informa uma opção inválida, THEN THE Script_Docker_Prod SHALL exibir uma mensagem de erro e encerrar com código de saída 1.
 12. WHEN a operação é concluída, THE Script_Docker_Prod SHALL exibir uma lista de comandos úteis do Makefile para gerenciamento posterior dos containers.
 13. THE Script_Docker_Prod SHALL delegar integralmente a definição de serviços, Dockerfiles, imagens e orquestração para o Deploy_Repo, sem manter Dockerfiles ou docker-compose próprios no diretório `docker/prod/`.

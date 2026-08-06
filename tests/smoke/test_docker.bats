@@ -105,12 +105,12 @@ setup() {
 }
 
 @test "docker/prod/docker-setup.sh usa make para gerenciar serviços" {
-    run grep -q 'make start-web' "$PROD_SCRIPT"
+    run grep -q 'make up' "$PROD_SCRIPT"
     [ "$status" -eq 0 ]
 }
 
-@test "docker/prod/docker-setup.sh usa make pull-image" {
-    run grep -q 'make pull-image' "$PROD_SCRIPT"
+@test "docker/prod/docker-setup.sh usa docker compose pull" {
+    run grep -q 'docker compose pull' "$PROD_SCRIPT"
     [ "$status" -eq 0 ]
 }
 
@@ -124,8 +124,8 @@ setup() {
     [ "$status" -eq 0 ]
 }
 
-@test "docker/prod/docker-setup.sh suporta clone com --recurse-submodules" {
-    run grep -q '\-\-recurse-submodules' "$PROD_SCRIPT"
+@test "docker/prod/docker-setup.sh usa make setup para configurar .env" {
+    run grep -q 'make setup' "$PROD_SCRIPT"
     [ "$status" -eq 0 ]
 }
 

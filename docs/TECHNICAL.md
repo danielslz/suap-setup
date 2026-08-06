@@ -935,11 +935,11 @@ docker compose -f docker/docker-compose.dev.yml exec web python manage.py migrat
 O ambiente Docker de produção **delega para o projeto `suap_deploy`**, que é o
 orquestrador oficial de produção. O suap_deploy:
 
-- Puxa imagens pré-construídas do registry GitLab
+- Suporta modo "registry" (pull de imagens pré-construídas) e "local" (build a partir do código)
 - Usa OWASP ModSecurity CRS como WAF no Nginx
-- Suporta resource limits por container (até 15G por serviço)
-- Integra com HashiCorp Vault para gerenciamento de segredos
-- Inclui serviços auxiliares (pdfprinter, ai)
+- Suporta resource limits por container
+- Controla serviços via COMPOSE_PROFILES no .env
+- Inclui serviços auxiliares (pdfprinter, ai, celery-beat, celery-flower)
 - Gerencia via Makefile com targets bem definidos
 
 ### Arquitetura de Delegação
@@ -949,40 +949,44 @@ suap-setup                          suap_deploy (SUAP_DEPLOY_DIR)
 ┌─────────────────────┐             ┌────────────────────────────────────┐
 │ docker/prod/        │             │ Makefile                           │
 │   docker-setup.sh ──┼──delega──▶  │ docker-compose.yml                 │
-│                     │             │ default-services.yml               │
+│                     │             │ scripts/setup.sh                   │
 │                     │             │ nginx/ (OWASP ModSecurity)         │
-│                     │             │ src/suap (git submodule)           │
+│                     │             │ src/suap/ (clonado por make setup) │
+│                     │             │ deploy/ (backup, media, logs)      │
 └─────────────────────┘             └────────────────────────────────────┘
 ```
 
 ### Docker Compose — Serviços de Produção
 
-| Serviço | Imagem | Porta | Restart | Descrição |
+| Serviço | Imagem | Porta | Profile | Descrição |
 |---------|--------|-------|---------|-----------|
-| `web` | `${SUAP_IMAGE}` (registry) | — | `always` | Gunicorn com SUAP |
-| `celery` | `${SUAP_IMAGE}` | — | `always` | Worker Celery |
-| `celery-beat` | `${SUAP_IMAGE}` | — | `always` | Agendador de tarefas |
-| `celery-flower` | `${SUAP_IMAGE}` | 5555 | `always` | Monitor web |
-| `cron` | `${SUAP_IMAGE}` | — | `always` | Tarefas crontab |
-| `nginx` | `owasp/modsecurity-crs:nginx` | 80, 443, 8080 | `always` | WAF + proxy reverso |
-| `pdfprinter` | `${SUAP_PDF_IMAGE}` | 9000 | `always` | Geração de PDFs |
-| `ai` | `${SUAP_AI_IMAGE}` | 7000 | `always` | Serviço de IA |
-| `redis` | `redis:latest` | 6379 | `always` | (somente homologação) |
-| `db` | `postgres:15` | 5432 | `always` | (somente homologação) |
+| `web` | `${SUAP_IMAGE}` | 8000 (interno) | `default`, `web` | Gunicorn com SUAP |
+| `celery` | `${SUAP_IMAGE}` | — | `default`, `celery` | Worker Celery |
+| `celery-beat` | `${SUAP_IMAGE}` | — | `celery-beat` | Agendador de tarefas |
+| `celery-flower` | `${SUAP_IMAGE}` | 5555 | `celery-flower` | Monitor web |
+| `cron` | `${SUAP_IMAGE}` | — | `cron` | Tarefas crontab (legado) |
+| `nginx` | `owasp/modsecurity-crs:nginx` | 80, 443, 8080 | `default`, `web` | WAF + proxy reverso |
+| `pdfprinter` | `${SUAP_PDF_IMAGE}` | 9000 | `default`, `pdfprinter` | Geração de PDFs |
+| `ai` | `${SUAP_AI_IMAGE}` | 7000 | `ai` | Serviço de IA |
+| `redis` | `redis:latest` | 6379 | `local-redis` | Só homologação |
+| `db` | `postgres:18` | 5432 | `local-db` | Só homologação |
 
 ### Menu Interativo
 
 O script apresenta um menu de gerenciamento:
 
 ```
-1) Fazer pull das imagens e iniciar todos os serviços
-2) Fazer build local das imagens (a partir do código-fonte)
-3) Apenas iniciar serviços (sem pull/build)
-4) Parar todos os serviços
-5) Ver status dos containers
-6) Ver logs
-7) Acessar shell do container web
-8) Executar backup do banco
+1) Fazer pull das imagens e iniciar serviços (modo registry)
+2) Fazer build local das imagens e iniciar (modo local)
+3) Apenas iniciar serviços (make up)
+4) Parar todos os serviços (make down)
+5) Reiniciar serviços (make restart)
+6) Ver status dos containers
+7) Ver logs
+8) Acessar shell do container web
+9) Executar backup do banco
+10) Executar restore do banco
+11) Executar setup interativo (make setup)
 0) Sair
 ```
 
@@ -994,14 +998,15 @@ O script apresenta um menu de gerenciamento:
 3. load_env_file() → carrega variáveis
 4. check_docker_available() → verifica Docker
 5. Verificar/clonar repositório suap_deploy em SUAP_DEPLOY_DIR
-6. Atualizar submodules (se repositório já existe)
-7. Verificar existência do Makefile
-8. Garantir que 'make' está instalado:
+   - Se não existe: git clone (sem submodules)
+   - Se já existe: msg_skip (sem atualização automática)
+6. Verificar existência do Makefile
+7. Garantir que 'make' está instalado:
    - Se ausente: instalar via apt-get (deb), dnf (rpm) ou pacman (arch)
    - Se plataforma desconhecida ou falha na instalação: exit 1
-9. Configurar .env do suap_deploy via `make setup` (se não existir)
-10. Exibir menu interativo de gerenciamento
-11. Executar target do Makefile conforme opção escolhida
+8. Configurar .env do suap_deploy via `make setup` (se não existir)
+9. Exibir menu interativo de gerenciamento (11 opções + sair)
+10. Executar target do Makefile conforme opção escolhida
 ```
 
 ### Variáveis Necessárias
@@ -1017,29 +1022,49 @@ O script apresenta um menu de gerenciamento:
 cd $SUAP_DEPLOY_DIR
 
 # Gerenciamento básico
-make start-web         # Iniciar web + nginx
-make start-celery      # Iniciar celery worker
-make start-celery-beat # Iniciar celery beat
-make start-flower      # Iniciar celery flower
-make start-cron        # Iniciar cron
-make stop              # Parar todos os serviços
-make status            # Ver status
+make help              # Listar todos os targets disponíveis
+make setup             # Setup interativo (modo imagem, .env, nginx, certs)
+make up                # Iniciar serviços (respeita COMPOSE_PROFILES do .env)
+make down              # Parar serviços
+make restart           # Reiniciar (down + up)
+make status            # Ver status dos containers
+make logs              # Ver logs (SERVICES="web nginx" para filtrar)
 
-# Operações de banco
-make backup            # Backup do PostgreSQL
-make restore DUMP=deploy/backup/dump_2024-01-01.sql  # Restore
-make psql              # Acessar psql
-
-# Build e deploy
-make build             # Build local das imagens
-make push-image        # Push para registry
-make pull-image        # Pull do registry
+# Build
+make build             # Build local das imagens (base + app + pdf)
 
 # Acesso ao container
 make bash              # Shell no container web
-make shell             # Python shell (manage.py shell)
-make execute COMMAND='python manage.py migrate'  # Comando arbitrário
+make shell             # Django manage.py shell
+make exec COMMAND=...  # Comando arbitrário no container web
+
+# Operações de banco
+make begin             # Criar DB + carga inicial (banco novo)
+make backup            # Dump do banco em deploy/backup/
+make restore DUMP=...  # Restaurar dump
+make psql              # Abrir psql usando credenciais do .env
 ```
+
+### COMPOSE_PROFILES
+
+Os serviços disponíveis são controlados pela variável `COMPOSE_PROFILES` no `.env` do suap_deploy:
+
+| Profile | Serviços |
+|---------|----------|
+| `default` | web + nginx + pdfprinter + celery |
+| `celery-beat` | scheduler (apenas UM nó) |
+| `celery-flower` | UI em :5555 (apenas UM nó) |
+| `ai` | serviço de IA |
+| `local-db` | PostgreSQL em container (só homologação) |
+| `local-redis` | Redis em container (só homologação) |
+| `celery-beat` | scheduler (apenas UM nó em todo o cluster) |
+| `celery-flower` | UI de monitoramento em :5555 (apenas UM nó) |
+| `ai` | serviço de IA |
+| `cron` | **legado/descontinuado** — substituído por celery-beat |
+| `local-db` | PostgreSQL em container (só homologação) |
+| `local-redis` | Redis em container (só homologação) |
+
+Exemplo para nó único: `COMPOSE_PROFILES=default,celery-beat,celery-flower`
 
 ---
 
@@ -1335,7 +1360,7 @@ na primeira execução do `setup.sh`.
 
 | Variável | Tipo | Padrão | Descrição |
 |----------|------|--------|-----------|
-| `POSTGRES_VERSION` | String | `15` | Versão do PostgreSQL a instalar via repositório PGDG (compatível: 15+ ou conforme recomendação do IFRN à época) |
+| `POSTGRES_VERSION` | String | `16` | Versão do PostgreSQL a instalar via repositório PGDG (compatível: 16+ ou conforme recomendação do IFRN à época) |
 
 ### Variáveis de Produção (adicionais)
 
@@ -1393,8 +1418,8 @@ CELERY_MIN_WORKERS=2
 CELERY_QUEUE=geral,celery_beat
 
 # --- PostgreSQL ---
-# Versão do PostgreSQL a instalar (compatível: 15+ ou conforme recomendação do IFRN à época)
-POSTGRES_VERSION=15
+# Versão do PostgreSQL a instalar (compatível: 16+ ou conforme recomendação do IFRN à época)
+POSTGRES_VERSION=16
 
 # --- Docker ---
 SUAP_IMAGE=registry.exemplo.com:5000/org/suap
