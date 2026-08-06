@@ -212,7 +212,7 @@ ensure_env_for_option() {
       echo "${GREEN}SUAP_DEPLOY_DIR${NO_COLOR}"
       echo "  ${YELLOW}Descrição:${NO_COLOR} Caminho absoluto para o repositório suap_deploy."
       echo "  ${YELLOW}Exemplos:${NO_COLOR} \$HOME/Projetos/suap_deploy, /opt/suap_deploy"
-      local _deploy_default="\$HOME/Projetos/suap_deploy"
+      local _deploy_default="/opt/suap_deploy"
       read -rp "  Valor [${GREEN}${_deploy_default}${NO_COLOR}]: " _input
       SUAP_DEPLOY_DIR="${_input:-$_deploy_default}"
       needs_update=true
@@ -463,7 +463,7 @@ _write_env() {
     printf 'SUAP_AI_IMAGE=%s\n' "${SUAP_AI_IMAGE:-gitlab.instituicao.edu.br:4567/org/suap-ai:latest}"
     echo ""
     echo "# Diretório do repositório suap_deploy (produção Docker)"
-    printf 'SUAP_DEPLOY_DIR=%s\n' "${SUAP_DEPLOY_DIR:-\$HOME/Projetos/suap_deploy}"
+    printf 'SUAP_DEPLOY_DIR=%s\n' "${SUAP_DEPLOY_DIR:-/opt/suap_deploy}"
     echo ""
     echo "# URL do repositório Git do suap_deploy"
     printf 'SUAP_DEPLOY_GIT_URL=%s\n' "${SUAP_DEPLOY_GIT_URL:-git@gitlab.instituicao.edu.br:org/suap_deploy.git}"

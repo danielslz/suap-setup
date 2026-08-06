@@ -135,10 +135,10 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `SUAP_IMAGE` | Imagem Docker do SUAP no registry | — | *(solicitado pelo wizard)* |
 | `SUAP_PDF_IMAGE` | Imagem Docker do serviço de PDF | — | *(solicitado pelo wizard)* |
 | `SUAP_AI_IMAGE` | Imagem Docker do serviço de IA | — | *(solicitado pelo wizard)* |
-| `SUAP_DEPLOY_DIR` | Diretório do repositório suap_deploy | — | `$HOME/Projetos/suap_deploy` |
+| `SUAP_DEPLOY_DIR` | Diretório do repositório suap_deploy | — | `/opt/suap_deploy` |
 | `SUAP_DEPLOY_GIT_URL` | URL Git do suap_deploy | — | *(solicitado pelo wizard)* |
 | `SUAP_MINIO_DIR` | Diretório do repositório suap-minio | — | `/opt/suap-minio` |
-| `SUAP_MINIO_GIT_URL` | URL do repositório Git do suap-minio | — | *(obrigatório, solicitado pelo wizard)* |
+| `SUAP_MINIO_GIT_URL` | URL do repositório Git do suap-minio | — | *(solicitado pelo wizard)* |
 
 ## Scripts disponíveis
 
