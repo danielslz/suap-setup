@@ -255,7 +255,7 @@ ensure_env_for_option() {
       _show_header
       echo "${GREEN}SUAP_MINIO_GIT_URL${NO_COLOR}"
       echo "  ${YELLOW}Descrição:${NO_COLOR} URL do repositório Git do suap-minio (${RED}obrigatório${NO_COLOR})."
-      echo "  ${YELLOW}Exemplos:${NO_COLOR} git@gitlab.ifrn.edu.br:cosinf/suap-minio.git"
+      echo "  ${YELLOW}Exemplos:${NO_COLOR} git@gitlab.instituicao.edu.br:org/suap-minio.git"
       read -rp "  Valor (${RED}obrigatório${NO_COLOR}): " _input
       if [ -z "${_input}" ]; then
         msg_error "SUAP_MINIO_GIT_URL é obrigatória. Não é possível continuar sem a URL do repositório."

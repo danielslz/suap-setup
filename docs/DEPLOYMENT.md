@@ -44,6 +44,9 @@
   - [12. Armazenamento de mídia (NFS / MinIO)](#12-armazenamento-de-mídia-nfs--minio)
     - [12.1. NFS](#121-nfs)
     - [12.2. MinIO (alternativa escalável)](#122-minio-alternativa-escalável)
+      - [Instalação via suap-setup](#instalação-via-suap-setup)
+      - [Integração com o SUAP](#integração-com-o-suap)
+      - [Migração de NFS para MinIO](#migração-de-nfs-para-minio)
   - [13. Rotina de atualização](#13-rotina-de-atualização)
     - [13.1. Rota nativa](#131-rota-nativa)
     - [13.2. Rota Docker](#132-rota-docker)
@@ -667,7 +670,7 @@ mount -a
 
 MinIO oferece armazenamento de objetos compatível com S3, com escalabilidade horizontal e tolerância a falhas nativa via erasure coding. Na rota Docker, é a opção recomendada pelo suap_deploy — não exige mount NFS e configura-se via variáveis `S3_*` no `.env`.
 
-**Instalação de referência:** [cosinf/suap-minio](https://gitlab.ifrn.edu.br/cosinf/suap-minio)
+**Instalação de referência:** Projeto `suap-minio` (GitLab COSINF/IFRN)
 
 **Topologia mínima para produção:** 4 nós (tolera perda de até 2 discos/nós).
 
@@ -845,6 +848,7 @@ make restart           # Reiniciar serviços
 - Wiki COSINF/IFRN — Múltiplas Instâncias do SUAP
 - Wiki COSINF/IFRN — Instalação do SUAP em produção usando Docker
 - Projeto `suap_deploy` (GitLab COSINF/IFRN)
+- Projeto `suap-minio` (GitLab COSINF/IFRN)
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)
 - [MinIO Documentation](https://min.io/docs/minio/linux/index.html)
 - [UV — Python Package Manager](https://docs.astral.sh/uv/)

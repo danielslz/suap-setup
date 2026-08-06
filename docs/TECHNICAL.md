@@ -1572,14 +1572,14 @@ SUAP_IMAGE=registry.exemplo.com:5000/org/suap
 SUAP_PDF_IMAGE=registry.exemplo.com:5000/org/suap-pdf:latest
 SUAP_AI_IMAGE=registry.exemplo.com:5000/org/suap-ai:latest
 SUAP_DEPLOY_DIR=/opt/suap_deploy
-SUAP_DEPLOY_GIT_URL=git@gitlab.exemplo.com:org/suap_deploy.git
+SUAP_DEPLOY_GIT_URL=git@gitlab.instituicao.edu.br:org/suap_deploy.git
 
 # --- MinIO ---
 # Diretório do repositório suap-minio
 SUAP_MINIO_DIR=/opt/suap-minio
 
 # URL do repositório Git do suap-minio (obrigatório, sem valor padrão)
-SUAP_MINIO_GIT_URL=git@gitlab.ifrn.edu.br:cosinf/suap-minio.git
+SUAP_MINIO_GIT_URL=git@gitlab.instituicao.edu.br:org/suap-minio.git
 ```
 
 ### Carregamento de Variáveis
