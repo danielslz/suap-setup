@@ -249,7 +249,7 @@ Na primeira execução, o wizard solicitará as variáveis principais:
 | Variável | Descrição | Exemplo |
 |---|---|---|
 | `SUAP_DEPLOY_DIR` | Diretório do repositório `suap_deploy` | `/opt/suap_deploy` |
-| `SUAP_DEPLOY_GIT_URL` | URL Git do `suap_deploy` | `git@gitlab.instituicao.edu.br:org/suap_deploy.git` |
+| `SUAP_DEPLOY_GIT_URL` | URL Git do `suap_deploy` (**obrigatório**) | `git@gitlab.instituicao.edu.br:org/suap_deploy.git` |
 
 > **Nota:** as variáveis de imagem Docker (`SUAP_IMAGE`, `SUAP_PDF_IMAGE`, `SUAP_AI_IMAGE`) são configuradas dentro do `.env` do próprio repositório `suap_deploy` (gerado pelo `make setup` a partir do `env.sample`), não no `.env` do suap-setup.
 

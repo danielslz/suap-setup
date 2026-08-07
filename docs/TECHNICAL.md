@@ -1017,7 +1017,7 @@ O script apresenta um menu de gerenciamento:
 | Variável | Padrão | Descrição |
 |----------|--------|-----------|
 | `SUAP_DEPLOY_DIR` | `/opt/suap_deploy` | Caminho do suap_deploy |
-| `SUAP_DEPLOY_GIT_URL` | `git@gitlab.exemplo.com:org/suap_deploy.git` | URL do repositório |
+| `SUAP_DEPLOY_GIT_URL` | *(obrigatório, sem padrão)* | URL do repositório |
 
 ### Comandos de Gerenciamento (via Makefile do suap_deploy)
 
@@ -1521,7 +1521,7 @@ na primeira execução do `setup.sh`.
 | `SUAP_PDF_IMAGE` | String | *(solicitado pelo wizard)* | Imagem Docker do serviço de geração de PDFs |
 | `SUAP_AI_IMAGE` | String | *(solicitado pelo wizard)* | Imagem Docker do serviço de inteligência artificial |
 | `SUAP_DEPLOY_DIR` | Path | `/opt/suap_deploy` | Diretório do repositório suap_deploy |
-| `SUAP_DEPLOY_GIT_URL` | URL | *(solicitado pelo wizard)* | URL do repositório suap_deploy |
+| `SUAP_DEPLOY_GIT_URL` | URL | *(obrigatório, sem padrão)* | URL do repositório suap_deploy |
 
 > **Nota:** As variáveis `SUAP_IMAGE`, `SUAP_PDF_IMAGE` e `SUAP_AI_IMAGE` só são
 > gravadas no `.env` quando definidas (ou seja, quando o usuário executa a opção 5 —
@@ -1578,7 +1578,7 @@ POSTGRES_VERSION=16
 # SUAP_PDF_IMAGE=registry.exemplo.com:5000/org/suap-pdf:latest
 # SUAP_AI_IMAGE=registry.exemplo.com:5000/org/suap-ai:latest
 SUAP_DEPLOY_DIR=/opt/suap_deploy
-SUAP_DEPLOY_GIT_URL=git@gitlab.instituicao.edu.br:org/suap_deploy.git
+SUAP_DEPLOY_GIT_URL=git@gitlab.instituicao.edu.br:org/suap_deploy.git  # obrigatório, sem valor padrão
 
 # --- MinIO ---
 # Diretório do repositório suap-minio
