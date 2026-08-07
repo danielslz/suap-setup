@@ -15,6 +15,8 @@
   },
   "then": {
     "type": "askAgent",
-    "prompt": "A code file was just modified. Check if README.md or docs/TECHNICAL.md need to be updated to reflect this change. If the modification affects usage instructions, menu options, environment variables, algorithms, package lists, or any documented behavior, update the relevant sections in both documents. If the change is purely internal (refactoring without behavior change), no documentation update is needed."
-  }
+    "prompt": "A code file was just modified. Check if README.md or docs/TECHNICAL.md or docs/DEPLOYMENT.md need to be updated to reflect this change. If the modification affects usage instructions, menu options, environment variables, algorithms, package lists, or any documented behavior, update the relevant sections in both documents. If the change is purely internal (refactoring without behavior change), no documentation update is needed."
+  },
+  "workspaceFolderName": "suap-setup",
+  "shortName": "update-docs-on-edit"
 }

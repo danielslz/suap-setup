@@ -453,15 +453,22 @@ _write_env() {
     printf 'CELERY_QUEUE=%s\n' "${CELERY_QUEUE:-geral,celery_beat}"
     echo ""
     echo "# --- Docker ---"
-    echo "# Imagem Docker do SUAP no registry"
-    printf 'SUAP_IMAGE=%s\n' "${SUAP_IMAGE:-gitlab.instituicao.edu.br:4567/org/suap}"
-    echo ""
-    echo "# Imagem Docker do serviço de PDF"
-    printf 'SUAP_PDF_IMAGE=%s\n' "${SUAP_PDF_IMAGE:-gitlab.instituicao.edu.br:4567/org/suap-pdf:latest}"
-    echo ""
-    echo "# Imagem Docker do serviço de IA"
-    printf 'SUAP_AI_IMAGE=%s\n' "${SUAP_AI_IMAGE:-gitlab.instituicao.edu.br:4567/org/suap-ai:latest}"
-    echo ""
+    # Imagens Docker: só gravar se definidas (usadas apenas pelo docker dev, opção 5)
+    if [ -n "${SUAP_IMAGE:-}" ]; then
+      echo "# Imagem Docker do SUAP no registry"
+      printf 'SUAP_IMAGE=%s\n' "${SUAP_IMAGE}"
+      echo ""
+    fi
+    if [ -n "${SUAP_PDF_IMAGE:-}" ]; then
+      echo "# Imagem Docker do serviço de PDF"
+      printf 'SUAP_PDF_IMAGE=%s\n' "${SUAP_PDF_IMAGE}"
+      echo ""
+    fi
+    if [ -n "${SUAP_AI_IMAGE:-}" ]; then
+      echo "# Imagem Docker do serviço de IA"
+      printf 'SUAP_AI_IMAGE=%s\n' "${SUAP_AI_IMAGE}"
+      echo ""
+    fi
     echo "# Diretório do repositório suap_deploy (produção Docker)"
     printf 'SUAP_DEPLOY_DIR=%s\n' "${SUAP_DEPLOY_DIR:-/opt/suap_deploy}"
     echo ""
@@ -471,13 +478,16 @@ _write_env() {
     echo "# --- PostgreSQL ---"
     echo "# Versão do PostgreSQL a ser instalada"
     printf 'POSTGRES_VERSION=%s\n' "${POSTGRES_VERSION:-16}"
-    echo ""
-    echo "# --- MinIO ---"
-    echo "# Diretório do repositório suap-minio"
-    printf 'SUAP_MINIO_DIR=%s\n' "${SUAP_MINIO_DIR:-/opt/suap-minio}"
-    echo ""
-    echo "# URL do repositório Git do suap-minio"
-    printf 'SUAP_MINIO_GIT_URL=%s\n' "${SUAP_MINIO_GIT_URL:-}"
+    # MinIO: só gravar se definidas (usadas apenas pela opção 10)
+    if [ -n "${SUAP_MINIO_DIR:-}" ] || [ -n "${SUAP_MINIO_GIT_URL:-}" ]; then
+      echo ""
+      echo "# --- MinIO ---"
+      echo "# Diretório do repositório suap-minio"
+      printf 'SUAP_MINIO_DIR=%s\n' "${SUAP_MINIO_DIR:-/opt/suap-minio}"
+      echo ""
+      echo "# URL do repositório Git do suap-minio"
+      printf 'SUAP_MINIO_GIT_URL=%s\n' "${SUAP_MINIO_GIT_URL:-}"
+    fi
   } > "${env_path}"
 
   echo ""

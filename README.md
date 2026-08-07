@@ -132,9 +132,9 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `CELERY_FLOWER_AUTH` | Autenticação do Flower | — | `admin:admin` |
 | `CELERY_MAX_WORKERS` | Máximo de workers Celery | — | `5` |
 | `CELERY_MIN_WORKERS` | Mínimo de workers Celery | — | `2` |
-| `SUAP_IMAGE` | Imagem Docker do SUAP no registry | — | *(solicitado pelo wizard)* |
-| `SUAP_PDF_IMAGE` | Imagem Docker do serviço de PDF | — | *(solicitado pelo wizard)* |
-| `SUAP_AI_IMAGE` | Imagem Docker do serviço de IA | — | *(solicitado pelo wizard)* |
+| `SUAP_IMAGE` | Imagem Docker do SUAP no registry | — | *(solicitado pelo wizard, opção 5)* |
+| `SUAP_PDF_IMAGE` | Imagem Docker do serviço de PDF | — | *(solicitado pelo wizard, opção 5)* |
+| `SUAP_AI_IMAGE` | Imagem Docker do serviço de IA | — | *(solicitado pelo wizard, opção 5)* |
 | `SUAP_DEPLOY_DIR` | Diretório do repositório suap_deploy | — | `/opt/suap_deploy` |
 | `SUAP_DEPLOY_GIT_URL` | URL Git do suap_deploy | — | *(solicitado pelo wizard)* |
 | `SUAP_MINIO_DIR` | Diretório do repositório suap-minio | — | `/opt/suap-minio` |
@@ -503,7 +503,7 @@ suap-setup/
 - **Docker auto-install**: se Docker não estiver disponível, os scripts Docker oferecem instalação automática.
 - **Delegação Docker**: scripts Docker não mantêm Dockerfiles locais — delegam para repositórios upstream (suap para dev, suap_deploy para prod).
 - **UID/GID 33 do www-data**: scripts de produção e atualização garantem que o usuário `www-data` possui UID/GID 33 para compatibilidade com volumes Docker do suap_deploy. Se outro usuário/grupo ocupa UID/GID 33, o script encerra com erro.
-- **Variáveis de imagens Docker** (`SUAP_IMAGE`, `SUAP_PDF_IMAGE`, `SUAP_AI_IMAGE`) são solicitadas pelo wizard do suap-setup para Docker dev (opção 5). Para Docker prod (opção 6), essas variáveis são gerenciadas pelo `.env` do próprio suap_deploy (via `make setup`).
+- **Variáveis de imagens Docker** (`SUAP_IMAGE`, `SUAP_PDF_IMAGE`, `SUAP_AI_IMAGE`) são solicitadas pelo wizard do suap-setup apenas para Docker dev (opção 5) e só são gravadas no `.env` quando definidas. Para Docker prod (opção 6), essas variáveis são gerenciadas pelo `.env` do próprio suap_deploy (via `make setup`).
 - As opções Docker funcionam em qualquer sistema com Docker, independente da distribuição.
 
 ## Licença
