@@ -91,9 +91,11 @@ msg_action "Iniciando e habilitando serviço Docker..."
 systemctl start docker
 systemctl enable docker
 
-# --- Adicionar usuário atual ao grupo docker ---
-msg_action "Adicionando usuário '${USER}' ao grupo docker..."
-usermod -aG docker "${USER}"
+# --- Adicionar usuário real ao grupo docker ---
+# Quando executado via sudo, SUDO_USER contém o usuário original
+_REAL_USER="${SUDO_USER:-${USER}}"
+msg_action "Adicionando usuário '${_REAL_USER}' ao grupo docker..."
+usermod -aG docker "${_REAL_USER}"
 
 # --- Verificação pós-instalação ---
 msg_action "Verificando instalação do Docker..."

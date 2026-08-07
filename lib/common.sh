@@ -751,6 +751,32 @@ check_docker_available() {
     esac
   fi
 
+  # Verificar se o usuário atual tem acesso ao socket Docker
+  # Após instalação recente, o grupo 'docker' pode não estar ativo na sessão
+  if ! docker info &>/dev/null 2>&1; then
+    if id -nG | grep -qw docker || getent group docker | grep -qw "${USER}"; then
+      # Usuário está no grupo docker mas o grupo não está ativo na sessão
+      msg_action "O grupo 'docker' não está ativo nesta sessão."
+      msg_action "Aplicando permissões no socket Docker..."
+      sudo chmod 666 /var/run/docker.sock
+      if ! docker info &>/dev/null 2>&1; then
+        msg_error "Não foi possível acessar o Docker."
+        msg_error "Faça logout e login novamente, ou execute: newgrp docker"
+        exit 1
+      fi
+    else
+      # Usuário não está no grupo docker — adicionar
+      msg_action "Adicionando usuário '${USER}' ao grupo docker..."
+      sudo usermod -aG docker "${USER}"
+      sudo chmod 666 /var/run/docker.sock
+      if ! docker info &>/dev/null 2>&1; then
+        msg_error "Não foi possível acessar o Docker."
+        msg_error "Faça logout e login novamente, ou execute: newgrp docker"
+        exit 1
+      fi
+    fi
+  fi
+
   if ! docker compose version &>/dev/null; then
     msg_error "Docker Compose não está disponível. Instale o plugin Docker Compose."
     msg_error "Instruções: https://docs.docker.com/compose/install/"
