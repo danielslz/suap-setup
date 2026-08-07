@@ -222,11 +222,14 @@ ensure_env_for_option() {
     if [ -z "${SUAP_DEPLOY_GIT_URL:-}" ]; then
       _show_header
       echo "${GREEN}SUAP_DEPLOY_GIT_URL${NO_COLOR}"
-      echo "  ${YELLOW}Descrição:${NO_COLOR} URL do repositório Git do suap_deploy."
+      echo "  ${YELLOW}Descrição:${NO_COLOR} URL do repositório Git do suap_deploy (${RED}obrigatório${NO_COLOR})."
       echo "  ${YELLOW}Exemplos:${NO_COLOR} git@gitlab.instituicao.edu.br:org/suap_deploy.git"
-      local _deploy_git_default="git@gitlab.instituicao.edu.br:org/suap_deploy.git"
-      read -rp "  Valor [${GREEN}${_deploy_git_default}${NO_COLOR}]: " _input
-      SUAP_DEPLOY_GIT_URL="${_input:-$_deploy_git_default}"
+      read -rp "  Valor (${RED}obrigatório${NO_COLOR}): " _input
+      if [ -z "${_input}" ]; then
+        msg_error "SUAP_DEPLOY_GIT_URL é obrigatória. Não é possível continuar sem a URL do repositório."
+        exit 1
+      fi
+      SUAP_DEPLOY_GIT_URL="${_input}"
       needs_update=true
       echo ""
     fi
