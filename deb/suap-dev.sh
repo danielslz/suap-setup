@@ -38,7 +38,7 @@ PACKAGES=(
   # lxml
   libxml2-dev libxslt1-dev libxmlsec1-dev
   # WeasyPrint
-  libcairo2-dev libpango1.0-dev libgdk-pixbuf2.0-dev libffi-dev
+  libcairo2-dev libpango1.0-dev libffi-dev
   # PDF
   poppler-utils
   # Python dev headers

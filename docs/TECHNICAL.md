@@ -259,7 +259,7 @@ gerenciador de pacotes. Se ao menos um pacote estiver faltando, instala todos.
 | Pillow (imagens) | `libjpeg-dev`, `libpng-dev`, `zlib1g-dev`, `libfreetype6-dev` |
 | PyMSSQL | `freetds-dev` |
 | lxml (XML/HTML) | `libxml2-dev`, `libxslt1-dev`, `libxmlsec1-dev` |
-| WeasyPrint (PDF) | `libcairo2-dev`, `libpango1.0-dev`, `libgdk-pixbuf2.0-dev`, `libffi-dev` |
+| WeasyPrint (PDF) | `libcairo2-dev`, `libpango1.0-dev`, `libffi-dev` |
 | PDF tools | `poppler-utils` |
 | Python headers | `python3-dev` |
 
