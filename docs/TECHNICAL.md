@@ -1008,8 +1008,12 @@ O script apresenta um menu de gerenciamento:
    - Se ausente: instalar via apt-get (deb), dnf (rpm) ou pacman (arch)
    - Se plataforma desconhecida ou falha na instalação: exit 1
 8. Configurar .env do suap_deploy via `make setup` (se não existir)
-9. Exibir menu interativo de gerenciamento (11 opções + sair)
-10. Executar target do Makefile conforme opção escolhida
+9. Garantir que diretórios de logs/volumes existam com permissões corretas:
+   - Cria (se ausentes): deploy/logs/nginx, deploy/logs/suap, deploy/media, deploy/backup
+   - Corrige ownership para ${USER}:${USER} se não graváveis
+   - Aplica chmod 777 em deploy/logs/nginx (Nginx roda como www-data/UID 33 no container)
+10. Exibir menu interativo de gerenciamento (11 opções + sair)
+11. Executar target do Makefile conforme opção escolhida
 ```
 
 ### Variáveis Necessárias

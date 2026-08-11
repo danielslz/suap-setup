@@ -258,7 +258,8 @@ O script então:
 1. Verifica se o Docker está disponível (oferece instalação automática caso não esteja);
 2. Clona o repositório `suap_deploy` em `SUAP_DEPLOY_DIR`;
 3. Executa `make setup` interativo (escolhe modo de imagem, gera `.env`, ativa template nginx, gera cert SSL);
-4. Apresenta o menu de gerenciamento:
+4. Cria os diretórios de logs e volumes (`deploy/logs/nginx`, `deploy/logs/suap`, `deploy/media`, `deploy/backup`) com permissões corretas para o container Nginx (UID 33);
+5. Apresenta o menu de gerenciamento:
 
 ```
 1) Fazer pull das imagens e iniciar serviços (modo registry)
