@@ -120,6 +120,19 @@ else
   msg_skip ".env já existe em ${SUAP_DEPLOY_DIR}"
 fi
 
+# 9.1 Garantir que diretórios de logs/volumes existam com permissões corretas
+_deploy_dir="${SUAP_DEPLOY_DIR}/deploy"
+for _log_dir in "${_deploy_dir}/logs/nginx" "${_deploy_dir}/logs/suap" "${_deploy_dir}/media" "${_deploy_dir}/backup"; do
+  if [ ! -d "${_log_dir}" ]; then
+    mkdir -p "${_log_dir}" 2>/dev/null || sudo mkdir -p "${_log_dir}"
+  fi
+  if [ ! -w "${_log_dir}" ]; then
+    sudo chown -R "${USER}:${USER}" "${_log_dir}"
+  fi
+done
+# Nginx roda como www-data (UID 33) dentro do container
+sudo chmod -R 777 "${_deploy_dir}/logs/nginx" 2>/dev/null || true
+
 # 10. Menu de ações
 cd "${SUAP_DEPLOY_DIR}"
 
