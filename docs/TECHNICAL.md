@@ -260,7 +260,7 @@ gerenciador de pacotes. Se ao menos um pacote estiver faltando, instala todos.
 | PyMSSQL | `freetds-dev` |
 | lxml (XML/HTML) | `libxml2-dev`, `libxslt1-dev`, `libxmlsec1-dev` |
 | WeasyPrint (PDF) | `libcairo2-dev`, `libpango1.0-dev`, `libffi-dev` |
-| PDF tools | `poppler-utils` |
+| PDF tools | `poppler-utils`, `qpdf`, `ghostscript`, `mupdf-tools`, `wkhtmltopdf` |
 | Python headers | `python3-dev` |
 
 **Pacotes equivalentes (Fedora/RHEL/Alma/Rocky via dnf):**
@@ -273,7 +273,7 @@ gerenciador de pacotes. Se ao menos um pacote estiver faltando, instala todos.
 | PyMSSQL | `freetds-devel` |
 | lxml | `libxml2-devel`, `libxslt-devel`, `xmlsec1-devel` |
 | WeasyPrint | `cairo-devel`, `pango-devel`, `gdk-pixbuf2-devel`, `libffi-devel` |
-| PDF tools | `poppler-utils` |
+| PDF tools | `poppler-utils`, `qpdf`, `ghostscript`, `mupdf`, `wkhtmltopdf` |
 | Python headers | `python3-devel` |
 
 **Pacotes equivalentes (Arch Linux via pacman):**
@@ -286,7 +286,7 @@ gerenciador de pacotes. Se ao menos um pacote estiver faltando, instala todos.
 | PyMSSQL | `freetds` |
 | lxml | `libxml2`, `libxslt`, `xmlsec` |
 | WeasyPrint | `cairo`, `pango`, `gdk-pixbuf2`, `libffi` |
-| PDF tools | `poppler` |
+| PDF tools | `poppler`, `qpdf`, `ghostscript`, `mupdf-tools`, `wkhtmltopdf` |
 | Python | `python` |
 
 **Pacotes equivalentes (macOS via Homebrew):**
@@ -299,7 +299,12 @@ gerenciador de pacotes. Se ao menos um pacote estiver faltando, instala todos.
 | PyMSSQL | `freetds` |
 | lxml | `libxml2`, `libxslt`, `xmlsec1` |
 | WeasyPrint | `cairo`, `pango`, `gdk-pixbuf`, `libffi` |
-| PDF tools | `poppler` |
+| PDF tools | `poppler`, `qpdf`, `ghostscript`, `mupdf` |
+
+> **Nota (macOS/PDF):** o `wkhtmltopdf` foi descontinuado upstream e desabilitado no
+> Homebrew em dezembro de 2024, portanto não está disponível no macOS. As ferramentas
+> de PDF instaladas no ambiente de desenvolvimento macOS são `qpdf`, `ghostscript` e
+> `mupdf` (o pacote é `mupdf`, não `mupdf-tools` como nas distribuições Linux).
 
 > **Comportamento em caso de falha:** Se o gerenciador de pacotes retorna erro
 > (exit code ≠ 0), o script exibe `msg_error` e encerra com exit 1 imediatamente.
@@ -445,8 +450,11 @@ Se o script não está rodando como root, ele se re-executa com `sudo` automatic
 | Agendamento | `cron` | `cronie` | `cronie` |
 | Sincronização de tempo | `ntpdate` | `chrony` | `chrony` |
 | Python runtime | `python3-dev`, `python3-venv`, `python3-pip` | `python3-devel`, `python3` | `python` |
-| PDF (produção) | `qpdf`, `ghostscript`, `mupdf-tools`, `wkhtmltopdf` | equivalentes | equivalentes |
 | Magic (tipo de arquivo) | `libmagic1` | `file-libs` | `file` |
+
+> **Nota (PDF):** As ferramentas de PDF (`qpdf`, `ghostscript`, `mupdf-tools`/`mupdf`,
+> `wkhtmltopdf`) também são instaladas no ambiente de desenvolvimento (ver seção
+> anterior), portanto não constam mais como pacotes exclusivos de produção.
 
 #### Etapa 3 — Configuração de Locale e Timezone
 

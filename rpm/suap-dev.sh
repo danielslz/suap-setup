@@ -52,7 +52,7 @@ PACKAGES=(
   libxml2-devel libxslt-devel
   cairo-devel pango-devel gdk-pixbuf2-devel
   libffi-devel
-  poppler-utils
+  poppler-utils qpdf ghostscript mupdf wkhtmltopdf
   git curl wget
 )
 

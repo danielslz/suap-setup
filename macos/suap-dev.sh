@@ -62,6 +62,10 @@ PACKAGES=(
   gdk-pixbuf
   libffi
   poppler
+  # PDF (wkhtmltopdf foi descontinuado upstream e desabilitado no Homebrew em 2024-12; não disponível no macOS)
+  qpdf
+  ghostscript
+  mupdf
   git
   curl
   wget
