@@ -1624,15 +1624,18 @@ Testing System) com as bibliotecas auxiliares:
 - **bats-assert** — assertions (`assert_success`, `assert_output`, `assert_line`)
 - **bats-support** — funções de suporte (`fail`, formatação de output)
 
-Instalados como git submodules em `tests/test_helper/`.
+As dependências são resolvidas automaticamente por `tests/run_tests.sh`: se o
+`bats` estiver instalado no sistema (no `PATH`) e as bibliotecas auxiliares
+disponíveis em caminhos padrão, elas são usadas diretamente; caso contrário, são
+baixadas sob demanda para `tests/.cache/` (diretório ignorado pelo git) via
+`git clone`. Não há git submodules nem código de terceiros versionado no
+repositório.
 
 ### Execução
 
 ```bash
-# Pré-requisito: instalar submodules
-git submodule update --init --recursive
-
 # Executar todos os testes (exceto integração)
+# As dependências de teste são resolvidas/baixadas automaticamente na 1ª execução
 ./tests/run_tests.sh
 
 # Por categoria

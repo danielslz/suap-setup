@@ -32,7 +32,6 @@ Os scripts automatizam instalação de dependências, configuração de ambiente
 ```bash
 git clone https://github.com/danielslz/suap-setup.git
 cd suap-setup
-git submodule update --init --recursive  # Necessário apenas para framework de testes
 ```
 
 ### 2. Executar o wrapper interativo
@@ -395,6 +394,7 @@ Mesma configuração, mas com upstream apontando para o nome do serviço Docker 
 ## Testes
 
 O projeto utiliza [bats-core](https://github.com/bats-core/bats-core) como framework de testes.
+As dependências (bats-core, bats-support, bats-assert) são resolvidas automaticamente por `tests/run_tests.sh`: ele usa o `bats` do sistema se estiver instalado ou, caso contrário, baixa as dependências sob demanda para `tests/.cache/` na primeira execução. Não é necessário nenhum passo manual.
 
 ### Executar testes
 

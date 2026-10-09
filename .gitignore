@@ -16,7 +16,8 @@ Thumbs.db
 *.log
 logs/
 
-# Dependências de testes (bats) - submodules são rastreados via .gitmodules
+# Dependências de testes (bats) baixadas sob demanda por tests/run_tests.sh
+tests/.cache/
 tests/libs/
 node_modules/
 

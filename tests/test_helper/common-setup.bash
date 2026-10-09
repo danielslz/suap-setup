@@ -2,12 +2,17 @@
 # tests/test_helper/common-setup.bash
 # Helper compartilhado para todos os testes bats do projeto suap-setup.
 # Carrega bats-support e bats-assert, e define variáveis comuns.
+#
+# As bibliotecas são resolvidas via BATS_LIB_PATH (definido por
+# tests/run_tests.sh, a partir das libs do sistema ou de tests/.cache/).
+# Use sempre `./tests/run_tests.sh` para executar a suíte.
 
 _COMMON_SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Carrega bibliotecas auxiliares do bats
-load "${_COMMON_SETUP_DIR}/bats-support/load.bash"
-load "${_COMMON_SETUP_DIR}/bats-assert/load.bash"
+# Carrega bibliotecas auxiliares do bats usando o mecanismo nativo, que
+# procura em cada diretório listado em BATS_LIB_PATH.
+bats_load_library bats-support
+bats_load_library bats-assert
 
 # Raiz do projeto (dois níveis acima de tests/test_helper/)
 export PROJECT_ROOT
