@@ -173,8 +173,6 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 Os scripts de desenvolvimento realizam:
 
 - Instalação de dependências do sistema (halt imediato em caso de falha)
-- Configuração de locale `pt_BR.UTF-8` (pulado no macOS)
-- Configuração de timezone `America/Fortaleza`
 - Instalação do [UV](https://docs.astral.sh/uv/) (com detecção em `~/.cargo/bin` e `~/.local/bin`)
 - Clone ou atualização do código SUAP
 - Geração de `settings.py` e `.env` a partir dos samples

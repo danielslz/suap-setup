@@ -66,26 +66,7 @@ else
   msg_skip "Dependências do sistema já estão instaladas"
 fi
 
-### 5. Configurar locale pt_BR.UTF-8 (se necessário)
-if [[ "$(localectl status)" != *"pt_BR.UTF-8"* ]]; then
-  msg_action "Configurando locale para pt_BR.UTF-8"
-  sudo sed -i 's/^#pt_BR.UTF-8 UTF-8/pt_BR.UTF-8 UTF-8/' /etc/locale.gen
-  sudo locale-gen
-  sudo localectl set-locale LANG=pt_BR.UTF-8
-else
-  msg_skip "Locale já configurado para pt_BR.UTF-8"
-fi
-
-### 6. Configurar timezone America/Fortaleza (se necessário)
-CURRENT_TZ=$(timedatectl show -p Timezone --value 2>/dev/null || echo "")
-if [ "${CURRENT_TZ}" != "America/Fortaleza" ]; then
-  msg_action "Configurando timezone para America/Fortaleza"
-  sudo timedatectl set-timezone America/Fortaleza
-else
-  msg_skip "Timezone já configurado para America/Fortaleza"
-fi
-
-### 7. Instalar UV (se não disponível no PATH)
+### 5. Instalar UV (se não disponível no PATH)
 if command -v uv &>/dev/null; then
   msg_skip "UV já está instalado"
 elif [ -x "${HOME}/.cargo/bin/uv" ]; then

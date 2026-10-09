@@ -85,19 +85,7 @@ else
   msg_skip "Dependências do sistema já estão instaladas"
 fi
 
-### 7. Locale: não necessário no macOS
-msg_skip "Locale não necessário no macOS"
-
-### 8. Configurar timezone America/Fortaleza (se necessário)
-CURRENT_TZ=$(systemsetup -gettimezone 2>/dev/null | awk -F': ' '{print $2}' || echo "")
-if [ "${CURRENT_TZ}" != "America/Fortaleza" ]; then
-  msg_action "Configurando timezone para America/Fortaleza"
-  sudo systemsetup -settimezone America/Fortaleza
-else
-  msg_skip "Timezone já configurado para America/Fortaleza"
-fi
-
-### 9. Instalar UV (se não disponível no PATH)
+### 5. Instalar UV (se não disponível no PATH)
 if command -v uv &>/dev/null; then
   msg_skip "UV já está instalado"
 elif [ -x "${HOME}/.cargo/bin/uv" ]; then

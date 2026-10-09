@@ -22,10 +22,10 @@ load_env_file "${SCRIPT_DIR}/.env"
 
 export DISTRO_TYPE="deb"
 
-# --- 3. Resolver SUAP_GIT_URL ---
+# --- 4. Resolver SUAP_GIT_URL ---
 resolve_git_url "${SCRIPT_DIR}/.env"
 
-# --- 4. Verificar e instalar dependências do sistema ---
+# --- 5. Verificar e instalar dependências do sistema ---
 PACKAGES=(
   # Ferramentas de compilação e utilitários
   locales vim git build-essential language-pack-pt openssl curl wget libpq-dev tmpreaper swig
@@ -56,26 +56,7 @@ else
   msg_skip "Dependências do sistema já estão instaladas"
 fi
 
-# --- 5. Configurar locale pt_BR.UTF-8 ---
-CURRENT_LOCALE=$(locale 2>/dev/null | grep "^LANG=" | cut -d= -f2 || echo "")
-if [ "${CURRENT_LOCALE}" != "pt_BR.UTF-8" ]; then
-  msg_action "Configurando locale para pt_BR.UTF-8"
-  sudo locale-gen pt_BR.UTF-8
-  sudo update-locale LANG=pt_BR.UTF-8
-else
-  msg_skip "Locale já configurado para pt_BR.UTF-8"
-fi
-
-# --- 6. Configurar timezone America/Fortaleza ---
-CURRENT_TZ=$(timedatectl show -p Timezone --value 2>/dev/null || echo "")
-if [ "${CURRENT_TZ}" != "America/Fortaleza" ]; then
-  msg_action "Configurando timezone para America/Fortaleza"
-  sudo timedatectl set-timezone America/Fortaleza
-else
-  msg_skip "Timezone já configurado para America/Fortaleza"
-fi
-
-# --- 7. Instalar UV ---
+# --- 6. Instalar UV ---
 if command -v uv &>/dev/null; then
   msg_skip "UV já está instalado"
 elif [ -x "${HOME}/.cargo/bin/uv" ]; then
@@ -99,7 +80,7 @@ else
   fi
 fi
 
-# --- 8. Clone/pull do repositório SUAP ---
+# --- 7. Clone/pull do repositório SUAP ---
 if [ ! -d "${SUAP_DIR}/.git" ]; then
   msg_action "Clonando repositório SUAP"
   mkdir -p "${BASE_DIR}"
@@ -114,7 +95,7 @@ fi
 
 cd "${SUAP_DIR}"
 
-# --- 9. Gerar settings.py e .env a partir dos samples ---
+# --- 8. Gerar settings.py e .env a partir dos samples ---
 if [ ! -f "${SUAP_DIR}/suap/settings.py" ]; then
   msg_action "Gerando settings.py a partir do sample"
   cp "${SUAP_DIR}/suap/settings_sample.py" "${SUAP_DIR}/suap/settings.py"
@@ -129,7 +110,7 @@ else
   msg_skip ".env do SUAP já existe"
 fi
 
-# --- 10. Instalar Python via UV ---
+# --- 9. Instalar Python via UV ---
 if ! uv python list --only-installed 2>/dev/null | grep -q "${PYTHON_VERSION}"; then
   msg_action "Instalando Python ${PYTHON_VERSION} via UV"
   uv python install "${PYTHON_VERSION}"
@@ -137,7 +118,7 @@ else
   msg_skip "Python ${PYTHON_VERSION} já está instalado"
 fi
 
-# --- 11. Criar virtualenv ---
+# --- 10. Criar virtualenv ---
 if [ ! -d "${VENV_DIR}" ]; then
   msg_action "Criando virtualenv com Python ${PYTHON_VERSION}"
   cd "${SUAP_DIR}"
@@ -146,7 +127,7 @@ else
   msg_skip "Virtualenv já existe em ${VENV_DIR}"
 fi
 
-# --- 12. Instalar/atualizar dependências Python ---
+# --- 11. Instalar/atualizar dependências Python ---
 msg_action "Instalando/atualizando dependências Python"
 cd "${SUAP_DIR}"
 if [ -f "${SUAP_DIR}/pyproject.toml" ]; then
@@ -164,7 +145,7 @@ else
   exit 1
 fi
 
-# --- 13. Mensagem final com próximos passos ---
+# --- 12. Mensagem final com próximos passos ---
 echo ""
 msg_action "SUAP instalado/atualizado com sucesso em ${SUAP_DIR}!"
 echo ""

@@ -309,30 +309,19 @@ gerenciador de pacotes. Se ao menos um pacote estiver faltando, instala todos.
 > **Comportamento em caso de falha:** Se o gerenciador de pacotes retorna erro
 > (exit code ≠ 0), o script exibe `msg_error` e encerra com exit 1 imediatamente.
 
-#### Etapa 3 — Configuração de Locale
+#### Locale e Timezone (não configurados no desenvolvimento)
 
-Configura o locale do sistema para `pt_BR.UTF-8` (necessário para formatação
-de datas, moedas e ordenação de texto em português).
+Os scripts de **desenvolvimento** (`deb/suap-dev.sh`, `rpm/suap-dev.sh`,
+`arch/suap-dev.sh`, `macos/suap-dev.sh`) **não** configuram locale nem timezone.
+Essa configuração ficou restrita aos fluxos de **produção**.
 
-| Plataforma | Comando |
-|------------|---------|
-| Debian/Ubuntu | `sudo locale-gen pt_BR.UTF-8 && sudo update-locale LANG=pt_BR.UTF-8` |
-| Fedora/RHEL/Alma/Rocky | `sudo localectl set-locale LANG=pt_BR.UTF-8` |
-| Arch Linux | `sudo localectl set-locale LANG=pt_BR.UTF-8` |
-| macOS | Pulado com `msg_skip` (locale não necessário) |
+- O locale `pt_BR.UTF-8` é gerado pelo respectivo `install-postgres.sh` quando
+  necessário (ex.: `deb/install-postgres.sh`, `rpm/install-postgres.sh`,
+  `arch/install-postgres.sh`).
+- O timezone utiliza o padrão do sistema no ambiente de desenvolvimento.
 
-**Idempotência:** verifica `locale | grep LANG=` antes de executar.
-
-#### Etapa 4 — Configuração de Timezone
-
-Define o timezone do sistema para `America/Fortaleza` (UTC-3).
-
-| Plataforma | Comando |
-|------------|---------|
-| Linux (todas) | `sudo timedatectl set-timezone America/Fortaleza` |
-| macOS | `sudo systemsetup -settimezone America/Fortaleza` |
-
-**Idempotência:** verifica `timedatectl show -p Timezone --value` antes de executar.
+A configuração de locale (`pt_BR.UTF-8`) e timezone (`America/Fortaleza`, UTC-3)
+permanece nos scripts de produção — consulte a seção do fluxo de produção.
 
 #### Etapa 5 — Instalação do UV
 
@@ -458,7 +447,18 @@ Se o script não está rodando como root, ele se re-executa com `sudo` automatic
 
 #### Etapa 3 — Configuração de Locale e Timezone
 
-Idêntico ao ambiente de desenvolvimento (Etapas 3 e 4 da seção anterior).
+Diferente do fluxo de desenvolvimento (onde locale e timezone não são
+configurados), **todas** as distribuições Linux de produção configuram locale
+`pt_BR.UTF-8` e timezone `America/Fortaleza`.
+
+| Plataforma | Locale | Timezone |
+|------------|--------|----------|
+| Debian/Ubuntu | `locale-gen pt_BR.UTF-8 && update-locale LANG=pt_BR.UTF-8` | `timedatectl set-timezone America/Fortaleza` |
+| Fedora/RHEL/Alma/Rocky | `localectl set-locale LANG=pt_BR.UTF-8` | `timedatectl set-timezone America/Fortaleza` |
+| Arch Linux | `locale-gen && localectl set-locale LANG=pt_BR.UTF-8` | `timedatectl set-timezone America/Fortaleza` |
+
+**Idempotência:** verifica `LANG=` (via `locale`/`localectl`) e
+`timedatectl show -p Timezone --value` antes de executar.
 
 #### Etapa 4 — Clone do Código SUAP
 
