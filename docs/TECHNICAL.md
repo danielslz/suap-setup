@@ -254,13 +254,14 @@ gerenciador de pacotes. Se ao menos um pacote estiver faltando, instala todos.
 
 | Categoria | Pacotes |
 |-----------|---------|
-| Compilação e utilitários | `locales`, `vim`, `git`, `build-essential`, `language-pack-pt`, `openssl`, `curl`, `wget`, `libpq-dev`, `tmpreaper`, `swig` |
+| Compilação e utilitários | `locales`, `vim`, `git`, `build-essential`, `openssl`, `curl`, `wget`, `libpq-dev`, `tmpreaper`, `swig` |
 | LDAP | `libldap2-dev`, `libsasl2-dev` |
 | Pillow (imagens) | `libjpeg-dev`, `libpng-dev`, `zlib1g-dev`, `libfreetype6-dev` |
 | PyMSSQL | `freetds-dev` |
 | lxml (XML/HTML) | `libxml2-dev`, `libxslt1-dev`, `libxmlsec1-dev` |
 | WeasyPrint (PDF) | `libcairo2-dev`, `libpango1.0-dev`, `libffi-dev` |
-| PDF tools | `poppler-utils`, `qpdf`, `ghostscript`, `mupdf-tools`, `wkhtmltopdf` |
+| PDF tools | `poppler-utils`, `qpdf`, `ghostscript`, `mupdf-tools` |
+| wkhtmltopdf (runtime) | `fontconfig`, `libxrender1`, `libxext6`, `libx11-6` |
 | Python headers | `python3-dev` |
 
 **Pacotes equivalentes (Fedora/RHEL/Alma/Rocky via dnf):**
@@ -273,7 +274,8 @@ gerenciador de pacotes. Se ao menos um pacote estiver faltando, instala todos.
 | PyMSSQL | `freetds-devel` |
 | lxml | `libxml2-devel`, `libxslt-devel`, `xmlsec1-devel` |
 | WeasyPrint | `cairo-devel`, `pango-devel`, `gdk-pixbuf2-devel`, `libffi-devel` |
-| PDF tools | `poppler-utils`, `qpdf`, `ghostscript`, `mupdf`, `wkhtmltopdf` |
+| PDF tools | `poppler-utils`, `qpdf`, `ghostscript`, `mupdf` |
+| wkhtmltopdf (runtime) | `fontconfig`, `libXrender`, `libXext`, `libX11` |
 | Python headers | `python3-devel` |
 
 **Pacotes equivalentes (Arch Linux via pacman):**
@@ -286,7 +288,8 @@ gerenciador de pacotes. Se ao menos um pacote estiver faltando, instala todos.
 | PyMSSQL | `freetds` |
 | lxml | `libxml2`, `libxslt`, `xmlsec` |
 | WeasyPrint | `cairo`, `pango`, `gdk-pixbuf2`, `libffi` |
-| PDF tools | `poppler`, `qpdf`, `ghostscript`, `mupdf-tools`, `wkhtmltopdf` |
+| PDF tools | `poppler`, `qpdf`, `ghostscript`, `mupdf-tools` |
+| wkhtmltopdf (runtime) | `fontconfig`, `libxrender`, `libxext`, `libx11` |
 | Python | `python` |
 
 **Pacotes equivalentes (macOS via Homebrew):**
@@ -301,10 +304,23 @@ gerenciador de pacotes. Se ao menos um pacote estiver faltando, instala todos.
 | WeasyPrint | `cairo`, `pango`, `gdk-pixbuf`, `libffi` |
 | PDF tools | `poppler`, `qpdf`, `ghostscript`, `mupdf` |
 
-> **Nota (macOS/PDF):** o `wkhtmltopdf` foi descontinuado upstream e desabilitado no
-> Homebrew em dezembro de 2024, portanto não está disponível no macOS. As ferramentas
-> de PDF instaladas no ambiente de desenvolvimento macOS são `qpdf`, `ghostscript` e
-> `mupdf` (o pacote é `mupdf`, não `mupdf-tools` como nas distribuições Linux).
+> **Nota (wkhtmltopdf):** o `wkhtmltopdf` foi removido dos repositórios das
+> distribuições (ex.: Debian trixie) e o projeto upstream está arquivado. Como o
+> código do SUAP ainda depende dele, os scripts instalam o **binário estático
+> `linux-generic` (versão 0.12.4)** publicado nos releases oficiais do GitHub —
+> a mesma abordagem da imagem oficial do `suap-pdf`. A instalação é feita pela
+> função `install_wkhtmltopdf()` em `lib/common.sh`, que baixa o tarball, coloca
+> os binários em `/usr/local/bin` e atualiza o cache de fontes (`fc-cache`). Por
+> isso, `wkhtmltopdf` não aparece mais nas listas de pacotes do gerenciador; o que
+> consta é apenas o conjunto de bibliotecas de runtime que o binário exige
+> (`fontconfig`, `libXrender`, `libXext`, `libX11`). É idempotente: se já houver um
+> `wkhtmltopdf` no `PATH`, a etapa é pulada.
+
+> **Nota (macOS/PDF):** no macOS o `wkhtmltopdf` não é instalado (foi descontinuado
+> upstream e desabilitado no Homebrew em dezembro de 2024, e não há binário estático
+> para macOS nessa release). As ferramentas de PDF no ambiente de desenvolvimento
+> macOS são `qpdf`, `ghostscript` e `mupdf` (o pacote é `mupdf`, não `mupdf-tools`
+> como nas distribuições Linux).
 
 > **Comportamento em caso de falha:** Se o gerenciador de pacotes retorna erro
 > (exit code ≠ 0), o script exibe `msg_error` e encerra com exit 1 imediatamente.
@@ -441,9 +457,11 @@ Se o script não está rodando como root, ele se re-executa com `sudo` automatic
 | Python runtime | `python3-dev`, `python3-venv`, `python3-pip` | `python3-devel`, `python3` | `python` |
 | Magic (tipo de arquivo) | `libmagic1` | `file-libs` | `file` |
 
-> **Nota (PDF):** As ferramentas de PDF (`qpdf`, `ghostscript`, `mupdf-tools`/`mupdf`,
-> `wkhtmltopdf`) também são instaladas no ambiente de desenvolvimento (ver seção
-> anterior), portanto não constam mais como pacotes exclusivos de produção.
+> **Nota (PDF):** As ferramentas de PDF de pacote (`qpdf`, `ghostscript`,
+> `mupdf-tools`/`mupdf`) também são instaladas no ambiente de desenvolvimento (ver
+> seção anterior), portanto não constam como pacotes exclusivos de produção. O
+> `wkhtmltopdf` é instalado via binário estático pela função `install_wkhtmltopdf()`
+> (ver nota na seção de desenvolvimento), tanto em dev quanto em produção.
 
 #### Etapa 3 — Configuração de Locale e Timezone
 

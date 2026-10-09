@@ -28,7 +28,7 @@ resolve_git_url "${SCRIPT_DIR}/.env"
 # --- 5. Verificar e instalar dependências do sistema ---
 PACKAGES=(
   # Ferramentas de compilação e utilitários
-  locales vim git build-essential language-pack-pt openssl curl wget libpq-dev tmpreaper swig
+  locales vim git build-essential openssl curl wget libpq-dev tmpreaper swig
   # LDAP
   libldap2-dev libsasl2-dev
   # Pillow
@@ -40,7 +40,9 @@ PACKAGES=(
   # WeasyPrint
   libcairo2-dev libpango1.0-dev libffi-dev
   # PDF
-  poppler-utils qpdf ghostscript mupdf-tools wkhtmltopdf
+  poppler-utils qpdf ghostscript mupdf-tools
+  # wkhtmltopdf (binário estático) - dependências de runtime e fontes
+  fontconfig libxrender1 libxext6 libx11-6
   # Python dev headers
   python3-dev
 )
@@ -54,6 +56,12 @@ if ! check_all_packages_installed "${PACKAGES[@]}"; then
   fi
 else
   msg_skip "Dependências do sistema já estão instaladas"
+fi
+
+# Instalar wkhtmltopdf (binário estático; removido do repositório do Debian)
+if ! install_wkhtmltopdf; then
+  msg_error "Falha na instalação do wkhtmltopdf."
+  exit 1
 fi
 
 # --- 6. Instalar UV ---

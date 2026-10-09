@@ -50,7 +50,9 @@ PACKAGES=(
   libxml2-devel libxslt-devel
   cairo-devel pango-devel gdk-pixbuf2-devel
   libffi-devel
-  poppler-utils qpdf ghostscript mupdf wkhtmltopdf
+  poppler-utils qpdf ghostscript mupdf
+  # wkhtmltopdf (binário estático) - dependências de runtime e fontes
+  fontconfig libXrender libXext libX11
   git curl wget
 )
 
@@ -62,6 +64,12 @@ if ! check_all_packages_installed "${PACKAGES[@]}"; then
   fi
 else
   msg_skip "Dependências do sistema já estão instaladas"
+fi
+
+# Instalar wkhtmltopdf (binário estático; não disponível nos repositórios)
+if ! install_wkhtmltopdf; then
+  msg_error "Falha na instalação do wkhtmltopdf."
+  exit 1
 fi
 
 ### 5. Instalar UV (se não disponível no PATH)

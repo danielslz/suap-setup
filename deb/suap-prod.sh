@@ -34,7 +34,7 @@ resolve_git_url "${SCRIPT_DIR}/.env"
 # --- 5. Verificar e instalar dependências do sistema ---
 PACKAGES=(
   # Base e utilitários
-  locales vim git build-essential language-pack-pt cron ntpdate supervisor openssl curl libpq-dev tmpreaper swig
+  locales locales-all vim git build-essential cron ntpdate supervisor openssl curl libpq-dev tmpreaper swig
   # Python
   python3-dev python3-venv python3-pip
   # LDAP
@@ -50,7 +50,9 @@ PACKAGES=(
   # Magic
   libmagic1
   # PDF
-  qpdf ghostscript poppler-utils mupdf-tools wkhtmltopdf
+  qpdf ghostscript poppler-utils mupdf-tools
+  # wkhtmltopdf (binário estático) - dependências de runtime e fontes
+  fontconfig libxrender1 libxext6 libx11-6
 )
 
 msg_action "Verificando dependências do sistema operacional"
@@ -64,6 +66,12 @@ if ! check_all_packages_installed "${PACKAGES[@]}"; then
   fi
 else
   msg_skip "Dependências do sistema já estão instaladas"
+fi
+
+# Instalar wkhtmltopdf (binário estático; removido do repositório do Debian)
+if ! install_wkhtmltopdf; then
+  msg_error "Falha na instalação do wkhtmltopdf."
+  exit 1
 fi
 
 # --- 6. Configurar locale e timezone ---

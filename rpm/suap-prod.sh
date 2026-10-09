@@ -40,9 +40,11 @@ PYMSSQL="freetds-devel"
 LXML="xmlsec1-devel libxml2-devel libxslt-devel"
 WEASYPRINT="pango harfbuzz"
 MAGIC="file-libs"
-PDF="qpdf ghostscript poppler-utils mupdf wkhtmltopdf"
+PDF="qpdf ghostscript poppler-utils mupdf"
+# wkhtmltopdf (binário estático) - dependências de runtime e fontes
+WKHTMLTOPDF_DEPS="fontconfig libXrender libXext libX11"
 
-ALL_PACKAGES="$BASE $PYTHON $LDAP $PILLOW $PYMSSQL $LXML $WEASYPRINT $MAGIC $PDF"
+ALL_PACKAGES="$BASE $PYTHON $LDAP $PILLOW $PYMSSQL $LXML $WEASYPRINT $MAGIC $PDF $WKHTMLTOPDF_DEPS"
 
 if ! check_all_packages_installed $ALL_PACKAGES; then
     msg_action "Instalando as dependências do sistema operacional"
@@ -53,6 +55,12 @@ if ! check_all_packages_installed $ALL_PACKAGES; then
     fi
 else
     msg_skip "Todas as dependências do sistema já estão instaladas"
+fi
+
+# Instalar wkhtmltopdf (binário estático; não disponível nos repositórios)
+if ! install_wkhtmltopdf; then
+    msg_error "Falha na instalação do wkhtmltopdf."
+    exit 1
 fi
 
 # --- Configurar locale (RPM-specific: localectl) ---

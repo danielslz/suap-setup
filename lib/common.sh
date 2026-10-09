@@ -851,3 +851,96 @@ ensure_www_data_uid_gid() {
   msg_skip "www-data já possui UID/GID 33"
   return 0
 }
+
+# --- Instalação do wkhtmltopdf (binário estático) ---
+
+# install_wkhtmltopdf()
+# Instala o wkhtmltopdf a partir do binário estático "linux-generic" publicado
+# nos releases do projeto no GitHub. O pacote foi removido do Debian trixie e o
+# projeto upstream está arquivado; o build genérico não depende dos pacotes da
+# distro e é a mesma abordagem usada pela imagem oficial do suap-pdf.
+#
+# Idempotente: se wkhtmltopdf já estiver no PATH, não faz nada.
+# Instala os binários em /usr/local/bin (local correto para binários manuais,
+# fora do controle do gerenciador de pacotes).
+#
+# Requer: curl ou wget, tar (com suporte a xz) e sudo.
+# Suporta: amd64 e i386 (únicas arquiteturas Linux publicadas no release).
+install_wkhtmltopdf() {
+  local version="0.12.4"
+
+  if command -v wkhtmltopdf &>/dev/null; then
+    msg_skip "wkhtmltopdf já está instalado ($(command -v wkhtmltopdf))"
+    return 0
+  fi
+
+  # Determinar a arquitetura do pacote a partir da arquitetura do sistema
+  local sys_arch pkg_arch
+  sys_arch="$(uname -m)"
+  case "${sys_arch}" in
+    x86_64|amd64) pkg_arch="amd64" ;;
+    i386|i686)    pkg_arch="i386" ;;
+    *)
+      msg_error "wkhtmltopdf: arquitetura '${sys_arch}' não possui binário estático publicado (apenas amd64/i386)."
+      return 1
+      ;;
+  esac
+
+  local tarball="wkhtmltox-${version}_linux-generic-${pkg_arch}.tar.xz"
+  local url="https://github.com/wkhtmltopdf/wkhtmltopdf/releases/download/${version}/${tarball}"
+
+  msg_action "Instalando wkhtmltopdf ${version} (binário estático ${pkg_arch})"
+
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+
+  # Baixar o tarball (curl ou wget, o que estiver disponível)
+  if command -v curl &>/dev/null; then
+    if ! curl -fL --retry 3 -o "${tmp_dir}/wkhtmltox.tar.xz" "${url}"; then
+      msg_error "Falha ao baixar wkhtmltopdf de ${url}"
+      rm -rf "${tmp_dir}"
+      return 1
+    fi
+  elif command -v wget &>/dev/null; then
+    if ! wget -O "${tmp_dir}/wkhtmltox.tar.xz" "${url}"; then
+      msg_error "Falha ao baixar wkhtmltopdf de ${url}"
+      rm -rf "${tmp_dir}"
+      return 1
+    fi
+  else
+    msg_error "wkhtmltopdf: nem curl nem wget estão disponíveis para o download."
+    rm -rf "${tmp_dir}"
+    return 1
+  fi
+
+  # Extrair e instalar os binários em /usr/local/bin
+  if ! tar -xf "${tmp_dir}/wkhtmltox.tar.xz" -C "${tmp_dir}"; then
+    msg_error "Falha ao extrair ${tarball}."
+    rm -rf "${tmp_dir}"
+    return 1
+  fi
+
+  if [ ! -d "${tmp_dir}/wkhtmltox/bin" ]; then
+    msg_error "wkhtmltopdf: estrutura inesperada no tarball (bin/ não encontrado)."
+    rm -rf "${tmp_dir}"
+    return 1
+  fi
+
+  sudo install -m 0755 "${tmp_dir}/wkhtmltox/bin/wkhtmltopdf" /usr/local/bin/wkhtmltopdf
+  sudo install -m 0755 "${tmp_dir}/wkhtmltox/bin/wkhtmltoimage" /usr/local/bin/wkhtmltoimage
+
+  rm -rf "${tmp_dir}"
+
+  # Atualizar o cache de fontes (necessário para renderização correta)
+  if command -v fc-cache &>/dev/null; then
+    fc-cache -f &>/dev/null || true
+  fi
+
+  if command -v wkhtmltopdf &>/dev/null; then
+    msg_action "wkhtmltopdf instalado em /usr/local/bin"
+    return 0
+  else
+    msg_error "wkhtmltopdf: instalação concluída mas o binário não está acessível no PATH."
+    return 1
+  fi
+}
