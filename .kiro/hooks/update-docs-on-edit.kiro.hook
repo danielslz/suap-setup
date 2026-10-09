@@ -1,5 +1,5 @@
 {
-  "enabled": true,
+  "enabled": false,
   "name": "Update Docs on Code Change",
   "description": "After editing any shell script or configuration file, reminds the agent to update README.md and docs/TECHNICAL.md to reflect the changes.",
   "version": "1",
