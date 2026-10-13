@@ -65,6 +65,19 @@ teardown() {
     assert_output --partial "já ausente"
 }
 
+@test "revert_file NÃO usa sudo em caminho gravável pelo usuário (home/tmp)" {
+    # Regressão: artefatos em diretório gravável (ex.: venv/SUAP_DIR no \$HOME)
+    # devem ser removidos sem sudo, para não pedir senha nem travar.
+    local f="${TEST_TEMP_DIR}/arq.txt"
+    echo x > "$f"
+    run revert_file "$f"
+    assert_success
+    [ ! -e "$f" ]
+    # sudo não deve ter sido chamado (o diretório pai é gravável)
+    run cat "$MOCK_LOG"
+    refute_output --partial "sudo"
+}
+
 @test "revert_binary remove binário" {
     local b="${TEST_TEMP_DIR}/wkhtmltopdf"
     echo x > "$b"

@@ -25,6 +25,9 @@ source "${SCRIPT_DIR}/lib/common.sh"
 DISTRO_TYPE="rpm"
 export DISTRO_TYPE
 
+### Chave do manifesto de estado desta rotina (para a reversão)
+MANIFEST_KEY="suap-dev"
+
 ### 2. Verificar existência do .env
 require_env_file "${SCRIPT_DIR}/.env"
 
@@ -56,20 +59,37 @@ PACKAGES=(
   git curl wget
 )
 
+# Capturar quais pacotes AINDA NÃO estão instalados (para registrar só o delta)
+_pkgs_to_install=()
+for _pkg in "${PACKAGES[@]}"; do
+  is_pkg_installed "${_pkg}" || _pkgs_to_install+=("${_pkg}")
+done
+
 if ! check_all_packages_installed "${PACKAGES[@]}"; then
   msg_action "Instalando dependências do sistema operacional"
   if ! sudo dnf install -y "${PACKAGES[@]}"; then
     msg_error "Falha na instalação de pacotes do sistema."
     exit 1
   fi
+  # Registrar no manifesto APENAS os pacotes que esta rotina instalou
+  for _pkg in "${_pkgs_to_install[@]}"; do
+    manifest_record "${MANIFEST_KEY}" package "${_pkg}"
+  done
 else
   msg_skip "Dependências do sistema já estão instaladas"
 fi
 
 # Instalar wkhtmltopdf (binário estático; não disponível nos repositórios)
+# Registrar no manifesto apenas se foi esta rotina que o instalou.
+_wkhtml_preexistia=0
+command -v wkhtmltopdf &>/dev/null && _wkhtml_preexistia=1
 if ! install_wkhtmltopdf; then
   msg_error "Falha na instalação do wkhtmltopdf."
   exit 1
+fi
+if [ "${_wkhtml_preexistia}" -eq 0 ] && command -v wkhtmltopdf &>/dev/null; then
+  manifest_record "${MANIFEST_KEY}" binary "/usr/local/bin/wkhtmltopdf"
+  manifest_record "${MANIFEST_KEY}" binary "/usr/local/bin/wkhtmltoimage"
 fi
 
 ### Configurar locale e timezone (interativo, se diferentes do padrão)
@@ -106,6 +126,8 @@ if [ ! -d "${SUAP_DIR}/.git" ]; then
   cd "${BASE_DIR}"
   git clone "${SUAP_GIT_URL}"
   cd "${SUAP_DIR}"
+  # Registrar o diretório clonado como contendo dados do usuário (reversão destrutiva)
+  manifest_record "${MANIFEST_KEY}" dir "${SUAP_DIR}" "user-data"
 else
   msg_skip "Código SUAP já existe, atualizando..."
   cd "${SUAP_DIR}"
@@ -117,6 +139,7 @@ fi
 if [ ! -f "${SUAP_DIR}/suap/settings.py" ]; then
   msg_action "Gerando settings.py"
   cp "${SUAP_DIR}/suap/settings_sample.py" "${SUAP_DIR}/suap/settings.py"
+  manifest_record "${MANIFEST_KEY}" file "${SUAP_DIR}/suap/settings.py"
 else
   msg_skip "settings.py já existe"
 fi
@@ -124,6 +147,7 @@ fi
 if [ ! -f "${SUAP_DIR}/.env" ]; then
   msg_action "Gerando .env do SUAP"
   cp "${SUAP_DIR}/.env.dev.sample" "${SUAP_DIR}/.env"
+  manifest_record "${MANIFEST_KEY}" file "${SUAP_DIR}/.env"
 else
   msg_skip ".env do SUAP já existe"
 fi
@@ -141,6 +165,7 @@ if [ ! -d "${VENV_DIR}" ]; then
   msg_action "Criando virtualenv"
   cd "${SUAP_DIR}"
   uv venv --python "${PYTHON_VERSION}"
+  manifest_record "${MANIFEST_KEY}" dir "${VENV_DIR}"
 else
   msg_skip "Virtualenv já existe"
 fi

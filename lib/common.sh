@@ -1199,6 +1199,32 @@ confirm_destructive() {
 # _dry() — true quando em modo dry-run
 _dry() { [ "${REVERT_DRY_RUN:-0}" = "1" ]; }
 
+# _need_sudo(caminho)
+# Retorna 0 (precisa de sudo) se o usuário NÃO tem permissão de escrita no
+# diretório que contém o caminho; 1 caso contrário. Evita usar sudo (e pedir
+# senha) para remover artefatos no $HOME do usuário, como o venv e o SUAP_DIR
+# em desenvolvimento. Se já estamos como root, nunca precisa de sudo.
+_need_sudo() {
+  local path="${1}"
+  [ "${EUID:-$(id -u)}" -eq 0 ] && return 1
+  local parent
+  parent="$(dirname "${path}")"
+  # Se o diretório pai é gravável pelo usuário, não precisa de sudo
+  [ -w "${parent}" ] && return 1
+  return 0
+}
+
+# _rm_path(flags, caminho)
+# Remove usando sudo apenas quando necessário (artefatos de sistema).
+_rm_path() {
+  local flags="${1}" path="${2}"
+  if _need_sudo "${path}"; then
+    sudo rm "${flags}" "${path}"
+  else
+    rm "${flags}" "${path}"
+  fi
+}
+
 # revert_file(caminho)
 # Remove um arquivo criado pela instalação (idempotente).
 revert_file() {
@@ -1209,7 +1235,7 @@ revert_file() {
   fi
   if _dry; then echo "  [dry-run] removeria arquivo: ${path}"; return 0; fi
   msg_action "Removendo arquivo: ${path}"
-  sudo rm -f "${path}"
+  _rm_path -f "${path}"
 }
 
 # revert_symlink(link, [alvo_restaurar])
@@ -1220,7 +1246,7 @@ revert_symlink() {
   if [ -L "${link}" ]; then
     if _dry; then echo "  [dry-run] removeria symlink: ${link}"; else
       msg_action "Removendo symlink: ${link}"
-      sudo rm -f "${link}"
+      _rm_path -f "${link}"
     fi
   else
     msg_skip "Symlink já ausente: ${link}"
@@ -1228,7 +1254,7 @@ revert_symlink() {
   if [ -n "${restore_target}" ] && [ ! -e "${restore_target}" ]; then
     if _dry; then echo "  [dry-run] restauraria symlink original -> ${restore_target}"; else
       msg_action "Restaurando symlink original: ${restore_target}"
-      sudo ln -sf "${restore_target}" "${link}"
+      if _need_sudo "${link}"; then sudo ln -sf "${restore_target}" "${link}"; else ln -sf "${restore_target}" "${link}"; fi
     fi
   fi
 }
@@ -1243,7 +1269,7 @@ revert_binary() {
   fi
   if _dry; then echo "  [dry-run] removeria binário: ${path}"; return 0; fi
   msg_action "Removendo binário: ${path}"
-  sudo rm -f "${path}"
+  _rm_path -f "${path}"
 }
 
 # revert_dir(caminho, [--destructive])
@@ -1263,7 +1289,7 @@ revert_dir() {
   fi
   if _dry; then echo "  [dry-run] removeria diretório: ${path}"; return 0; fi
   msg_action "Removendo diretório: ${path}"
-  sudo rm -rf "${path}"
+  _rm_path -rf "${path}"
 }
 
 # revert_package(pkg)

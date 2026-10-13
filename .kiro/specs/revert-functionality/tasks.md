@@ -37,7 +37,7 @@ Implementação incremental da funcionalidade de reversão. Parte da infraestrut
 - [ ] 3. Instrumentar rotinas de instalação para registrar o manifesto
   - [~] 3.1 Ambiente dev (deb/rpm/arch/macos) registra artefatos
     - Registrar delta de pacotes (só os que não estavam instalados), VENV_DIR, SUAP_DIR clonado, binário wkhtmltopdf, settings.py/.env gerados
-    - **Feito: deb.** Pendente: rpm/arch/macos.
+    - **Feito: deb, rpm.** Pendente: arch/macos.
     - _Requisitos: 1.3, 1.4, 1.7, 5.1, 5.2_
   - [ ] 3.2 Ambiente prod (deb/rpm/arch) registra artefatos
     - Delta de pacotes, confs do Supervisor copiadas, conf do Nginx, usuário www-data (se criado), SUAP_DIR, binário wkhtmltopdf
@@ -53,7 +53,7 @@ Implementação incremental da funcionalidade de reversão. Parte da infraestrut
 - [ ] 4. Scripts de reversão por funcionalidade
   - [~] 4.1 `suap-dev-revert.sh` (deb/rpm/arch/macos)
     - Carregar .env, definir DISTRO_TYPE, chamar `revert_apply "suap-dev"` com políticas (SUAP_DIR e pacotes exigem confirmação; UV/Python preservados)
-    - **Feito: deb** (`deb/suap-dev-revert.sh`, com `--dry-run` e resumo). Pendente: rpm/arch/macos.
+    - **Feito: deb, rpm** (com `--dry-run` e resumo). Pendente: arch/macos.
     - _Requisitos: 2.1, 5.1, 5.2, 5.3, 5.4, 5.5, 7.4_
   - [ ] 4.2 `suap-prod-revert.sh` (deb/rpm/arch)
     - _Requisitos: 2.1, 6.4_
