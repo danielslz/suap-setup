@@ -100,3 +100,17 @@ teardown() {
     run manifest_is_empty "$KEY"
     assert_success
 }
+
+@test "confirmacao via stdin ('s') dentro do revert_apply remove o SUAP_DIR" {
+    # Regressão: o laço de revert_apply nao pode sequestrar o stdin; a
+    # confirmacao deve conseguir ler a resposta 's' alimentada aqui.
+    # 's' para SUAP_DIR (dir user-data) e 's' para o pacote swig; demais
+    # confirmacoes de pacote tambem recebem 's'. Fornecemos varios 's'.
+    run revert_apply "$KEY" <<< $'s\ns\ns\ns\ns\ns\n'
+    assert_success
+    # SUAP_DIR deve ter sido removido (confirmacao aceita)
+    [ ! -d "$SUAP_DIR" ]
+    # pacote swig: confirmacao aceita -> apt-get remove chamado
+    run cat "$MOCK_LOG"
+    assert_output --partial "apt-get remove"
+}

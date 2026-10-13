@@ -1188,6 +1188,9 @@ confirm_destructive() {
   echo ""
   echo "  ${RED}ATENÇÃO (operação destrutiva):${NO_COLOR} ${descricao}"
   local _resp
+  # Lê do stdin. O laço de revert_apply itera o manifesto por um descritor
+  # dedicado (fd 3), deixando o stdin (fd 0) livre para esta confirmação falar
+  # com o usuário / receber a resposta alimentada pelos testes.
   read -rp "  Confirmar? [s/N]: " _resp
   _resp="${_resp:-N}"
   [[ "${_resp}" =~ ^[sS]$ ]]
@@ -1468,7 +1471,11 @@ revert_apply() {
 
   local failures=0 removed=0
   local sortline
-  while IFS= read -r sortline; do
+  # Itera a lista ordenada pelo descritor 3, mantendo o stdin (fd 0) livre para
+  # as confirmações interativas (confirm_destructive) lerem do teclado/testes.
+  local _sorted="/tmp/_revert_sorted_$$"
+  sort -t$'\t' -k1,1n -k2,2n /tmp/_revert_sort_$$ 2>/dev/null > "${_sorted}"
+  while IFS= read -r sortline <&3; do
     [ -z "${sortline}" ] && continue
     # Remove as duas colunas de ordenação (prio, depth)
     local entry="${sortline#*$'\t'}"; entry="${entry#*$'\t'}"
@@ -1488,9 +1495,9 @@ revert_apply() {
       failures=$((failures + 1))
       msg_error "Falha ao reverter ${type} '${id}' (mantido no manifesto)."
     fi
-  done < <(sort -t$'\t' -k1,1n -k2,2n /tmp/_revert_sort_$$ 2>/dev/null)
+  done 3< "${_sorted}"
 
-  rm -f /tmp/_revert_sort_$$
+  rm -f /tmp/_revert_sort_$$ "${_sorted}"
 
   echo ""
   if _dry; then
