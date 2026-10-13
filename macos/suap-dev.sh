@@ -28,6 +28,9 @@ source "${SCRIPT_DIR}/lib/common.sh"
 DISTRO_TYPE="macos"
 export DISTRO_TYPE
 
+### Chave do manifesto de estado desta rotina (para a reversão)
+MANIFEST_KEY="suap-dev"
+
 ### 2. Verificar Homebrew disponível
 if ! command -v brew &>/dev/null; then
   msg_error "Homebrew não está instalado. Instale em: https://brew.sh"
@@ -75,12 +78,22 @@ PACKAGES=(
   freetds
 )
 
+# Capturar quais pacotes AINDA NÃO estão instalados (para registrar só o delta)
+_pkgs_to_install=()
+for _pkg in "${PACKAGES[@]}"; do
+  is_pkg_installed "${_pkg}" || _pkgs_to_install+=("${_pkg}")
+done
+
 if ! check_all_packages_installed "${PACKAGES[@]}"; then
   msg_action "Instalando dependências do sistema via Homebrew"
   if ! brew install "${PACKAGES[@]}"; then
     msg_error "Falha na instalação de pacotes via Homebrew."
     exit 1
   fi
+  # Registrar no manifesto APENAS os pacotes que esta rotina instalou
+  for _pkg in "${_pkgs_to_install[@]}"; do
+    manifest_record "${MANIFEST_KEY}" package "${_pkg}"
+  done
 else
   msg_skip "Dependências do sistema já estão instaladas"
 fi
@@ -118,6 +131,8 @@ if [ ! -d "${SUAP_DIR}/.git" ]; then
   mkdir -p "${BASE_DIR}"
   cd "${BASE_DIR}"
   git clone "${SUAP_GIT_URL}" suap
+  # Registrar o diretório clonado como contendo dados do usuário (reversão destrutiva)
+  manifest_record "${MANIFEST_KEY}" dir "${SUAP_DIR}" "user-data"
 else
   msg_skip "Repositório SUAP já existe, atualizando..."
   cd "${SUAP_DIR}"
@@ -131,6 +146,7 @@ cd "${SUAP_DIR}"
 if [ ! -f "${SUAP_DIR}/suap/settings.py" ]; then
   msg_action "Gerando settings.py a partir do sample"
   cp "${SUAP_DIR}/suap/settings_sample.py" "${SUAP_DIR}/suap/settings.py"
+  manifest_record "${MANIFEST_KEY}" file "${SUAP_DIR}/suap/settings.py"
 else
   msg_skip "settings.py já existe"
 fi
@@ -138,6 +154,7 @@ fi
 if [ ! -f "${SUAP_DIR}/.env" ]; then
   msg_action "Gerando .env do SUAP a partir do sample"
   cp "${SUAP_DIR}/.env.dev.sample" "${SUAP_DIR}/.env"
+  manifest_record "${MANIFEST_KEY}" file "${SUAP_DIR}/.env"
 else
   msg_skip ".env do SUAP já existe"
 fi
@@ -155,6 +172,7 @@ if [ ! -d "${VENV_DIR}" ]; then
   msg_action "Criando virtualenv com Python ${PYTHON_VERSION}"
   cd "${SUAP_DIR}"
   uv venv --python "${PYTHON_VERSION}"
+  manifest_record "${MANIFEST_KEY}" dir "${VENV_DIR}"
 else
   msg_skip "Virtualenv já existe em ${VENV_DIR}"
 fi
