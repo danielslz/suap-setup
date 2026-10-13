@@ -62,14 +62,15 @@ Implementação incremental da funcionalidade de reversão. Parte da infraestrut
   - [ ] 4.4 Reversões de Docker dev/prod, Dockhand, MinIO
     - _Requisitos: 2.1, 6.5_
 
-- [ ] 5. Integração no menu do Wrapper (setup.sh)
-  - [ ] 5.1 Adicionar entrada "Reverter" no menu principal + submenu de reversão e roteamento por DISTRO_TYPE
+- [x] 5. Integração no menu do Wrapper (setup.sh)
+  - [x] 5.1 Adicionar entrada "Reverter" no menu principal + submenu de reversão e roteamento por DISTRO_TYPE
     - Menu principal: uma única entrada "R) Reverter" que abre o submenu; submenu com opção "0) Voltar"
     - Submenu espelha as funcionalidades suportadas; não oferecer reversões incompatíveis com a plataforma (ex.: prod no macOS)
-    - Exibir resumo do manifesto e confirmar antes de executar
+    - Reversões ainda não implementadas exibem "ainda não disponível" (script ausente) em vez de erro cru
+    - O resumo do manifesto e a confirmação ocorrem dentro de cada script `-revert.sh`
     - _Requisitos: 4.1, 4.2, 4.3, 4.4, 4.5_
-  - [ ] 5.2 Testes de roteamento do menu de reversão
-    - Property/unit análogos ao `test_routing.bats` existente
+  - [x] 5.2 Testes de roteamento do menu de reversão
+    - `tests/property/test_revert_routing.bats`: contagem por plataforma, mapeamento índice→script, índices inválidos
     - _Requisitos: 8.3_
 
 - [ ] 6. Documentação

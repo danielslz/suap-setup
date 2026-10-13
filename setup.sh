@@ -24,9 +24,10 @@ if [ "${DISTRO_TYPE}" = "macos" ]; then
   echo "3) Configurar ambiente prod via Docker"
   echo "4) Iniciar Dockhand (via Docker)"
   echo "5) Instalar MinIO (via Docker)"
+  echo "R) Reverter uma funcionalidade"
   echo "0) Sair"
   echo ""
-  read -rp "Escolha uma opção [0-5]: " CHOICE
+  read -rp "Escolha uma opção [0-5, R]: " CHOICE
 else
   echo "1) Configurar ambiente de desenvolvimento"
   echo "2) Configurar ambiente de produção"
@@ -38,15 +39,85 @@ else
   echo "8) Atualizar SUAP (produção)"
   echo "9) Instalar PostgreSQL"
   echo "10) Instalar MinIO (via Docker)"
+  echo "R) Reverter uma funcionalidade"
   echo "0) Sair"
   echo ""
-  read -rp "Escolha uma opção [0-10]: " CHOICE
+  read -rp "Escolha uma opção [0-10, R]: " CHOICE
 fi
 
 # Sair imediatamente se opção 0
 if [ "${CHOICE}" = "0" ]; then
   echo "Saindo..."
   exit 0
+fi
+
+# --- Submenu de reversão (opção R) ---
+# Exibe as funcionalidades que suportam reversão (conforme a plataforma),
+# roteia para o respectivo script <distro>/<rotina>-revert.sh e executa.
+run_revert_submenu() {
+  echo ""
+  echo "${GREEN}=== SUAP Setup — Reverter ===${NO_COLOR}"
+  echo "${YELLOW}Reversão conservadora: artefatos pré-existentes são preservados;"
+  echo "operações destrutivas (apagar diretórios/bancos, desinstalar pacotes)"
+  echo "pedem confirmação.${NO_COLOR}"
+  echo ""
+
+  # Monta a lista de reversões disponíveis conforme a plataforma.
+  # Cada item: "rótulo|script relativo ao SCRIPT_DIR"
+  local -a items=()
+  if [ "${DISTRO_TYPE}" = "macos" ]; then
+    items+=("Reverter ambiente de desenvolvimento|${DISTRO_TYPE}/suap-dev-revert.sh")
+    items+=("Reverter ambiente dev via Docker|docker/dev/docker-setup-revert.sh")
+    items+=("Reverter ambiente prod via Docker|docker/prod/docker-setup-revert.sh")
+    items+=("Reverter Dockhand|docker/dockhand-revert.sh")
+    items+=("Reverter MinIO|docker/minio-revert.sh")
+  else
+    items+=("Reverter ambiente de desenvolvimento|${DISTRO_TYPE}/suap-dev-revert.sh")
+    items+=("Reverter ambiente de produção|${DISTRO_TYPE}/suap-prod-revert.sh")
+    items+=("Reverter Redis|${DISTRO_TYPE}/install-redis-revert.sh")
+    items+=("Reverter Nginx|${DISTRO_TYPE}/install-nginx-revert.sh")
+    items+=("Reverter ambiente dev via Docker|docker/dev/docker-setup-revert.sh")
+    items+=("Reverter ambiente prod via Docker|docker/prod/docker-setup-revert.sh")
+    items+=("Reverter Dockhand|docker/dockhand-revert.sh")
+    items+=("Reverter PostgreSQL|${DISTRO_TYPE}/install-postgres-revert.sh")
+    items+=("Reverter MinIO|docker/minio-revert.sh")
+  fi
+
+  local i
+  for i in "${!items[@]}"; do
+    echo "$((i + 1))) ${items[$i]%%|*}"
+  done
+  echo "0) Voltar"
+  echo ""
+  read -rp "Escolha uma opção para reverter: " REV_CHOICE
+
+  if [ "${REV_CHOICE}" = "0" ]; then
+    echo "Voltando..."
+    exit 0
+  fi
+
+  # Validar seleção numérica dentro do intervalo
+  if ! [[ "${REV_CHOICE}" =~ ^[0-9]+$ ]] || [ "${REV_CHOICE}" -lt 1 ] || [ "${REV_CHOICE}" -gt "${#items[@]}" ]; then
+    msg_error "Opção de reversão inválida."
+    exit 1
+  fi
+
+  local selected="${items[$((REV_CHOICE - 1))]}"
+  local rev_script="${SCRIPT_DIR}/${selected#*|}"
+
+  if [ ! -f "${rev_script}" ]; then
+    msg_error "A reversão desta funcionalidade ainda não está disponível."
+    msg_error "Script não encontrado: ${rev_script}"
+    exit 2
+  fi
+
+  msg_action "Executando ${rev_script}..."
+  bash "${rev_script}"
+  exit $?
+}
+
+if [ "${CHOICE}" = "R" ] || [ "${CHOICE}" = "r" ]; then
+  run_revert_submenu
 fi
 
 # Remapear opções do macOS para o mapeamento interno

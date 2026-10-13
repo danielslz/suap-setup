@@ -96,6 +96,7 @@ O `setup.sh` detecta automaticamente o sistema operacional e exibe apenas as op�
 8) Atualizar ambiente de produção
 9) Instalar PostgreSQL
 10) Instalar MinIO (via Docker)
+R) Reverter uma funcionalidade
 0) Sair
 ```
 
@@ -108,8 +109,11 @@ O `setup.sh` detecta automaticamente o sistema operacional e exibe apenas as op�
 3) Configurar ambiente prod via Docker
 4) Iniciar Dockhand (via Docker)
 5) Instalar MinIO (via Docker)
+R) Reverter uma funcionalidade
 0) Sair
 ```
+
+A opção **R) Reverter** abre um submenu que lista as funcionalidades que podem ser desfeitas na plataforma atual. A reversão é conservadora: remove apenas o que a instalação criou (registrado em um manifesto de estado), preserva o que já existia no sistema e pede confirmação para operações destrutivas (apagar diretórios/bancos, desinstalar pacotes).
 
 No macOS, opções de produção nativa, Redis e Nginx não estão disponíveis (macOS é suportado apenas para desenvolvimento).
 
