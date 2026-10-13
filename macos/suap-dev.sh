@@ -85,6 +85,9 @@ else
   msg_skip "Dependências do sistema já estão instaladas"
 fi
 
+### Configurar timezone (interativo, se diferente do padrão; locale não se aplica no macOS)
+ensure_locale_timezone
+
 ### 5. Instalar UV (se não disponível no PATH)
 if command -v uv &>/dev/null; then
   msg_skip "UV já está instalado"

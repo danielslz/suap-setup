@@ -172,6 +172,8 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 Os scripts de desenvolvimento realizam:
 
 - Instalação de dependências do sistema (halt imediato em caso de falha)
+- Instalação do `wkhtmltopdf` (binário estático, pois foi removido dos repositórios das distros)
+- Configuração interativa de locale e timezone: se diferentes do padrão do SUAP (`pt_BR.UTF-8` / `America/Fortaleza`), o script pergunta se deseja ajustar
 - Instalação do [UV](https://docs.astral.sh/uv/) (com detecção em `~/.cargo/bin` e `~/.local/bin`)
 - Clone ou atualização do código SUAP
 - Geração de `settings.py` e `.env` a partir dos samples
@@ -183,7 +185,7 @@ Os scripts de desenvolvimento realizam:
 Os scripts de produção (requerem root) realizam:
 
 - Instalação de dependências do sistema (halt imediato em caso de falha)
-- Configuração de locale e timezone
+- Configuração interativa de locale e timezone (padrão `pt_BR.UTF-8` / `America/Fortaleza`; pergunta apenas se diferente do padrão)
 - Clone com `git clone --depth 1` ou atualização do código
 - Criação de virtualenv com `python3 -m venv`
 - Instalação de dependências via `pip install . --group prod` ou `pip install -r requirements/production.txt`

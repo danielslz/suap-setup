@@ -71,26 +71,8 @@ if ! install_wkhtmltopdf; then
     exit 1
 fi
 
-# --- Configurar locale (Arch-specific: localectl) ---
-CURRENT_LANG=$(localectl | grep -Eo 'LANG=[^ ]+' | cut -d'=' -f2)
-if [ "$CURRENT_LANG" != "pt_BR.UTF-8" ]; then
-    msg_action "Configurando locale para pt_BR.UTF-8"
-    # Garantir que o locale está gerado
-    sed -i 's/^#pt_BR.UTF-8 UTF-8/pt_BR.UTF-8 UTF-8/' /etc/locale.gen
-    locale-gen
-    localectl set-locale LANG=pt_BR.UTF-8
-else
-    msg_skip "Locale já configurado para pt_BR.UTF-8"
-fi
-
-# --- Configurar timezone ---
-CURRENT_TZ=$(timedatectl show -p Timezone --value)
-if [ "$CURRENT_TZ" != "America/Fortaleza" ]; then
-    msg_action "Configurando timezone para America/Fortaleza"
-    timedatectl set-timezone America/Fortaleza
-else
-    msg_skip "Timezone já configurado para America/Fortaleza"
-fi
+# --- Configurar locale e timezone (interativo, se diferentes do padrão) ---
+ensure_locale_timezone
 
 # --- Baixar/atualizar código SUAP ---
 if [ ! -d "$SUAP_DIR/.git" ]; then

@@ -64,7 +64,10 @@ if ! install_wkhtmltopdf; then
   exit 1
 fi
 
-# --- 6. Instalar UV ---
+# --- 6. Configurar locale e timezone (interativo, se diferentes do padrão) ---
+ensure_locale_timezone
+
+# --- 7. Instalar UV ---
 if command -v uv &>/dev/null; then
   msg_skip "UV já está instalado"
 elif [ -x "${HOME}/.cargo/bin/uv" ]; then
@@ -88,7 +91,7 @@ else
   fi
 fi
 
-# --- 7. Clone/pull do repositório SUAP ---
+# --- 8. Clone/pull do repositório SUAP ---
 if [ ! -d "${SUAP_DIR}/.git" ]; then
   msg_action "Clonando repositório SUAP"
   mkdir -p "${BASE_DIR}"
@@ -103,7 +106,7 @@ fi
 
 cd "${SUAP_DIR}"
 
-# --- 8. Gerar settings.py e .env a partir dos samples ---
+# --- 9. Gerar settings.py e .env a partir dos samples ---
 if [ ! -f "${SUAP_DIR}/suap/settings.py" ]; then
   msg_action "Gerando settings.py a partir do sample"
   cp "${SUAP_DIR}/suap/settings_sample.py" "${SUAP_DIR}/suap/settings.py"
@@ -118,7 +121,7 @@ else
   msg_skip ".env do SUAP já existe"
 fi
 
-# --- 9. Instalar Python via UV ---
+# --- 10. Instalar Python via UV ---
 if ! uv python list --only-installed 2>/dev/null | grep -q "${PYTHON_VERSION}"; then
   msg_action "Instalando Python ${PYTHON_VERSION} via UV"
   uv python install "${PYTHON_VERSION}"
@@ -126,7 +129,7 @@ else
   msg_skip "Python ${PYTHON_VERSION} já está instalado"
 fi
 
-# --- 10. Criar virtualenv ---
+# --- 11. Criar virtualenv ---
 if [ ! -d "${VENV_DIR}" ]; then
   msg_action "Criando virtualenv com Python ${PYTHON_VERSION}"
   cd "${SUAP_DIR}"
@@ -135,7 +138,7 @@ else
   msg_skip "Virtualenv já existe em ${VENV_DIR}"
 fi
 
-# --- 11. Instalar/atualizar dependências Python ---
+# --- 12. Instalar/atualizar dependências Python ---
 msg_action "Instalando/atualizando dependências Python"
 cd "${SUAP_DIR}"
 if [ -f "${SUAP_DIR}/pyproject.toml" ]; then
@@ -153,7 +156,7 @@ else
   exit 1
 fi
 
-# --- 12. Mensagem final com próximos passos ---
+# --- 13. Mensagem final com próximos passos ---
 echo ""
 msg_action "SUAP instalado/atualizado com sucesso em ${SUAP_DIR}!"
 echo ""

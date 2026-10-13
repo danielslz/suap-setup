@@ -74,22 +74,8 @@ if ! install_wkhtmltopdf; then
   exit 1
 fi
 
-# --- 6. Configurar locale e timezone ---
-CURRENT_LOCALE=$(locale 2>/dev/null | grep "^LANG=" | cut -d= -f2 || echo "")
-if [ "${CURRENT_LOCALE}" != "pt_BR.UTF-8" ]; then
-  msg_action "Configurando locale para pt_BR.UTF-8"
-  update-locale LANG=pt_BR.UTF-8
-else
-  msg_skip "Locale já configurado para pt_BR.UTF-8"
-fi
-
-CURRENT_TZ=$(timedatectl show -p Timezone --value 2>/dev/null || echo "")
-if [ "${CURRENT_TZ}" != "America/Fortaleza" ]; then
-  msg_action "Configurando timezone para America/Fortaleza"
-  timedatectl set-timezone America/Fortaleza
-else
-  msg_skip "Timezone já configurado para America/Fortaleza"
-fi
+# --- 6. Configurar locale e timezone (interativo, se diferentes do padrão) ---
+ensure_locale_timezone
 
 # --- 7. Clone/pull do código SUAP (com --depth 1) ---
 if [ ! -d "${SUAP_DIR}/.git" ]; then

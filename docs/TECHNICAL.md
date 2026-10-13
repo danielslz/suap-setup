@@ -325,19 +325,40 @@ gerenciador de pacotes. Se ao menos um pacote estiver faltando, instala todos.
 > **Comportamento em caso de falha:** Se o gerenciador de pacotes retorna erro
 > (exit code ≠ 0), o script exibe `msg_error` e encerra com exit 1 imediatamente.
 
-#### Locale e Timezone (não configurados no desenvolvimento)
+#### Locale e Timezone (interativo)
 
-Os scripts de **desenvolvimento** (`deb/suap-dev.sh`, `rpm/suap-dev.sh`,
-`arch/suap-dev.sh`, `macos/suap-dev.sh`) **não** configuram locale nem timezone.
-Essa configuração ficou restrita aos fluxos de **produção**.
+Tanto os scripts de **desenvolvimento** quanto os de **produção** configuram
+locale e timezone de forma **interativa**, pela função compartilhada
+`ensure_locale_timezone()` em `lib/common.sh`.
 
-- O locale `pt_BR.UTF-8` é gerado pelo respectivo `install-postgres.sh` quando
-  necessário (ex.: `deb/install-postgres.sh`, `rpm/install-postgres.sh`,
-  `arch/install-postgres.sh`).
-- O timezone utiliza o padrão do sistema no ambiente de desenvolvimento.
+**Padrões do SUAP** (configuráveis via `.env`, com fallback):
 
-A configuração de locale (`pt_BR.UTF-8`) e timezone (`America/Fortaleza`, UTC-3)
-permanece nos scripts de produção — consulte a seção do fluxo de produção.
+- Locale: `SUAP_LOCALE` (padrão `pt_BR.UTF-8`)
+- Timezone: `SUAP_TIMEZONE` (padrão `America/Fortaleza`, UTC-3)
+
+**Algoritmo:**
+
+```
+1. Detectar o locale atual (LANG) e o timezone atual do sistema
+2. SE o valor atual já é igual ao padrão → msg_skip (não pergunta)
+3. SENÃO → exibir o valor atual e o padrão, e perguntar se deseja ajustar
+   (resposta padrão ao pressionar Enter = SIM, pois o SUAP depende de pt_BR
+    para formatação de datas/moeda)
+4. SE o usuário confirmar → aplicar o padrão conforme a plataforma
+   SENÃO → preservar o valor atual (msg_skip)
+```
+
+**Aplicação por plataforma:**
+
+| Plataforma | Locale | Timezone |
+|------------|--------|----------|
+| Debian/Ubuntu | `locale-gen` + `update-locale LANG=...` | `timedatectl set-timezone` |
+| Fedora/RHEL/Alma/Rocky | `glibc-langpack-pt` + `localectl set-locale` | `timedatectl set-timezone` |
+| Arch Linux | habilita em `/etc/locale.gen` + `locale-gen` + `localectl set-locale` | `timedatectl set-timezone` |
+| macOS | não se aplica (locale) | `systemsetup -settimezone` |
+
+**Idempotência:** se locale e timezone já estão no padrão, a etapa é pulada sem
+perguntar nada ao usuário.
 
 #### Etapa 5 — Instalação do UV
 
@@ -465,18 +486,12 @@ Se o script não está rodando como root, ele se re-executa com `sudo` automatic
 
 #### Etapa 3 — Configuração de Locale e Timezone
 
-Diferente do fluxo de desenvolvimento (onde locale e timezone não são
-configurados), **todas** as distribuições Linux de produção configuram locale
-`pt_BR.UTF-8` e timezone `America/Fortaleza`.
-
-| Plataforma | Locale | Timezone |
-|------------|--------|----------|
-| Debian/Ubuntu | `locale-gen pt_BR.UTF-8 && update-locale LANG=pt_BR.UTF-8` | `timedatectl set-timezone America/Fortaleza` |
-| Fedora/RHEL/Alma/Rocky | `localectl set-locale LANG=pt_BR.UTF-8` | `timedatectl set-timezone America/Fortaleza` |
-| Arch Linux | `locale-gen && localectl set-locale LANG=pt_BR.UTF-8` | `timedatectl set-timezone America/Fortaleza` |
-
-**Idempotência:** verifica `LANG=` (via `locale`/`localectl`) e
-`timedatectl show -p Timezone --value` antes de executar.
+Igual ao fluxo de desenvolvimento: a produção usa a mesma função compartilhada
+`ensure_locale_timezone()` (ver "Locale e Timezone (interativo)" na seção de
+desenvolvimento). A configuração é interativa — se o locale/timezone atuais já
+coincidem com o padrão do SUAP (`pt_BR.UTF-8` / `America/Fortaleza`), a etapa é
+pulada; caso contrário, o operador é perguntado se deseja ajustar (resposta
+padrão = sim).
 
 #### Etapa 4 — Clone do Código SUAP
 

@@ -72,6 +72,9 @@ if ! install_wkhtmltopdf; then
   exit 1
 fi
 
+### Configurar locale e timezone (interativo, se diferentes do padrão)
+ensure_locale_timezone
+
 ### 5. Instalar UV (se não disponível no PATH)
 if command -v uv &>/dev/null; then
   msg_skip "UV já está instalado"

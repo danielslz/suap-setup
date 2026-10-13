@@ -944,3 +944,97 @@ install_wkhtmltopdf() {
     return 1
   fi
 }
+
+# --- Configuração de Locale e Timezone (interativa) ---
+
+# ensure_locale_timezone()
+# Verifica o locale e o timezone atuais do sistema e, caso difiram do padrão do
+# SUAP, pergunta ao usuário se deseja ajustá-los para o padrão. Se já estiverem
+# no padrão, apenas pula (sem perguntar).
+#
+# Padrões (configuráveis via .env, com fallback):
+#   SUAP_LOCALE   (padrão: pt_BR.UTF-8)
+#   SUAP_TIMEZONE (padrão: America/Fortaleza)
+#
+# A resposta padrão (Enter) é SIM (aplicar o padrão), pois o SUAP depende do
+# locale pt_BR para formatação correta de datas/moeda. O usuário pode recusar.
+#
+# Comportamento por DISTRO_TYPE:
+#   deb:   locale-gen + update-locale; timezone via timedatectl
+#   rpm:   glibc-langpack-pt + localectl; timezone via timedatectl
+#   arch:  habilita no /etc/locale.gen + locale-gen + localectl; timezone timedatectl
+#   macos: locale não se aplica; timezone via systemsetup
+#
+# Requer: DISTRO_TYPE definida (via detect_distro ou export no script).
+ensure_locale_timezone() {
+  local target_locale="${SUAP_LOCALE:-pt_BR.UTF-8}"
+  local target_tz="${SUAP_TIMEZONE:-America/Fortaleza}"
+
+  _confirm_default_yes() {
+    # $1 = pergunta; retorna 0 (sim) por padrão quando o usuário aperta Enter
+    local _resp
+    read -rp "$1 [S/n]: " _resp
+    _resp="${_resp:-S}"
+    [[ "${_resp}" =~ ^[sS]$ ]]
+  }
+
+  # ---------- LOCALE ----------
+  if [ "${DISTRO_TYPE}" = "macos" ]; then
+    msg_skip "Locale não se aplica ao macOS"
+  else
+    local current_locale
+    current_locale=$(locale 2>/dev/null | grep "^LANG=" | cut -d= -f2 | tr -d '"' || echo "")
+    if [ "${current_locale}" = "${target_locale}" ]; then
+      msg_skip "Locale já está no padrão (${target_locale})"
+    else
+      echo ""
+      echo "Locale atual: ${YELLOW}${current_locale:-<não definido>}${NO_COLOR} (padrão do SUAP: ${GREEN}${target_locale}${NO_COLOR})"
+      if _confirm_default_yes "Deseja ajustar o locale para ${target_locale}?"; then
+        msg_action "Configurando locale para ${target_locale}"
+        case "${DISTRO_TYPE}" in
+          deb)
+            sudo locale-gen "${target_locale}"
+            sudo update-locale LANG="${target_locale}"
+            ;;
+          rpm)
+            sudo dnf install -y glibc-langpack-pt
+            sudo localectl set-locale LANG="${target_locale}"
+            ;;
+          arch)
+            # Descomenta a linha correspondente no /etc/locale.gen antes de gerar
+            sudo sed -i "s/^#\s*${target_locale} UTF-8/${target_locale} UTF-8/" /etc/locale.gen
+            sudo locale-gen
+            sudo localectl set-locale LANG="${target_locale}"
+            ;;
+        esac
+      else
+        msg_skip "Locale mantido como está (${current_locale:-<não definido>})"
+      fi
+    fi
+  fi
+
+  # ---------- TIMEZONE ----------
+  local current_tz
+  if [ "${DISTRO_TYPE}" = "macos" ]; then
+    current_tz=$(systemsetup -gettimezone 2>/dev/null | awk -F': ' '{print $2}' || echo "")
+  else
+    current_tz=$(timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || echo "")
+  fi
+
+  if [ "${current_tz}" = "${target_tz}" ]; then
+    msg_skip "Timezone já está no padrão (${target_tz})"
+  else
+    echo ""
+    echo "Timezone atual: ${YELLOW}${current_tz:-<não definido>}${NO_COLOR} (padrão do SUAP: ${GREEN}${target_tz}${NO_COLOR})"
+    if _confirm_default_yes "Deseja ajustar o timezone para ${target_tz}?"; then
+      msg_action "Configurando timezone para ${target_tz}"
+      if [ "${DISTRO_TYPE}" = "macos" ]; then
+        sudo systemsetup -settimezone "${target_tz}"
+      else
+        sudo timedatectl set-timezone "${target_tz}"
+      fi
+    else
+      msg_skip "Timezone mantido como está (${current_tz:-<não definido>})"
+    fi
+  fi
+}
