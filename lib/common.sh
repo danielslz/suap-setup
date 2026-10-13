@@ -1038,3 +1038,466 @@ ensure_locale_timezone() {
     fi
   fi
 }
+
+# =============================================================
+# Manifesto de Estado (para a funcionalidade de reversão)
+# =============================================================
+# Cada rotina de instalação registra, em um manifesto por funcionalidade, os
+# artefatos que efetivamente criou (diretórios, arquivos, pacotes instalados por
+# ela, binários, serviços, usuários, etc.). A reversão lê esse manifesto e desfaz
+# apenas o que consta nele — nunca o que já existia no sistema.
+#
+# Formato de cada linha (delimitado por TAB):
+#   <tipo>\t<identificador>\t<metadado-opcional>
+#
+# Tipos: dir, file, symlink, package, binary, service, user, pg_db, pg_user,
+#        file_lines, repo_added
+
+# _manifest_state_dir()
+# Resolve o diretório onde os manifestos são gravados:
+#   1. <repo>/.state/ se o repositório for gravável (uso típico em dev)
+#   2. /var/lib/suap-setup/ como fallback (produção/root fora do repo)
+# Ecoa o caminho do diretório (criando-o) e retorna 0; retorna 1 em falha.
+_manifest_state_dir() {
+  local repo_root repo_state
+  repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  repo_state="${repo_root}/.state"
+
+  # Preferir .state/ no repo quando for possível criar/gravar
+  if mkdir -p "${repo_state}" 2>/dev/null && [ -w "${repo_state}" ]; then
+    echo "${repo_state}"
+    return 0
+  fi
+
+  # Fallback de sistema
+  local sys_state="/var/lib/suap-setup"
+  if mkdir -p "${sys_state}" 2>/dev/null && [ -w "${sys_state}" ]; then
+    echo "${sys_state}"
+    return 0
+  fi
+
+  return 1
+}
+
+# manifest_path(chave)
+# Ecoa o caminho completo do arquivo de manifesto para a chave informada,
+# garantindo que o diretório de estado exista.
+# Ex.: manifest_path "suap-dev" -> <repo>/.state/suap-dev.manifest
+manifest_path() {
+  local key="${1}"
+  local dir
+  if ! dir="$(_manifest_state_dir)"; then
+    msg_error "Não foi possível criar o diretório de estado do manifesto."
+    return 1
+  fi
+  echo "${dir}/${key}.manifest"
+}
+
+# manifest_has(chave, tipo, id)
+# Retorna 0 se a entrada (tipo + id) já existe no manifesto da chave.
+manifest_has() {
+  local key="${1}" type="${2}" id="${3}"
+  local file
+  file="$(manifest_path "${key}")" || return 1
+  [ -f "${file}" ] || return 1
+  # Compara tipo e id exatos (campos 1 e 2 separados por TAB)
+  grep -qP "^${type}\t${id}(\t|\$)" "${file}" 2>/dev/null
+}
+
+# manifest_record(chave, tipo, id, [meta])
+# Adiciona a entrada ao manifesto, se ainda não existir (idempotente).
+manifest_record() {
+  local key="${1}" type="${2}" id="${3}" meta="${4:-}"
+  local file
+  file="$(manifest_path "${key}")" || return 1
+
+  if manifest_has "${key}" "${type}" "${id}"; then
+    return 0
+  fi
+
+  printf '%s\t%s\t%s\n' "${type}" "${id}" "${meta}" >> "${file}"
+}
+
+# manifest_entries(chave)
+# Emite as entradas do manifesto (uma por linha), para iteração na reversão.
+# Não emite nada se o manifesto não existir.
+manifest_entries() {
+  local key="${1}"
+  local file
+  file="$(manifest_path "${key}")" || return 1
+  [ -f "${file}" ] || return 0
+  # Ignora linhas vazias
+  grep -v '^[[:space:]]*$' "${file}" 2>/dev/null || true
+}
+
+# manifest_remove_entry(chave, tipo, id)
+# Remove a linha correspondente (tipo + id) do manifesto após reverter.
+manifest_remove_entry() {
+  local key="${1}" type="${2}" id="${3}"
+  local file
+  file="$(manifest_path "${key}")" || return 1
+  [ -f "${file}" ] || return 0
+
+  local tmp
+  tmp="$(mktemp)"
+  # Mantém todas as linhas EXCETO a que casa tipo + id
+  grep -vP "^${type}\t${id}(\t|\$)" "${file}" 2>/dev/null > "${tmp}" || true
+  mv "${tmp}" "${file}"
+}
+
+# manifest_is_empty(chave)
+# Retorna 0 (verdadeiro) se o manifesto não existe ou não tem entradas.
+manifest_is_empty() {
+  local key="${1}"
+  local file
+  file="$(manifest_path "${key}")" || return 0
+  [ -f "${file}" ] || return 0
+  # Vazio se não houver nenhuma linha não-branca
+  ! grep -q '[^[:space:]]' "${file}" 2>/dev/null
+}
+
+# =============================================================
+# Funções de Reversão (para a funcionalidade de reversão)
+# =============================================================
+# Cada função revert_* desfaz um tipo de artefato registrado no manifesto, de
+# forma idempotente e conservadora. Operações destrutivas passam por
+# confirm_destructive. revert_apply itera o manifesto na ordem segura.
+#
+# Variáveis de controle (ambiente):
+#   REVERT_DRY_RUN=1    -> apenas lista o que seria feito, sem executar
+#   REVERT_ASSUME_YES=1 -> responde "sim" automaticamente às confirmações
+#                          (NÃO afeta a proteção de www-data, que exige flag
+#                           dedicada REVERT_ALLOW_WWW_DATA=1)
+
+# confirm_destructive(descricao)
+# Exibe o que será afetado e pede confirmação. Em dry-run, nunca confirma (0=sim).
+# Com REVERT_ASSUME_YES=1, confirma sem perguntar.
+# Retorno: 0 se confirmado, 1 caso contrário.
+confirm_destructive() {
+  local descricao="${1}"
+
+  if [ "${REVERT_DRY_RUN:-0}" = "1" ]; then
+    echo "  ${YELLOW}[dry-run]${NO_COLOR} seria afetado: ${descricao}"
+    return 1
+  fi
+
+  if [ "${REVERT_ASSUME_YES:-0}" = "1" ]; then
+    return 0
+  fi
+
+  echo ""
+  echo "  ${RED}ATENÇÃO (operação destrutiva):${NO_COLOR} ${descricao}"
+  local _resp
+  read -rp "  Confirmar? [s/N]: " _resp
+  _resp="${_resp:-N}"
+  [[ "${_resp}" =~ ^[sS]$ ]]
+}
+
+# _dry() — true quando em modo dry-run
+_dry() { [ "${REVERT_DRY_RUN:-0}" = "1" ]; }
+
+# revert_file(caminho)
+# Remove um arquivo criado pela instalação (idempotente).
+revert_file() {
+  local path="${1}"
+  if [ ! -e "${path}" ]; then
+    msg_skip "Arquivo já ausente: ${path}"
+    return 0
+  fi
+  if _dry; then echo "  [dry-run] removeria arquivo: ${path}"; return 0; fi
+  msg_action "Removendo arquivo: ${path}"
+  sudo rm -f "${path}"
+}
+
+# revert_symlink(link, [alvo_restaurar])
+# Remove um symlink criado pela instalação. Se alvo_restaurar for informado,
+# recria o link original (ex.: Nginx sites-enabled/default).
+revert_symlink() {
+  local link="${1}" restore_target="${2:-}"
+  if [ -L "${link}" ]; then
+    if _dry; then echo "  [dry-run] removeria symlink: ${link}"; else
+      msg_action "Removendo symlink: ${link}"
+      sudo rm -f "${link}"
+    fi
+  else
+    msg_skip "Symlink já ausente: ${link}"
+  fi
+  if [ -n "${restore_target}" ] && [ ! -e "${restore_target}" ]; then
+    if _dry; then echo "  [dry-run] restauraria symlink original -> ${restore_target}"; else
+      msg_action "Restaurando symlink original: ${restore_target}"
+      sudo ln -sf "${restore_target}" "${link}"
+    fi
+  fi
+}
+
+# revert_binary(caminho)
+# Remove um binário instalado manualmente (ex.: /usr/local/bin/wkhtmltopdf).
+revert_binary() {
+  local path="${1}"
+  if [ ! -e "${path}" ]; then
+    msg_skip "Binário já ausente: ${path}"
+    return 0
+  fi
+  if _dry; then echo "  [dry-run] removeria binário: ${path}"; return 0; fi
+  msg_action "Removendo binário: ${path}"
+  sudo rm -f "${path}"
+}
+
+# revert_dir(caminho, [--destructive])
+# Remove um diretório criado pela instalação. Com --destructive (contém dados do
+# usuário), passa por confirm_destructive.
+revert_dir() {
+  local path="${1}" flag="${2:-}"
+  if [ ! -d "${path}" ]; then
+    msg_skip "Diretório já ausente: ${path}"
+    return 0
+  fi
+  if [ "${flag}" = "--destructive" ]; then
+    if ! confirm_destructive "remover o diretório ${path} e todo o seu conteúdo"; then
+      msg_skip "Diretório preservado: ${path}"
+      return 0
+    fi
+  fi
+  if _dry; then echo "  [dry-run] removeria diretório: ${path}"; return 0; fi
+  msg_action "Removendo diretório: ${path}"
+  sudo rm -rf "${path}"
+}
+
+# revert_package(pkg)
+# Desinstala um pacote via gerenciador da DISTRO_TYPE. SEMPRE exige confirmação
+# (pacotes podem ser compartilhados), salvo REVERT_ASSUME_YES=1.
+revert_package() {
+  local pkg="${1}"
+  if ! is_pkg_installed "${pkg}"; then
+    msg_skip "Pacote já ausente: ${pkg}"
+    return 0
+  fi
+  if ! confirm_destructive "desinstalar o pacote de sistema '${pkg}'"; then
+    msg_skip "Pacote preservado: ${pkg}"
+    return 0
+  fi
+  if _dry; then echo "  [dry-run] desinstalaria pacote: ${pkg}"; return 0; fi
+  msg_action "Desinstalando pacote: ${pkg}"
+  case "${DISTRO_TYPE}" in
+    deb)  sudo apt-get remove -y "${pkg}" ;;
+    rpm)  sudo dnf remove -y "${pkg}" ;;
+    arch) sudo pacman -Rns --noconfirm "${pkg}" ;;
+    macos) brew uninstall "${pkg}" ;;
+  esac
+}
+
+# revert_service(nome, [meta])
+# Para e/ou desabilita um serviço conforme meta ("started", "enabled" ou ambos),
+# revertendo apenas o que a rotina ativou. NÃO desinstala o serviço (preservação
+# de serviço compartilhado — o pacote, se registrado, é tratado por revert_package).
+revert_service() {
+  local svc="${1}" meta="${2:-started enabled}"
+  if [ "${DISTRO_TYPE}" = "macos" ]; then
+    msg_skip "Gerência de serviço não se aplica ao macOS: ${svc}"
+    return 0
+  fi
+  if [[ "${meta}" == *started* ]]; then
+    if _dry; then echo "  [dry-run] pararia serviço: ${svc}"; else
+      msg_action "Parando serviço: ${svc}"
+      sudo systemctl stop "${svc}" 2>/dev/null || true
+    fi
+  fi
+  if [[ "${meta}" == *enabled* ]]; then
+    if _dry; then echo "  [dry-run] desabilitaria serviço: ${svc}"; else
+      msg_action "Desabilitando serviço: ${svc}"
+      sudo systemctl disable "${svc}" 2>/dev/null || true
+    fi
+  fi
+}
+
+# revert_user(nome)
+# Remove um usuário de sistema criado pela instalação. www-data é protegido por
+# padrão (só removido com REVERT_ALLOW_WWW_DATA=1 e confirmação).
+revert_user() {
+  local user="${1}"
+  if ! getent passwd "${user}" &>/dev/null; then
+    msg_skip "Usuário já ausente: ${user}"
+    return 0
+  fi
+  if [ "${user}" = "www-data" ] && [ "${REVERT_ALLOW_WWW_DATA:-0}" != "1" ]; then
+    msg_skip "Usuário www-data preservado por padrão (defina REVERT_ALLOW_WWW_DATA=1 para remover)"
+    return 0
+  fi
+  if ! confirm_destructive "remover o usuário de sistema '${user}'"; then
+    msg_skip "Usuário preservado: ${user}"
+    return 0
+  fi
+  if _dry; then echo "  [dry-run] removeria usuário: ${user}"; return 0; fi
+  msg_action "Removendo usuário: ${user}"
+  sudo userdel "${user}" 2>/dev/null || true
+}
+
+# revert_pg_db(nome)
+# Executa DROP DATABASE (destrutivo — exige confirmação).
+revert_pg_db() {
+  local db="${1}"
+  if ! confirm_destructive "APAGAR o banco de dados PostgreSQL '${db}' (perda de dados irreversível)"; then
+    msg_skip "Banco de dados preservado: ${db}"
+    return 0
+  fi
+  if _dry; then echo "  [dry-run] executaria DROP DATABASE ${db}"; return 0; fi
+  msg_action "Removendo banco de dados: ${db}"
+  sudo -u postgres psql -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS ${db};" || true
+}
+
+# revert_pg_user(nome)
+# Executa DROP ROLE (exige confirmação).
+revert_pg_user() {
+  local role="${1}"
+  if ! confirm_destructive "remover o usuário (role) PostgreSQL '${role}'"; then
+    msg_skip "Role preservada: ${role}"
+    return 0
+  fi
+  if _dry; then echo "  [dry-run] executaria DROP ROLE ${role}"; return 0; fi
+  msg_action "Removendo role: ${role}"
+  sudo -u postgres psql -v ON_ERROR_STOP=1 -c "DROP ROLE IF EXISTS ${role};" || true
+}
+
+# revert_file_lines(arquivo, marcador)
+# Remove do arquivo o bloco de linhas que contêm o marcador sentinela inserido
+# pela instalação (ex.: regras adicionadas em pg_hba.conf).
+revert_file_lines() {
+  local file="${1}" marker="${2}"
+  if [ ! -f "${file}" ]; then
+    msg_skip "Arquivo já ausente: ${file}"
+    return 0
+  fi
+  if ! grep -qF "${marker}" "${file}" 2>/dev/null; then
+    msg_skip "Nenhuma linha com o marcador em ${file}"
+    return 0
+  fi
+  if _dry; then echo "  [dry-run] removeria linhas com marcador '${marker}' de ${file}"; return 0; fi
+  msg_action "Removendo linhas inseridas em ${file}"
+  local tmp
+  tmp="$(mktemp)"
+  grep -vF "${marker}" "${file}" > "${tmp}" 2>/dev/null || true
+  sudo cp "${tmp}" "${file}"
+  rm -f "${tmp}"
+}
+
+# revert_repo_added(caminho)
+# Remove uma fonte de repositório/keyring adicionada pela instalação.
+revert_repo_added() {
+  local path="${1}"
+  revert_file "${path}"
+}
+
+# _revert_dispatch(chave, tipo, id, meta)
+# Despacha uma entrada do manifesto para a função revert_* adequada.
+_revert_dispatch() {
+  local key="${1}" type="${2}" id="${3}" meta="${4:-}"
+  case "${type}" in
+    service)     revert_service "${id}" "${meta:-started enabled}" ;;
+    pg_db)       revert_pg_db "${id}" ;;
+    pg_user)     revert_pg_user "${id}" ;;
+    file_lines)  revert_file_lines "${id}" "${meta}" ;;
+    file)        revert_file "${id}" ;;
+    symlink)     revert_symlink "${id}" "${meta}" ;;
+    binary)      revert_binary "${id}" ;;
+    dir)         if [ "${meta}" = "user-data" ]; then revert_dir "${id}" --destructive; else revert_dir "${id}"; fi ;;
+    package)     revert_package "${id}" ;;
+    user)        revert_user "${id}" ;;
+    repo_added)  revert_repo_added "${id}" ;;
+    *)           msg_error "Tipo de artefato desconhecido no manifesto: ${type}"; return 1 ;;
+  esac
+}
+
+# _revert_type_order(tipo) -> número de prioridade (menor = mais cedo)
+# Ordem segura de reversão (ver design): serviços primeiro, pacotes/usuário por último.
+_revert_type_order() {
+  case "${1}" in
+    service)    echo 1 ;;
+    pg_db)      echo 2 ;;
+    pg_user)    echo 3 ;;
+    file_lines) echo 4 ;;
+    file)       echo 5 ;;
+    symlink)    echo 6 ;;
+    binary)     echo 7 ;;
+    dir)        echo 8 ;;
+    package)    echo 9 ;;
+    user)       echo 10 ;;
+    repo_added) echo 11 ;;
+    *)          echo 99 ;;
+  esac
+}
+
+# revert_apply(chave, [--dry-run])
+# Itera as entradas do manifesto na ordem segura, despacha para revert_*, e ao
+# sucesso remove a entrada do manifesto. Trata manifesto vazio. Imprime resumo.
+revert_apply() {
+  local key="${1}"
+  if [ "${2:-}" = "--dry-run" ]; then
+    export REVERT_DRY_RUN=1
+  fi
+
+  if manifest_is_empty "${key}"; then
+    msg_skip "Nada registrado para reverter em '${key}'."
+    return 0
+  fi
+
+  # Lê as entradas e ordena por prioridade de tipo (dir do mais profundo p/ raso)
+  local -a lines=()
+  local line
+  while IFS= read -r line; do
+    [ -z "${line}" ] && continue
+    lines+=("${line}")
+  done < <(manifest_entries "${key}")
+
+  # Ordenação: prioridade do tipo asc; para 'dir', profundidade desc (mais longo primeiro)
+  local -a sortable=()
+  for line in "${lines[@]}"; do
+    local t="${line%%$'\t'*}"
+    local rest="${line#*$'\t'}"
+    local id="${rest%%$'\t'*}"
+    local prio depth
+    prio="$(_revert_type_order "${t}")"
+    depth=$(echo -n "${id}" | tr -cd '/' | wc -c)
+    # chave de ordenação: prio (2 dígitos) + profundidade invertida (dir) + linha
+    if [ "${t}" = "dir" ]; then
+      printf '%02d\t%03d\t%s\n' "${prio}" "$((999 - depth))" "${line}"
+    else
+      printf '%02d\t000\t%s\n' "${prio}" "${line}"
+    fi
+    sortable+=("")  # placeholder (não usado)
+  done > /tmp/_revert_sort_$$ 2>/dev/null
+
+  local failures=0 removed=0
+  local sortline
+  while IFS= read -r sortline; do
+    [ -z "${sortline}" ] && continue
+    # Remove as duas colunas de ordenação (prio, depth)
+    local entry="${sortline#*$'\t'}"; entry="${entry#*$'\t'}"
+    local type id meta
+    type="${entry%%$'\t'*}"
+    local r1="${entry#*$'\t'}"
+    id="${r1%%$'\t'*}"
+    meta="${r1#*$'\t'}"
+    [ "${meta}" = "${id}" ] && meta=""
+
+    if _revert_dispatch "${key}" "${type}" "${id}" "${meta}"; then
+      if ! _dry; then
+        manifest_remove_entry "${key}" "${type}" "${id}"
+        removed=$((removed + 1))
+      fi
+    else
+      failures=$((failures + 1))
+      msg_error "Falha ao reverter ${type} '${id}' (mantido no manifesto)."
+    fi
+  done < <(sort -t$'\t' -k1,1n -k2,2n /tmp/_revert_sort_$$ 2>/dev/null)
+
+  rm -f /tmp/_revert_sort_$$
+
+  echo ""
+  if _dry; then
+    msg_action "Pré-visualização (dry-run) de '${key}' concluída. Nenhuma alteração foi feita."
+    unset REVERT_DRY_RUN
+  else
+    msg_action "Reversão de '${key}' concluída: ${removed} artefato(s) revertido(s), ${failures} falha(s)."
+  fi
+  [ "${failures}" -eq 0 ]
+}

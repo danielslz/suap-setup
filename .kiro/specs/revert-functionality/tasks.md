@@ -5,31 +5,31 @@ Implementação incremental da funcionalidade de reversão. Parte da infraestrut
 
 ## Tasks
 
-- [ ] 1. Infraestrutura de manifesto em lib/common.sh
-  - [ ] 1.1 Implementar funções de manifesto
+- [x] 1. Infraestrutura de manifesto em lib/common.sh
+  - [x] 1.1 Implementar funções de manifesto
     - Implementar `manifest_path(chave)` com resolução `.state/` (repo, se gravável) ou `/var/lib/suap-setup/` (fallback de sistema), criando o diretório
     - Implementar `manifest_record(chave, tipo, id, [meta])` idempotente (não duplica)
     - Implementar `manifest_has`, `manifest_entries`, `manifest_remove_entry`, `manifest_is_empty`
     - Usar TAB como delimitador; formato `<tipo>\t<id>\t<meta>`
     - _Requisitos: 1.1, 1.2, 1.5, 1.6, 2.4_
-  - [ ] 1.2 Adicionar `.state/` ao .gitignore
+  - [x] 1.2 Adicionar `.state/` ao .gitignore
     - _Requisitos: 1.6_
-  - [ ] 1.3 Testes unitários das funções de manifesto
+  - [x] 1.3 Testes unitários das funções de manifesto
     - Criar `tests/unit/test_manifest.bats`: registro idempotente, has, remove_entry, is_empty, resolução de path
     - _Requisitos: 8.3_
 
-- [ ] 2. Funções de reversão reutilizáveis em lib/common.sh
-  - [ ] 2.1 Implementar funções `revert_*` por tipo de artefato
+- [x] 2. Funções de reversão reutilizáveis em lib/common.sh
+  - [x] 2.1 Implementar funções `revert_*` por tipo de artefato
     - `revert_dir` (com flag destrutivo), `revert_file`, `revert_symlink` (restaura alvo), `revert_binary`
     - `revert_package` (desinstala por DISTRO_TYPE, sempre com confirmação), `revert_service` (para/desabilita só o que a rotina mudou)
     - `revert_user` (recusa `www-data` por padrão), `revert_pg_db`, `revert_pg_user`, `revert_file_lines` (remove bloco por marcador sentinela), `repo_added`
     - `confirm_destructive(descricao)` com suporte a modo não-interativo/dry-run
     - _Requisitos: 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.7, 6.1, 6.2, 6.3_
-  - [ ] 2.2 Implementar `revert_apply(chave, [--dry-run])`
+  - [x] 2.2 Implementar `revert_apply(chave, [--dry-run])`
     - Iterar entradas, despachar por tipo na ordem segura definida no design, remover entrada ao sucesso, acumular falhas, imprimir resumo
     - Tratar manifesto vazio/ausente (sai sem erro); idempotência
     - _Requisitos: 2.2, 2.3, 2.6, 3.6, 7.1, 7.2, 7.3_
-  - [ ] 2.3 Testes unitários/property das funções de reversão (com mocks)
+  - [x] 2.3 Testes unitários/property das funções de reversão (com mocks)
     - Mock de apt/dnf/pacman, systemctl, psql, userdel; verificar comandos sem executar
     - Property: preserva Artefato_Preexistente; destrutivo exige confirmação; idempotência; `www-data` nunca removido por padrão; dry-run não altera nada
     - _Requisitos: 8.3, 8.4, 3.1, 3.2, 3.4, 7.1_

@@ -21,6 +21,9 @@ tests/.cache/
 tests/libs/
 node_modules/
 
+# Manifestos de estado da reversão (estado local da máquina)
+.state/
+
 # Docker (volumes e dados locais)
 docker/dev/data/
 docker/prod/data/
