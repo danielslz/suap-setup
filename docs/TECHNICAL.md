@@ -175,8 +175,8 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 2. Source lib/common.sh (carrega todas as funções utilitárias)
 3. Detecta distribuição/OS via detect_distro()
 4. Exibe menu adaptativo conforme plataforma:
-   - Linux: 10 opções (dev, prod, redis, nginx, docker dev, docker prod, dockhand, update, postgresql, minio)
-   - macOS: 5 opções (dev, docker dev, docker prod, dockhand, minio)
+   - Linux: 11 opções (dev, prod, redis, nginx, docker dev, docker prod, dockhand, update, postgresql, minio, redis docker)
+   - macOS: 6 opções (dev, docker dev, docker prod, dockhand, minio, redis docker)
 5. Valida entrada do usuário
 6. Remapeia opções do macOS para índices internos
 7. Coleta variáveis via ensure_env_for_option (wizard se necessário)
@@ -202,6 +202,7 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 | 8 | `{distro}/suap-update.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR |
 | 9 | `{distro}/install-postgres.sh` | POSTGRES_VERSION |
 | 10 | `docker/minio-setup.sh` | SUAP_MINIO_DIR, SUAP_MINIO_GIT_URL |
+| 11 | `docker/redis-setup.sh` | nenhuma (opcionais: REDIS_DOCKER_PORT, REDIS_DOCKER_PASSWORD, REDIS_DOCKER_IMAGE) |
 
 **macOS (com remapeamento):**
 
@@ -212,6 +213,7 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 | 3 | 6 | `docker/prod/docker-setup.sh` |
 | 4 | 7 | `docker/dockhand-setup.sh` |
 | 5 | 10 | `docker/minio-setup.sh` |
+| 6 | 11 | `docker/redis-setup.sh` |
 
 ---
 

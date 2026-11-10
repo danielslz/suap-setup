@@ -74,6 +74,7 @@ bash docker/prod/docker-setup.sh
 bash docker/dockhand-setup.sh
 bash docker/install-docker.sh
 bash docker/minio-setup.sh
+bash docker/redis-setup.sh
 ```
 
 > Scripts individuais exigem que o `.env` já exista. Se não existir, o script encerra com erro orientando a executar `setup.sh` primeiro.
@@ -96,6 +97,7 @@ O `setup.sh` detecta automaticamente o sistema operacional e exibe apenas as op�
 8) Atualizar ambiente de produção
 9) Instalar PostgreSQL
 10) Instalar MinIO (via Docker)
+11) Iniciar Redis (via Docker)
 R) Reverter uma funcionalidade
 0) Sair
 ```
@@ -109,6 +111,7 @@ R) Reverter uma funcionalidade
 3) Configurar ambiente prod via Docker
 4) Iniciar Dockhand (via Docker)
 5) Instalar MinIO (via Docker)
+6) Iniciar Redis (via Docker)
 R) Reverter uma funcionalidade
 0) Sair
 ```
@@ -170,6 +173,8 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `docker/prod/docker-setup.sh` | Todas | Ambiente prod via Docker |
 | `docker/dockhand-setup.sh` | Todas | Interface web para gerenciamento Docker |
 | `docker/minio-setup.sh` | Todas | Setup do MinIO (object storage S3-compatível) via Docker |
+| `docker/redis-setup.sh` | Todas | Redis em container Docker com porta 6379 exposta |
+| `docker/redis-revert.sh` | Todas | Reverte o Redis Docker (container; volume com confirmação) |
 
 ## Ambiente de desenvolvimento
 
@@ -370,6 +375,20 @@ make logs
 make stop
 ```
 
+### Redis (via Docker)
+
+O script `docker/redis-setup.sh` sobe um Redis em container, com a porta padrão `6379` exposta para acesso a partir de outras máquinas.
+
+| Propriedade | Valor |
+|-------------|-------|
+| Container | `suap-redis` (`redis:7-alpine`, `--restart unless-stopped`) |
+| Porta | `6379` (escuta em `0.0.0.0`) |
+| Dados | volume `suap-redis-data` (AOF habilitado) |
+| Autenticação | senha obrigatória (`requirepass`); solicitada ou gerada |
+| Variáveis opcionais | `REDIS_DOCKER_PORT`, `REDIS_DOCKER_PASSWORD`, `REDIS_DOCKER_IMAGE` |
+
+O script é idempotente: se o container já estiver ativo, apenas exibe o endereço; se estiver parado, ele é iniciado. Libere a porta no firewall se necessário. Para remover, use `R` no menu (ou `bash docker/redis-revert.sh`); o volume só é apagado com confirmação.
+
 ## Configuração Nginx
 
 ### Instalação nativa (`nginx/suap`)
@@ -468,6 +487,8 @@ suap-setup/
 │   ├── install-docker.sh             # Instalação do Docker
 │   ├── dockhand-setup.sh             # Dockhand
 │   ├── minio-setup.sh               # Setup do MinIO (suap-minio)
+│   ├── redis-setup.sh               # Redis via Docker (porta 6379)
+│   ├── redis-revert.sh              # Reversão do Redis Docker
 │   ├── README.md                     # Documentação da arquitetura de delegação
 │   ├── dev/
 │   │   └── docker-setup.sh           # Delegação → suap (docker-compose.dev.yml)
