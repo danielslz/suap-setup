@@ -1134,6 +1134,20 @@ os logs em `deploy/logs/`.
 Para arquitetura multi-servidor, Vault, drain protocol, media compartilhada (NFS/MinIO)
 e outras configurações avançadas, consulte `docs/ADVANCED.md` no repositório suap_deploy.
 
+### Reversão (Docker dev)
+
+**Arquivo:** `docker/dev/docker-setup-revert.sh`
+
+```
+1. Carrega .env (se existir); Docker ausente, SUAP_DIR indefinido ou compose ausente: skip
+2. Exporta as variáveis exigidas pela interpolação do compose (SUAP_IMAGE etc.)
+3. confirm_destructive: volumes (-v) e imagens locais (--rmi local)
+4. docker compose -f docker/docker-compose.dev.yml down --remove-orphans [-v] [--rmi local]
+5. Preserva SUAP_DIR (.env e settings.py gerados)
+```
+
+Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`.
+
 ---
 
 ## Instalação do Docker

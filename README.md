@@ -188,6 +188,7 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `docker/install-docker.sh` | Linux | Instala Docker Engine e Compose |
 | `docker/install-docker-revert.sh` | Linux | Remove Docker (serviços, pacotes, repositório, grupo); dados em `/var/lib/docker` só com confirmação |
 | `docker/dev/docker-setup.sh` | Todas | Ambiente dev via Docker |
+| `docker/dev/docker-setup-revert.sh` | Todas | Reverte o ambiente dev Docker (down; volumes e imagens com confirmação) |
 | `docker/prod/docker-setup.sh` | Todas | Ambiente prod via Docker |
 | `docker/dockhand-setup.sh` | Todas | Interface web para gerenciamento Docker |
 | `docker/dockhand-revert.sh` | Todas | Reverte o Dockhand (container; volumes e imagem com confirmação) |
@@ -301,6 +302,8 @@ docker compose -f docker/docker-compose.dev.yml logs -f
 docker compose -f docker/docker-compose.dev.yml exec web bash
 docker compose -f docker/docker-compose.dev.yml down
 ```
+
+Para desfazer, use `R) Reverter > Reverter ambiente dev via Docker` (ou `bash docker/dev/docker-setup-revert.sh`). Executa `docker compose down` (containers e rede); volumes (ex.: PostgreSQL dev) e imagens locais só são removidos com confirmação. O repositório em `SUAP_DIR` (com `.env` e `settings.py` gerados) é preservado.
 
 ### Produção (Docker)
 
@@ -540,7 +543,8 @@ suap-setup/
 │   ├── postgres-revert.sh           # Reversão do PostgreSQL Docker
 │   ├── README.md                     # Documentação da arquitetura de delegação
 │   ├── dev/
-│   │   └── docker-setup.sh           # Delegação → suap (docker-compose.dev.yml)
+│   │   ├── docker-setup.sh           # Delegação → suap (docker-compose.dev.yml)
+│   │   └── docker-setup-revert.sh    # Reversão do ambiente dev Docker
 │   └── prod/
 │       └── docker-setup.sh           # Delegação → suap_deploy (Makefile)
 ├── nginx/
