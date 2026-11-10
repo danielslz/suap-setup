@@ -175,10 +175,10 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 2. Source lib/common.sh (carrega todas as funções utilitárias)
 3. Detecta distribuição/OS via detect_distro()
 4. Exibe menu adaptativo conforme plataforma:
-   - Linux: 11 opções (dev, prod, redis, nginx, docker dev, docker prod, dockhand, update, postgresql, minio, redis docker)
-   - macOS: 6 opções (dev, docker dev, docker prod, dockhand, minio, redis docker)
+   - Linux: 12 opções agrupadas em seções (Ambiente SUAP, Serviços no host, Via Docker)
+   - macOS: 7 opções (dev e as opções Via Docker, incluindo redis e postgres docker)
 5. Valida entrada do usuário
-6. Remapeia opções do macOS para índices internos
+6. Traduz a opção exibida (sequencial) para o id interno via lista `MENU_IDS`
 7. Coleta variáveis via ensure_env_for_option (wizard se necessário)
 8. Carrega .env completo com load_env_file
 9. Determina path do script alvo baseado em DISTRO_TYPE + opção
@@ -188,9 +188,9 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 
 ### Mapeamento de Opções
 
-**Linux (mapeamento direto):**
+**Id interno (igual em Linux e macOS; o número exibido no menu é sequencial e segue a ordem das seções):**
 
-| Opção | Script | Variáveis necessárias |
+| Id interno | Script | Variáveis necessárias |
 |-------|--------|----------------------|
 | 1 | `{distro}/suap-dev.sh` | PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR, SUAP_GIT_URL |
 | 2 | `{distro}/suap-prod.sh` | Todas as de dev + GUNICORN_*, CELERY_* |
@@ -203,8 +203,9 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 | 9 | `{distro}/install-postgres.sh` | POSTGRES_VERSION |
 | 10 | `docker/minio-setup.sh` | SUAP_MINIO_DIR, SUAP_MINIO_GIT_URL |
 | 11 | `docker/redis-setup.sh` | nenhuma (opcionais: REDIS_DOCKER_PORT, REDIS_DOCKER_PASSWORD, REDIS_DOCKER_IMAGE) |
+| 12 | `docker/postgres-setup.sh` | nenhuma (opcionais: POSTGRES_VERSION, POSTGRES_DOCKER_PORT, POSTGRES_DOCKER_DB, POSTGRES_DOCKER_USER, POSTGRES_DOCKER_PASSWORD, POSTGRES_DOCKER_IMAGE) |
 
-**macOS (com remapeamento):**
+**macOS (opção exibida → id interno):**
 
 | Opção exibida | Opção interna | Script |
 |:---:|:---:|--------|
@@ -214,6 +215,7 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 | 4 | 7 | `docker/dockhand-setup.sh` |
 | 5 | 10 | `docker/minio-setup.sh` |
 | 6 | 11 | `docker/redis-setup.sh` |
+| 7 | 12 | `docker/postgres-setup.sh` |
 
 ---
 
