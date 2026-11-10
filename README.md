@@ -190,6 +190,7 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `docker/dev/docker-setup.sh` | Todas | Ambiente dev via Docker |
 | `docker/prod/docker-setup.sh` | Todas | Ambiente prod via Docker |
 | `docker/dockhand-setup.sh` | Todas | Interface web para gerenciamento Docker |
+| `docker/dockhand-revert.sh` | Todas | Reverte o Dockhand (container; volumes e imagem com confirmação) |
 | `docker/minio-setup.sh` | Todas | Setup do MinIO (object storage S3-compatível) via Docker |
 | `docker/redis-setup.sh` | Todas | Redis em container Docker com porta 6379 exposta |
 | `docker/postgres-setup.sh` | Todas | PostgreSQL em container Docker com porta 5432 exposta |
@@ -365,6 +366,8 @@ O [Dockhand](https://dockhand.pro/) é uma interface web para gerenciamento de c
 
 O script é idempotente: se o container já estiver em execução, apenas exibe a URL.
 
+Para desfazer, use `R) Reverter > Reverter Dockhand` (ou `bash docker/dockhand-revert.sh`). O container é removido; volumes associados (dados do Dockhand) e a imagem só são apagados com confirmação.
+
 ### MinIO (Object Storage)
 
 O [MinIO](https://min.io/) é um servidor de object storage compatível com a API S3, utilizado pelo SUAP para armazenamento de arquivos de mídia e temporários. O script `docker/minio-setup.sh` delega para o projeto `suap-minio`, que fornece MinIO + Nginx como proxy.
@@ -525,6 +528,7 @@ suap-setup/
 │   ├── install-docker.sh             # Instalação do Docker
 │   ├── install-docker-revert.sh      # Reversão da instalação do Docker
 │   ├── dockhand-setup.sh             # Dockhand
+│   ├── dockhand-revert.sh            # Reversão do Dockhand
 │   ├── minio-setup.sh               # Setup do MinIO (suap-minio)
 │   ├── redis-setup.sh               # Redis via Docker (porta 6379)
 │   ├── redis-revert.sh              # Reversão do Redis Docker

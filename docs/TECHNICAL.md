@@ -1257,6 +1257,19 @@ containers através do navegador.
 > **Idempotência:** Se o container `dockhand` já estiver rodando, o script
 > apenas exibe a URL de acesso e encerra sem criar outro container.
 
+### Reversão
+
+**Arquivo:** `docker/dockhand-revert.sh`
+
+```
+1. Docker ausente: skip (exit 0)
+2. Container "dockhand" existe: registra seus volumes (docker inspect) e executa docker rm -f
+3. Para cada volume registrado: confirm_destructive + docker volume rm
+4. Imagem lscr.io/linuxserver/dockhand:latest existe: confirm_destructive + docker rmi
+```
+
+Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`. Idempotente. O socket `/var/run/docker.sock` é apenas montado no container e não é alterado.
+
 ---
 
 ## MinIO — Object Storage S3-compatível {#minio-object-storage}

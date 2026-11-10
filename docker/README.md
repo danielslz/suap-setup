@@ -48,6 +48,7 @@ O suap_deploy:
 
 Instala e inicia o Dockhand (interface web para gerenciamento Docker).
 Este é um utilitário independente e não depende dos projetos acima.
+Reversão em `docker/dockhand-revert.sh`.
 
 ## MinIO (`docker/minio-setup.sh`)
 
