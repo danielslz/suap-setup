@@ -186,6 +186,7 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `rpm/install-nginx.sh` | Fedora/RHEL/Alma/Rocky | Instala Nginx e configura proxy SUAP |
 | `arch/install-nginx.sh` | Arch Linux | Instala Nginx e configura proxy SUAP |
 | `docker/install-docker.sh` | Linux | Instala Docker Engine e Compose |
+| `docker/install-docker-revert.sh` | Linux | Remove Docker (serviços, pacotes, repositório, grupo); dados em `/var/lib/docker` só com confirmação |
 | `docker/dev/docker-setup.sh` | Todas | Ambiente dev via Docker |
 | `docker/prod/docker-setup.sh` | Todas | Ambiente prod via Docker |
 | `docker/dockhand-setup.sh` | Todas | Interface web para gerenciamento Docker |
@@ -348,6 +349,8 @@ O script `docker/install-docker.sh` instala Docker Engine e Docker Compose autom
 - **macOS**: exibe URL para download do Docker Desktop
 
 Após instalar, o script habilita o serviço e adiciona o usuário ao grupo `docker`.
+
+Para desfazer, use `R) Reverter > Reverter instalação do Docker` (ou `bash docker/install-docker-revert.sh`). A reversão **derruba todos os containers da máquina**, por isso pede confirmação. Ela para os serviços, desinstala os pacotes, remove o repositório e tira o usuário do grupo `docker`. Imagens e volumes (`/var/lib/docker`, `/var/lib/containerd`) só são apagados com uma segunda confirmação. Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`.
 
 ### Dockhand
 
@@ -520,6 +523,7 @@ suap-setup/
 │   └── suap-dev.sh
 ├── docker/
 │   ├── install-docker.sh             # Instalação do Docker
+│   ├── install-docker-revert.sh      # Reversão da instalação do Docker
 │   ├── dockhand-setup.sh             # Dockhand
 │   ├── minio-setup.sh               # Setup do MinIO (suap-minio)
 │   ├── redis-setup.sh               # Redis via Docker (porta 6379)

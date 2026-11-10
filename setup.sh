@@ -110,6 +110,7 @@ run_revert_submenu() {
     items+=("Reverter MinIO|docker/minio-revert.sh")
     items+=("Reverter Redis (Docker)|docker/redis-revert.sh")
     items+=("Reverter PostgreSQL (Docker)|docker/postgres-revert.sh")
+    items+=("Reverter instalação do Docker|docker/install-docker-revert.sh")
   fi
 
   local i
