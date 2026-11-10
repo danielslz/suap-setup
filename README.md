@@ -368,11 +368,13 @@ O [Dockhand](https://dockhand.pro/) é uma interface web para gerenciamento de c
 |-------------|-------|
 | Imagem | `fnsys/dockhand:latest` (Docker Hub; sobrescrevível via `DOCKHAND_IMAGE`) |
 | Volume de dados | `dockhand_data` → `/app/data` |
-| Porta de acesso | `http://localhost:9093` |
+| Porta de acesso | `http://localhost:9093` (configurável via `DOCKHAND_PORT`) |
 | Socket Docker | `/var/run/docker.sock` |
 | Restart policy | `unless-stopped` |
 
 O script é idempotente: se o container já estiver em execução, apenas exibe a URL.
+
+Para usar outra porta, defina `DOCKHAND_PORT` no `.env` ou no ambiente (ex.: `DOCKHAND_PORT=8080 bash docker/dockhand-setup.sh`). A porta só vale na criação do container: para trocá-la depois, remova o container (`docker rm -f dockhand`) e rode o script de novo; os dados ficam no volume `dockhand_data`.
 
 Para desfazer, use `R) Reverter > Reverter Dockhand` (ou `bash docker/dockhand-revert.sh`). O container é removido; volumes associados (dados do Dockhand) e a imagem só são apagados com confirmação.
 

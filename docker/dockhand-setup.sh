@@ -10,15 +10,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # 1. Source da biblioteca compartilhada
 source "${SCRIPT_DIR}/lib/common.sh"
 
+# Carregar .env se existir (opcional; permite definir DOCKHAND_PORT / DOCKHAND_IMAGE)
+if [ -f "${SCRIPT_DIR}/.env" ]; then
+  load_env_file "${SCRIPT_DIR}/.env"
+fi
+
 # 2. Verificar se Docker está disponível
 check_docker_available
 
 # Imagem oficial (Docker Hub). Pode ser sobrescrita via DOCKHAND_IMAGE (ex.: fnsys/dockhand:v1.0.55)
 DOCKHAND_IMAGE="${DOCKHAND_IMAGE:-fnsys/dockhand:latest}"
+# Porta exposta no host (padrão: 9093). O container escuta na 3000.
+DOCKHAND_PORT="${DOCKHAND_PORT:-9093}"
 
 # 3. Verificar se container "dockhand" já está em execução
 if docker ps --filter "name=^dockhand$" --format '{{.Names}}' | grep -q "^dockhand$"; then
-  msg_skip "Container Dockhand já está ativo. Acesso: http://localhost:9093"
+  msg_skip "Container Dockhand já está ativo. Acesso: http://localhost:${DOCKHAND_PORT}"
   exit 0
 fi
 
@@ -33,7 +40,7 @@ fi
 msg_action "Iniciando container Dockhand..."
 if ! docker run -d \
   --name dockhand \
-  -p 9093:3000 \
+  -p "${DOCKHAND_PORT}:3000" \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v dockhand_data:/app/data \
   --restart unless-stopped \
@@ -49,4 +56,4 @@ if ! docker ps --filter "name=^dockhand$" --format '{{.Names}}' | grep -q "^dock
 fi
 
 # 7. Exibir URL de acesso
-msg_action "Dockhand iniciado com sucesso! Acesso: http://localhost:9093"
+msg_action "Dockhand iniciado com sucesso! Acesso: http://localhost:${DOCKHAND_PORT}"

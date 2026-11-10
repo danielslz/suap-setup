@@ -1248,7 +1248,7 @@ containers através do navegador.
 |-------------|-------|
 | Imagem | `fnsys/dockhand:latest` (Docker Hub; sobrescrevível via `DOCKHAND_IMAGE`) |
 | Volume de dados | `dockhand_data` → `/app/data` |
-| Porta host | 9093 |
+| Porta host | 9093 (padrão; configurável via `DOCKHAND_PORT`) |
 | Porta container | 3000 |
 | Docker Socket | `/var/run/docker.sock` montado como volume |
 | Restart policy | `unless-stopped` |
@@ -1262,12 +1262,12 @@ containers através do navegador.
 3. Verificar se container "dockhand" já está ativo:
    - Se sim: msg_skip + exibir URL → exit 0
 4. docker pull fnsys/dockhand:latest
-5. docker run -d --name dockhand -p 9093:3000 \
+5. docker run -d --name dockhand -p ${DOCKHAND_PORT:-9093}:3000 \
      -v /var/run/docker.sock:/var/run/docker.sock \
      -v dockhand_data:/app/data \
      --restart unless-stopped fnsys/dockhand:latest
 6. Verificar se container iniciou com sucesso
-7. Exibir URL de acesso: http://localhost:9093
+7. Exibir URL de acesso: http://localhost:${DOCKHAND_PORT:-9093}
 ```
 
 > **Idempotência:** Se o container `dockhand` já estiver rodando, o script

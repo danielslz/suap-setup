@@ -63,11 +63,11 @@ setup() {
 
 # ============================================================
 # Validação de mapeamento de porta
-# Requisito 27.8: porta 9093:3000
+# Requisito 27.8: porta 9093 (padrão, configurável via DOCKHAND_PORT) -> 3000
 # ============================================================
 
-@test "dockhand-setup.sh mapeia porta 9093:3000" {
-    run grep -q '\-p 9093:3000' "$DOCKHAND_SCRIPT"
+@test "dockhand-setup.sh mapeia porta configurável (padrão 9093) para 3000" {
+    run grep -q 'DOCKHAND_PORT:-9093' "$DOCKHAND_SCRIPT"
     [ "$status" -eq 0 ]
 }
 
