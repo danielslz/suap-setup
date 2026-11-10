@@ -24,10 +24,11 @@ if [ "${DISTRO_TYPE}" = "macos" ]; then
   echo "3) Configurar ambiente prod via Docker"
   echo "4) Iniciar Dockhand (via Docker)"
   echo "5) Instalar MinIO (via Docker)"
+  echo "6) Iniciar Redis (via Docker)"
   echo "R) Reverter uma funcionalidade"
   echo "0) Sair"
   echo ""
-  read -rp "Escolha uma opção [0-5, R]: " CHOICE
+  read -rp "Escolha uma opção [0-6, R]: " CHOICE
 else
   echo "1) Configurar ambiente de desenvolvimento"
   echo "2) Configurar ambiente de produção"
@@ -39,10 +40,11 @@ else
   echo "8) Atualizar SUAP (produção)"
   echo "9) Instalar PostgreSQL"
   echo "10) Instalar MinIO (via Docker)"
+  echo "11) Iniciar Redis (via Docker)"
   echo "R) Reverter uma funcionalidade"
   echo "0) Sair"
   echo ""
-  read -rp "Escolha uma opção [0-10, R]: " CHOICE
+  read -rp "Escolha uma opção [0-11, R]: " CHOICE
 fi
 
 # Sair imediatamente se opção 0
@@ -71,6 +73,7 @@ run_revert_submenu() {
     items+=("Reverter ambiente prod via Docker|docker/prod/docker-setup-revert.sh")
     items+=("Reverter Dockhand|docker/dockhand-revert.sh")
     items+=("Reverter MinIO|docker/minio-revert.sh")
+    items+=("Reverter Redis (Docker)|docker/redis-revert.sh")
   else
     items+=("Reverter ambiente de desenvolvimento|${DISTRO_TYPE}/suap-dev-revert.sh")
     items+=("Reverter ambiente de produção|${DISTRO_TYPE}/suap-prod-revert.sh")
@@ -81,6 +84,7 @@ run_revert_submenu() {
     items+=("Reverter Dockhand|docker/dockhand-revert.sh")
     items+=("Reverter PostgreSQL|${DISTRO_TYPE}/install-postgres-revert.sh")
     items+=("Reverter MinIO|docker/minio-revert.sh")
+    items+=("Reverter Redis (Docker)|docker/redis-revert.sh")
   fi
 
   local i
@@ -128,16 +132,17 @@ if [ "${DISTRO_TYPE}" = "macos" ]; then
     3) INTERNAL_CHOICE="6" ;;  # docker prod
     4) INTERNAL_CHOICE="7" ;;  # dockhand
     5) INTERNAL_CHOICE="10" ;; # minio
+    6) INTERNAL_CHOICE="11" ;; # redis docker
     *)
-      msg_error "Opção inválida: use 0, 1, 2, 3, 4 ou 5."
+      msg_error "Opção inválida: use 0, 1, 2, 3, 4, 5 ou 6."
       exit 1
       ;;
   esac
 else
   case "${CHOICE}" in
-    1|2|3|4|5|6|7|8|9|10) INTERNAL_CHOICE="${CHOICE}" ;;
+    1|2|3|4|5|6|7|8|9|10|11) INTERNAL_CHOICE="${CHOICE}" ;;
     *)
-      msg_error "Opção inválida: use 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ou 10."
+      msg_error "Opção inválida: use 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ou 11."
       exit 1
       ;;
   esac
@@ -156,6 +161,7 @@ fi
 #   8 (update):     PYTHON_VERSION, BASE_DIR, SUAP_DIR, VENV_DIR
 #   9 (postgres):   POSTGRES_VERSION
 #   10 (minio):     SUAP_MINIO_DIR, SUAP_MINIO_GIT_URL
+#   11 (redis docker): nenhuma
 
 ensure_env_for_option "${ENV_FILE}" "${INTERNAL_CHOICE}"
 
@@ -176,6 +182,7 @@ case "${INTERNAL_CHOICE}" in
   8) TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/suap-update.sh" ;;
   9) TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/install-postgres.sh" ;;
   10) TARGET_SCRIPT="${SCRIPT_DIR}/docker/minio-setup.sh" ;;
+  11) TARGET_SCRIPT="${SCRIPT_DIR}/docker/redis-setup.sh" ;;
 esac
 
 # Verificar existência do script antes de executar

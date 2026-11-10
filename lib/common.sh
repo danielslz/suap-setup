@@ -90,13 +90,14 @@ EOF
 #   8 (update):      nenhuma (requer .env já existente do setup de produção)
 #   9 (postgres):    POSTGRES_VERSION
 #   10 (minio):      SUAP_MINIO_DIR, SUAP_MINIO_GIT_URL
+#   11 (redis docker): nenhuma
 ensure_env_for_option() {
   local env_path="${1}"
   local option="${2}"
 
   # Opções que não precisam de variáveis
   case "${option}" in
-    3|4|7|8|9) return 0 ;;
+    3|4|7|8|9|11) return 0 ;;
   esac
 
   # Carregar variáveis existentes (se .env já existe)

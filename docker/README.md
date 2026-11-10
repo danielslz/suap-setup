@@ -77,6 +77,12 @@ S3-compatível via Docker. O suap-minio:
    - `AWS_ACCESS_KEY_ID=<access-key>`
    - `AWS_SECRET_ACCESS_KEY=<secret-key>`
 
+## Redis (`docker/redis-setup.sh`)
+
+Utilitário independente: sobe o container `suap-redis` (`redis:7-alpine`) com a
+porta `6379` exposta em `0.0.0.0` e senha obrigatória. Dados no volume
+`suap-redis-data`. Reversão em `docker/redis-revert.sh`.
+
 ## Por que não manter Dockerfiles locais?
 
 1. **Evita drift**: Quando o upstream muda dependências (ex: nova lib Python),
