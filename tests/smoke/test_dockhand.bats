@@ -95,7 +95,7 @@ setup() {
 # Validação de imagem utilizada
 # ============================================================
 
-@test "dockhand-setup.sh usa imagem lscr.io/linuxserver/dockhand:latest" {
-    run grep -q 'lscr.io/linuxserver/dockhand:latest' "$DOCKHAND_SCRIPT"
+@test "dockhand-setup.sh usa imagem fnsys/dockhand:latest" {
+    run grep -q 'fnsys/dockhand:latest' "$DOCKHAND_SCRIPT"
     [ "$status" -eq 0 ]
 }

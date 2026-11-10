@@ -1246,7 +1246,8 @@ containers através do navegador.
 
 | Propriedade | Valor |
 |-------------|-------|
-| Imagem | `lscr.io/linuxserver/dockhand:latest` |
+| Imagem | `fnsys/dockhand:latest` (Docker Hub; sobrescrevível via `DOCKHAND_IMAGE`) |
+| Volume de dados | `dockhand_data` → `/app/data` |
 | Porta host | 9093 |
 | Porta container | 3000 |
 | Docker Socket | `/var/run/docker.sock` montado como volume |
@@ -1260,10 +1261,11 @@ containers através do navegador.
 2. check_docker_available() → verifica Docker
 3. Verificar se container "dockhand" já está ativo:
    - Se sim: msg_skip + exibir URL → exit 0
-4. docker pull lscr.io/linuxserver/dockhand:latest
+4. docker pull fnsys/dockhand:latest
 5. docker run -d --name dockhand -p 9093:3000 \
      -v /var/run/docker.sock:/var/run/docker.sock \
-     --restart unless-stopped lscr.io/linuxserver/dockhand:latest
+     -v dockhand_data:/app/data \
+     --restart unless-stopped fnsys/dockhand:latest
 6. Verificar se container iniciou com sucesso
 7. Exibir URL de acesso: http://localhost:9093
 ```
@@ -1294,7 +1296,7 @@ Se a confirmação do passo 2 for negada, nada é alterado nos serviços (o dire
 1. Docker ausente: skip (exit 0)
 2. Container "dockhand" existe: registra seus volumes (docker inspect) e executa docker rm -f
 3. Para cada volume registrado: confirm_destructive + docker volume rm
-4. Imagem lscr.io/linuxserver/dockhand:latest existe: confirm_destructive + docker rmi
+4. Imagem fnsys/dockhand:latest existe: confirm_destructive + docker rmi
 ```
 
 Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`. Idempotente. O socket `/var/run/docker.sock` é apenas montado no container e não é alterado.

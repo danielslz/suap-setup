@@ -16,7 +16,7 @@ if ! command -v docker &>/dev/null; then
 fi
 
 CONTAINER_NAME="dockhand"
-IMAGE_NAME="lscr.io/linuxserver/dockhand:latest"
+IMAGE_NAME="${DOCKHAND_IMAGE:-fnsys/dockhand:latest}"
 _volumes=""
 
 if docker ps -a --filter "name=^${CONTAINER_NAME}$" --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then

@@ -366,7 +366,8 @@ O [Dockhand](https://dockhand.pro/) é uma interface web para gerenciamento de c
 
 | Propriedade | Valor |
 |-------------|-------|
-| Imagem | `lscr.io/linuxserver/dockhand:latest` |
+| Imagem | `fnsys/dockhand:latest` (Docker Hub; sobrescrevível via `DOCKHAND_IMAGE`) |
+| Volume de dados | `dockhand_data` → `/app/data` |
 | Porta de acesso | `http://localhost:9093` |
 | Socket Docker | `/var/run/docker.sock` |
 | Restart policy | `unless-stopped` |

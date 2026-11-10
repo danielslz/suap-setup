@@ -13,6 +13,9 @@ source "${SCRIPT_DIR}/lib/common.sh"
 # 2. Verificar se Docker está disponível
 check_docker_available
 
+# Imagem oficial (Docker Hub). Pode ser sobrescrita via DOCKHAND_IMAGE (ex.: fnsys/dockhand:v1.0.55)
+DOCKHAND_IMAGE="${DOCKHAND_IMAGE:-fnsys/dockhand:latest}"
+
 # 3. Verificar se container "dockhand" já está em execução
 if docker ps --filter "name=^dockhand$" --format '{{.Names}}' | grep -q "^dockhand$"; then
   msg_skip "Container Dockhand já está ativo. Acesso: http://localhost:9093"
@@ -21,7 +24,7 @@ fi
 
 # 4. Obter imagem mais recente do Dockhand
 msg_action "Baixando imagem do Dockhand..."
-if ! docker pull lscr.io/linuxserver/dockhand:latest; then
+if ! docker pull "${DOCKHAND_IMAGE}"; then
   msg_error "Falha ao baixar imagem do Dockhand."
   exit 1
 fi
@@ -32,8 +35,9 @@ if ! docker run -d \
   --name dockhand \
   -p 9093:3000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -v dockhand_data:/app/data \
   --restart unless-stopped \
-  lscr.io/linuxserver/dockhand:latest; then
+  "${DOCKHAND_IMAGE}"; then
   msg_error "Falha ao iniciar container Dockhand."
   exit 1
 fi
