@@ -83,6 +83,12 @@ Utilitário independente: sobe o container `suap-redis` (`redis:7-alpine`) com a
 porta `6379` exposta em `0.0.0.0` e senha obrigatória. Dados no volume
 `suap-redis-data`. Reversão em `docker/redis-revert.sh`.
 
+## PostgreSQL (`docker/postgres-setup.sh`)
+
+Utilitário independente: sobe o container `suap-postgres` (`postgres:<versão>`)
+com a porta `5432` exposta, senha obrigatória e `bytea_output=escape`. Dados no
+volume `suap-postgres-data`. Reversão em `docker/postgres-revert.sh`.
+
 ## Por que não manter Dockerfiles locais?
 
 1. **Evita drift**: Quando o upstream muda dependências (ex: nova lib Python),

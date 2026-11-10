@@ -75,6 +75,7 @@ bash docker/dockhand-setup.sh
 bash docker/install-docker.sh
 bash docker/minio-setup.sh
 bash docker/redis-setup.sh
+bash docker/postgres-setup.sh
 ```
 
 > Scripts individuais exigem que o `.env` já exista. Se não existir, o script encerra com erro orientando a executar `setup.sh` primeiro.
@@ -87,34 +88,50 @@ O `setup.sh` detecta automaticamente o sistema operacional e exibe apenas as op�
 
 ```
 === SUAP Setup ===
-1) Configurar ambiente de desenvolvimento
-2) Configurar ambiente de produção
-3) Instalar Redis
-4) Instalar Nginx
-5) Configurar ambiente dev via Docker
-6) Configurar ambiente prod via Docker
-7) Iniciar Dockhand (via Docker)
-8) Atualizar ambiente de produção
-9) Instalar PostgreSQL
-10) Instalar MinIO (via Docker)
-11) Iniciar Redis (via Docker)
-R) Reverter uma funcionalidade
-0) Sair
+
+Ambiente SUAP (no host)
+   1) Configurar ambiente de desenvolvimento
+   2) Configurar ambiente de produção
+   3) Atualizar SUAP (produção)
+
+Serviços (no host)
+   4) Instalar Redis
+   5) Instalar Nginx
+   6) Instalar PostgreSQL
+
+Via Docker
+   7) SUAP dev (docker compose)
+   8) SUAP prod (suap_deploy)
+   9) Dockhand (gerenciador Docker web)
+  10) MinIO (object storage S3)
+  11) Redis (porta 6379 exposta)
+  12) PostgreSQL (porta 5432 exposta)
+
+   R) Reverter uma funcionalidade
+   0) Sair
 ```
 
 **macOS:**
 
 ```
 === SUAP Setup ===
-1) Configurar ambiente de desenvolvimento
-2) Configurar ambiente dev via Docker
-3) Configurar ambiente prod via Docker
-4) Iniciar Dockhand (via Docker)
-5) Instalar MinIO (via Docker)
-6) Iniciar Redis (via Docker)
-R) Reverter uma funcionalidade
-0) Sair
+
+Ambiente SUAP
+   1) Configurar ambiente de desenvolvimento
+
+Via Docker
+   2) SUAP dev (docker compose)
+   3) SUAP prod (suap_deploy)
+   4) Dockhand (gerenciador Docker web)
+   5) MinIO (object storage S3)
+   6) Redis (porta 6379 exposta)
+   7) PostgreSQL (porta 5432 exposta)
+
+   R) Reverter uma funcionalidade
+   0) Sair
 ```
+
+A numeração exibida é sequencial e gerada a partir de uma lista agrupada em seções; internamente cada entrada mantém um id fixo que roteia o script.
 
 A opção **R) Reverter** abre um submenu que lista as funcionalidades que podem ser desfeitas na plataforma atual. A reversão é conservadora: remove apenas o que a instalação criou (registrado em um manifesto de estado), preserva o que já existia no sistema e pede confirmação para operações destrutivas (apagar diretórios/bancos, desinstalar pacotes).
 
@@ -174,6 +191,8 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `docker/dockhand-setup.sh` | Todas | Interface web para gerenciamento Docker |
 | `docker/minio-setup.sh` | Todas | Setup do MinIO (object storage S3-compatível) via Docker |
 | `docker/redis-setup.sh` | Todas | Redis em container Docker com porta 6379 exposta |
+| `docker/postgres-setup.sh` | Todas | PostgreSQL em container Docker com porta 5432 exposta |
+| `docker/postgres-revert.sh` | Todas | Reverte o PostgreSQL Docker (container; volume com confirmação) |
 | `docker/redis-revert.sh` | Todas | Reverte o Redis Docker (container; volume com confirmação) |
 
 ## Ambiente de desenvolvimento
@@ -389,6 +408,22 @@ O script `docker/redis-setup.sh` sobe um Redis em container, com a porta padrão
 
 O script é idempotente: se o container já estiver ativo, apenas exibe o endereço; se estiver parado, ele é iniciado. Libere a porta no firewall se necessário. Para remover, use `R` no menu (ou `bash docker/redis-revert.sh`); o volume só é apagado com confirmação.
 
+### PostgreSQL (via Docker)
+
+O script `docker/postgres-setup.sh` sobe um PostgreSQL em container, com a porta padrão `5432` exposta para acesso a partir de outras máquinas.
+
+| Propriedade | Valor |
+|-------------|-------|
+| Container | `suap-postgres` (`postgres:${POSTGRES_VERSION:-16}`, `--restart unless-stopped`) |
+| Porta | `5432` (`listen_addresses='*'`) |
+| Dados | volume `suap-postgres-data` |
+| Banco/usuário | `suap` / `suap_app` (padrões; solicitados no wizard) |
+| Autenticação | senha obrigatória; solicitada ou gerada |
+| Ajuste | `bytea_output=escape` (compatível com o SUAP) |
+| Variáveis opcionais | `POSTGRES_VERSION`, `POSTGRES_DOCKER_PORT`, `POSTGRES_DOCKER_DB`, `POSTGRES_DOCKER_USER`, `POSTGRES_DOCKER_PASSWORD`, `POSTGRES_DOCKER_IMAGE` |
+
+Idempotente como o Redis. Diferença para a instalação nativa (opção 6): o banco é criado com a collation padrão da imagem (UTF-8), sem `pt_BR.UTF-8`. Para remover, use `R` no menu (ou `bash docker/postgres-revert.sh`); o volume só é apagado com confirmação.
+
 ## Configuração Nginx
 
 ### Instalação nativa (`nginx/suap`)
@@ -489,6 +524,8 @@ suap-setup/
 │   ├── minio-setup.sh               # Setup do MinIO (suap-minio)
 │   ├── redis-setup.sh               # Redis via Docker (porta 6379)
 │   ├── redis-revert.sh              # Reversão do Redis Docker
+│   ├── postgres-setup.sh            # PostgreSQL via Docker (porta 5432)
+│   ├── postgres-revert.sh           # Reversão do PostgreSQL Docker
 │   ├── README.md                     # Documentação da arquitetura de delegação
 │   ├── dev/
 │   │   └── docker-setup.sh           # Delegação → suap (docker-compose.dev.yml)

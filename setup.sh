@@ -15,37 +15,60 @@ ENV_FILE="${SCRIPT_DIR}/.env"
 # Detectar distribuição Linux (define DISTRO_TYPE e DISTRO_NAME)
 detect_distro
 
-# Exibir menu interativo
+# --- Menu interativo agrupado ---
+# Cada entrada: "id interno|rótulo". Entradas "#|Título" são cabeçalhos de seção.
+# A numeração exibida é sequencial; o id interno (1-12) é o que roteia o script.
+if [ "${DISTRO_TYPE}" = "macos" ]; then
+  MENU_ENTRIES=(
+    "#|Ambiente SUAP"
+    "1|Configurar ambiente de desenvolvimento"
+    "#|Via Docker"
+    "5|SUAP dev (docker compose)"
+    "6|SUAP prod (suap_deploy)"
+    "7|Dockhand (gerenciador Docker web)"
+    "10|MinIO (object storage S3)"
+    "11|Redis (porta 6379 exposta)"
+    "12|PostgreSQL (porta 5432 exposta)"
+  )
+else
+  MENU_ENTRIES=(
+    "#|Ambiente SUAP (no host)"
+    "1|Configurar ambiente de desenvolvimento"
+    "2|Configurar ambiente de produção"
+    "8|Atualizar SUAP (produção)"
+    "#|Serviços (no host)"
+    "3|Instalar Redis"
+    "4|Instalar Nginx"
+    "9|Instalar PostgreSQL"
+    "#|Via Docker"
+    "5|SUAP dev (docker compose)"
+    "6|SUAP prod (suap_deploy)"
+    "7|Dockhand (gerenciador Docker web)"
+    "10|MinIO (object storage S3)"
+    "11|Redis (porta 6379 exposta)"
+    "12|PostgreSQL (porta 5432 exposta)"
+  )
+fi
+
+MENU_IDS=()
 echo ""
 echo "${GREEN}=== SUAP Setup ===${NO_COLOR}"
-if [ "${DISTRO_TYPE}" = "macos" ]; then
-  echo "1) Configurar ambiente de desenvolvimento"
-  echo "2) Configurar ambiente dev via Docker"
-  echo "3) Configurar ambiente prod via Docker"
-  echo "4) Iniciar Dockhand (via Docker)"
-  echo "5) Instalar MinIO (via Docker)"
-  echo "6) Iniciar Redis (via Docker)"
-  echo "R) Reverter uma funcionalidade"
-  echo "0) Sair"
-  echo ""
-  read -rp "Escolha uma opção [0-6, R]: " CHOICE
-else
-  echo "1) Configurar ambiente de desenvolvimento"
-  echo "2) Configurar ambiente de produção"
-  echo "3) Instalar Redis"
-  echo "4) Instalar Nginx"
-  echo "5) Configurar ambiente dev via Docker"
-  echo "6) Configurar ambiente prod via Docker"
-  echo "7) Iniciar Dockhand (via Docker)"
-  echo "8) Atualizar SUAP (produção)"
-  echo "9) Instalar PostgreSQL"
-  echo "10) Instalar MinIO (via Docker)"
-  echo "11) Iniciar Redis (via Docker)"
-  echo "R) Reverter uma funcionalidade"
-  echo "0) Sair"
-  echo ""
-  read -rp "Escolha uma opção [0-11, R]: " CHOICE
-fi
+for _entry in "${MENU_ENTRIES[@]}"; do
+  _id="${_entry%%|*}"
+  _label="${_entry#*|}"
+  if [ "${_id}" = "#" ]; then
+    echo ""
+    echo "${YELLOW}${_label}${NO_COLOR}"
+  else
+    MENU_IDS+=("${_id}")
+    printf '  %2d) %s\n' "${#MENU_IDS[@]}" "${_label}"
+  fi
+done
+echo ""
+echo "   R) Reverter uma funcionalidade"
+echo "   0) Sair"
+echo ""
+read -rp "Escolha uma opção [0-${#MENU_IDS[@]}, R]: " CHOICE
 
 # Sair imediatamente se opção 0
 if [ "${CHOICE}" = "0" ]; then
@@ -74,6 +97,7 @@ run_revert_submenu() {
     items+=("Reverter Dockhand|docker/dockhand-revert.sh")
     items+=("Reverter MinIO|docker/minio-revert.sh")
     items+=("Reverter Redis (Docker)|docker/redis-revert.sh")
+    items+=("Reverter PostgreSQL (Docker)|docker/postgres-revert.sh")
   else
     items+=("Reverter ambiente de desenvolvimento|${DISTRO_TYPE}/suap-dev-revert.sh")
     items+=("Reverter ambiente de produção|${DISTRO_TYPE}/suap-prod-revert.sh")
@@ -85,6 +109,7 @@ run_revert_submenu() {
     items+=("Reverter PostgreSQL|${DISTRO_TYPE}/install-postgres-revert.sh")
     items+=("Reverter MinIO|docker/minio-revert.sh")
     items+=("Reverter Redis (Docker)|docker/redis-revert.sh")
+    items+=("Reverter PostgreSQL (Docker)|docker/postgres-revert.sh")
   fi
 
   local i
@@ -124,28 +149,12 @@ if [ "${CHOICE}" = "R" ] || [ "${CHOICE}" = "r" ]; then
   run_revert_submenu
 fi
 
-# Remapear opções do macOS para o mapeamento interno
-if [ "${DISTRO_TYPE}" = "macos" ]; then
-  case "${CHOICE}" in
-    1) INTERNAL_CHOICE="1" ;;  # dev
-    2) INTERNAL_CHOICE="5" ;;  # docker dev
-    3) INTERNAL_CHOICE="6" ;;  # docker prod
-    4) INTERNAL_CHOICE="7" ;;  # dockhand
-    5) INTERNAL_CHOICE="10" ;; # minio
-    6) INTERNAL_CHOICE="11" ;; # redis docker
-    *)
-      msg_error "Opção inválida: use 0, 1, 2, 3, 4, 5 ou 6."
-      exit 1
-      ;;
-  esac
+# Traduzir a opção exibida (sequencial) para o id interno
+if [[ "${CHOICE}" =~ ^[0-9]+$ ]] && [ "${CHOICE}" -ge 1 ] && [ "${CHOICE}" -le "${#MENU_IDS[@]}" ]; then
+  INTERNAL_CHOICE="${MENU_IDS[$((CHOICE - 1))]}"
 else
-  case "${CHOICE}" in
-    1|2|3|4|5|6|7|8|9|10|11) INTERNAL_CHOICE="${CHOICE}" ;;
-    *)
-      msg_error "Opção inválida: use 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ou 11."
-      exit 1
-      ;;
-  esac
+  msg_error "Opção inválida: use 0 a ${#MENU_IDS[@]} ou R."
+  exit 1
 fi
 
 # --- Coletar variáveis de ambiente conforme a opção escolhida ---
@@ -162,6 +171,7 @@ fi
 #   9 (postgres):   POSTGRES_VERSION
 #   10 (minio):     SUAP_MINIO_DIR, SUAP_MINIO_GIT_URL
 #   11 (redis docker): nenhuma
+#   12 (postgres docker): nenhuma
 
 ensure_env_for_option "${ENV_FILE}" "${INTERNAL_CHOICE}"
 
@@ -183,6 +193,7 @@ case "${INTERNAL_CHOICE}" in
   9) TARGET_SCRIPT="${SCRIPT_DIR}/${DISTRO_TYPE}/install-postgres.sh" ;;
   10) TARGET_SCRIPT="${SCRIPT_DIR}/docker/minio-setup.sh" ;;
   11) TARGET_SCRIPT="${SCRIPT_DIR}/docker/redis-setup.sh" ;;
+  12) TARGET_SCRIPT="${SCRIPT_DIR}/docker/postgres-setup.sh" ;;
 esac
 
 # Verificar existência do script antes de executar
