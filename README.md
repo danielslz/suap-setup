@@ -190,6 +190,7 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `docker/dev/docker-setup.sh` | Todas | Ambiente dev via Docker |
 | `docker/dev/docker-setup-revert.sh` | Todas | Reverte o ambiente dev Docker (down; volumes e imagens com confirmação) |
 | `docker/prod/docker-setup.sh` | Todas | Ambiente prod via Docker |
+| `docker/prod/docker-setup-revert.sh` | Todas | Reverte o ambiente prod Docker (make down; banco, imagens e diretório com confirmação) |
 | `docker/dockhand-setup.sh` | Todas | Interface web para gerenciamento Docker |
 | `docker/dockhand-revert.sh` | Todas | Reverte o Dockhand (container; volumes e imagem com confirmação) |
 | `docker/minio-setup.sh` | Todas | Setup do MinIO (object storage S3-compatível) via Docker |
@@ -343,6 +344,8 @@ make status
 make logs
 make down
 ```
+
+Para desfazer, use `R) Reverter > Reverter ambiente prod via Docker` (ou `bash docker/prod/docker-setup-revert.sh`). Como derruba a produção, pede confirmação antes de executar `make down`. O volume `suap_pgdata` (banco local), as imagens e o diretório `SUAP_DEPLOY_DIR` (`.env`, `deploy/media`, `deploy/backup`) só são apagados com confirmação separada.
 
 ### Instalação do Docker
 
@@ -546,7 +549,8 @@ suap-setup/
 │   │   ├── docker-setup.sh           # Delegação → suap (docker-compose.dev.yml)
 │   │   └── docker-setup-revert.sh    # Reversão do ambiente dev Docker
 │   └── prod/
-│       └── docker-setup.sh           # Delegação → suap_deploy (Makefile)
+│       ├── docker-setup.sh           # Delegação → suap_deploy (Makefile)
+│       └── docker-setup-revert.sh    # Reversão do ambiente prod Docker
 ├── nginx/
 │   ├── suap                          # Config para instalação nativa
 │   └── suap.docker                   # Config para containers Docker

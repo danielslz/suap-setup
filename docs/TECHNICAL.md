@@ -1270,6 +1270,21 @@ containers através do navegador.
 
 > **Idempotência:** Se o container `dockhand` já estiver rodando, o script
 > apenas exibe a URL de acesso e encerra sem criar outro container.
+### Reversão (Docker prod)
+
+**Arquivo:** `docker/prod/docker-setup-revert.sh`
+
+```
+1. Carrega .env (se existir); calcula SUAP_DEPLOY_DIR como o setup; diretório ausente: skip
+2. confirm_destructive: parar a produção
+   - make down (remove também suap_static/suap_docker/suap_docs); sem Makefile: docker compose down
+3. Volume suap_pgdata (banco local): confirm_destructive + docker volume rm
+4. Imagens do compose: confirm_destructive + docker compose down --rmi all
+5. revert_dir --destructive em SUAP_DEPLOY_DIR (.env, deploy/media, deploy/backup)
+```
+
+Se a confirmação do passo 2 for negada, nada é alterado nos serviços (o diretório ainda pode ser tratado no passo 5). Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`.
+
 
 ### Reversão
 
