@@ -90,6 +90,14 @@ Utilitário independente: sobe o container `suap-postgres` (`postgres:<versão>`
 com a porta `5432` exposta, senha obrigatória e `bytea_output=escape`. Dados no
 volume `suap-postgres-data`. Reversão em `docker/postgres-revert.sh`.
 
+## Reversões
+
+Cada setup Docker tem um `*-revert.sh` correspondente (acionado por `R` no `setup.sh`):
+`install-docker-revert.sh`, `dockhand-revert.sh`, `minio-revert.sh`, `redis-revert.sh`,
+`postgres-revert.sh`, `dev/docker-setup-revert.sh` e `prod/docker-setup-revert.sh`.
+Todos usam `confirm_destructive` para volumes, imagens e diretórios, e aceitam
+`REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`.
+
 ## Por que não manter Dockerfiles locais?
 
 1. **Evita drift**: Quando o upstream muda dependências (ex: nova lib Python),

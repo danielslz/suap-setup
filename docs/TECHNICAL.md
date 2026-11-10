@@ -1390,6 +1390,22 @@ AWS_SECRET_ACCESS_KEY=<secret-key>
 - **Configuração .env:** Se `.env` já existe no suap-minio, a configuração é pulada
 - **make:** Se instalação do `make` falha, o script encerra com erro informativo
 
+### Reversão
+
+**Arquivo:** `docker/minio-revert.sh`
+
+```
+1. Carrega .env (se existir); SUAP_MINIO_DIR (padrão /opt/suap-minio); diretório ausente: skip
+2. Registra volumes e imagens dos containers do projeto
+   (docker ps -a --filter label=com.docker.compose.project.working_dir=<dir>)
+3. Remove os containers: make down (ou make stop, se não houver o target) + docker rm -f
+4. Para cada volume registrado: confirm_destructive + docker volume rm
+5. Para cada imagem registrada: confirm_destructive + docker rmi
+6. revert_dir --destructive em SUAP_MINIO_DIR (clone + .env com credenciais)
+```
+
+Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`. Idempotente.
+
 ---
 
 ## Configuração Nginx Detalhada

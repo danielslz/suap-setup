@@ -192,6 +192,7 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `docker/dockhand-setup.sh` | Todas | Interface web para gerenciamento Docker |
 | `docker/dockhand-revert.sh` | Todas | Reverte o Dockhand (container; volumes e imagem com confirmação) |
 | `docker/minio-setup.sh` | Todas | Setup do MinIO (object storage S3-compatível) via Docker |
+| `docker/minio-revert.sh` | Todas | Reverte o MinIO (containers; volumes, imagens e diretório com confirmação) |
 | `docker/redis-setup.sh` | Todas | Redis em container Docker com porta 6379 exposta |
 | `docker/postgres-setup.sh` | Todas | PostgreSQL em container Docker com porta 5432 exposta |
 | `docker/postgres-revert.sh` | Todas | Reverte o PostgreSQL Docker (container; volume com confirmação) |
@@ -400,6 +401,8 @@ make logs
 make stop
 ```
 
+Para desfazer, use `R) Reverter > Reverter MinIO` (ou `bash docker/minio-revert.sh`). Remove os containers do suap-minio; volumes (dados), imagens e o diretório `SUAP_MINIO_DIR` (clone + `.env` com credenciais) só são apagados com confirmação.
+
 ### Redis (via Docker)
 
 O script `docker/redis-setup.sh` sobe um Redis em container, com a porta padrão `6379` exposta para acesso a partir de outras máquinas.
@@ -530,6 +533,7 @@ suap-setup/
 │   ├── dockhand-setup.sh             # Dockhand
 │   ├── dockhand-revert.sh            # Reversão do Dockhand
 │   ├── minio-setup.sh               # Setup do MinIO (suap-minio)
+│   ├── minio-revert.sh              # Reversão do MinIO
 │   ├── redis-setup.sh               # Redis via Docker (porta 6379)
 │   ├── redis-revert.sh              # Reversão do Redis Docker
 │   ├── postgres-setup.sh            # PostgreSQL via Docker (porta 5432)
