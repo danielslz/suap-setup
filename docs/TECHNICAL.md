@@ -1196,6 +1196,26 @@ docker compose version
 > **Nota:** É necessário fazer logout e login novamente para que a adição ao
 > grupo `docker` tenha efeito.
 
+### Reversão
+
+**Arquivo:** `docker/install-docker-revert.sh` (apenas Linux; no macOS apenas informa que o Docker Desktop deve ser removido manualmente)
+
+```
+1. detect_distro e seleção de pacotes/arquivos de repositório por distro
+   - deb:  docker-ce docker-ce-cli containerd.io docker-compose-plugin; docker.list e docker.asc
+   - rpm:  mesmos pacotes; /etc/yum.repos.d/docker-ce.repo
+   - arch: docker docker-compose (sem repositório)
+2. Se nenhum pacote/repositório existe: skip (exit 0)
+3. confirm_destructive geral (derruba todos os containers da máquina)
+4. revert_service: docker.socket, docker, containerd (stop + disable)
+5. revert_package de cada pacote (sem perguntar um a um)
+6. revert_repo_added: remove repositório/keyring
+7. gpasswd -d <usuário> docker (o grupo é preservado)
+8. revert_dir --destructive em /var/lib/docker e /var/lib/containerd (confirmação separada)
+```
+
+Suporta `REVERT_DRY_RUN=1` (apenas lista as etapas) e `REVERT_ASSUME_YES=1`. É idempotente: sem Docker instalado, encerra com skip.
+
 ---
 
 ## Dockhand
