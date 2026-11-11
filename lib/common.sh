@@ -1538,6 +1538,21 @@ revert_apply() {
   [ "${failures}" -eq 0 ]
 }
 
+# resolve_suap_deploy_dir()
+# Ecoa o diretório do repositório suap_deploy: SUAP_DEPLOY_DIR, ou ao lado de
+# SUAP_DIR, ou ~/Projetos/suap_deploy. Mesma regra de docker/prod/docker-setup.sh.
+resolve_suap_deploy_dir() {
+  local dir="${SUAP_DEPLOY_DIR:-}"
+  if [ -z "${dir}" ]; then
+    if [ -n "${SUAP_DIR:-}" ]; then
+      dir="$(dirname "$(eval echo "${SUAP_DIR}")")/suap_deploy"
+    else
+      dir="${HOME}/Projetos/suap_deploy"
+    fi
+  fi
+  eval echo "${dir}"
+}
+
 # =============================================================================
 # Stacks Docker Compose (Redis, PostgreSQL, Dockhand, Arcane)
 # =============================================================================

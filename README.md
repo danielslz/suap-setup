@@ -71,6 +71,8 @@ bash arch/install-nginx.sh
 # Docker
 bash docker/dev/docker-setup.sh
 bash docker/prod/docker-setup.sh
+bash docker/prod/suap-deploy.sh help      # operar o suap_deploy sem trocar de pasta
+bash docker/prod/configure-node.sh        # papel do nó (multi-servidor)
 bash docker/dockhand-setup.sh
 bash docker/arcane-setup.sh
 bash docker/install-docker.sh
@@ -194,6 +196,8 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `docker/dev/docker-setup.sh` | Todas | Ambiente dev via Docker |
 | `docker/dev/docker-setup-revert.sh` | Todas | Reverte o ambiente dev Docker (down; volumes e imagens com confirmação) |
 | `docker/prod/docker-setup.sh` | Todas | Ambiente prod via Docker |
+| `docker/prod/suap-deploy.sh` | Todas | Atalho não interativo para o suap_deploy (build, up, down, update, logs, backup, check…) |
+| `docker/prod/configure-node.sh` | Todas | Configura o papel do nó (profiles, DB/Redis, SSL, S3) no `.env` do suap_deploy |
 | `docker/prod/docker-setup-revert.sh` | Todas | Reverte o ambiente prod Docker (make down; banco, imagens e diretório com confirmação) |
 | `docker/dockhand-setup.sh` | Todas | Interface web para gerenciamento Docker |
 | `docker/dockhand-revert.sh` | Todas | Reverte o Dockhand (container; volumes e imagem com confirmação) |
@@ -334,8 +338,13 @@ O script `docker/prod/docker-setup.sh` delega para o projeto suap_deploy:
 9) Executar backup do banco
 10) Executar restore do banco
 11) Executar setup interativo (make setup)
+12) Configurar o papel deste nó (multi-servidor / multi-nó)
+13) Verificar a configuração (check)
+14) Atualizar: pull/build + restart com drain (update)
 0) Sair
 ```
+
+Com o stack no ar, as opções 1 e 2 usam `make restart` (que dispara o drain) em vez de `make up`.
 
 O suap_deploy suporta dois modos de imagem: **registry** (pull de imagens pré-construídas) e **local** (build a partir do código-fonte clonado em `./src/suap`). Os serviços ativos são controlados pela variável `COMPOSE_PROFILES` no `.env` do suap_deploy. Inclui OWASP ModSecurity CRS como WAF no Nginx e resource limits por container.
 
@@ -350,6 +359,44 @@ make status
 make logs
 make down
 ```
+
+#### Atalho `suap-deploy.sh` (sem trocar de pasta)
+
+`docker/prod/suap-deploy.sh` opera o suap_deploy de qualquer diretório, de forma não interativa (útil por SSH, cron e automações). É uma camada fina: resolve `SUAP_DEPLOY_DIR` e delega para o `make` e o `docker compose` do suap_deploy.
+
+```bash
+bash docker/prod/suap-deploy.sh help                  # todos os comandos
+bash docker/prod/suap-deploy.sh update --git-pull     # build/pull + restart com drain (ou up, se parado)
+bash docker/prod/suap-deploy.sh status
+bash docker/prod/suap-deploy.sh logs web nginx
+bash docker/prod/suap-deploy.sh exec python manage.py migrate
+bash docker/prod/suap-deploy.sh scale 3               # workers celery
+bash docker/prod/suap-deploy.sh backup
+bash docker/prod/suap-deploy.sh check                 # valida .env, TLS, DB/Redis, profiles, drain
+```
+
+Comandos: `setup`, `build`, `pull`, `up`, `down`, `restart`, `update`, `status`, `logs`, `scale`, `bash`, `shell`, `exec`, `begin`, `psql`, `backup`, `restore`, `node`, `profiles`, `check`, `drain`, `healthy`, `compose`, `dir`. O `update` detecta o modo de imagem (local ou registry) e usa `restart`, nunca `up`, em um stack em execução.
+
+#### Multi-servidor e multi-nó: `configure-node.sh`
+
+`docker/prod/configure-node.sh` define o papel de um nó editando o `.env` do suap_deploy (com backup `.env.bak-<data>`, segredos mascarados e `--dry-run`):
+
+| Papel (`--role`) | `COMPOSE_PROFILES` |
+|---|---|
+| `single` | `default,celery-beat,celery-flower` |
+| `app` | `web` |
+| `async-primary` | `celery,celery-beat,celery-flower,pdfprinter` |
+| `async` | `celery` |
+| `homolog` | `default,celery-beat,celery-flower,local-db,local-redis` |
+
+```bash
+# Nó de aplicação atrás de balanceador que termina o TLS
+NODE_DB_PASSWORD='...' NODE_REDIS_PASSWORD='...' \
+bash docker/prod/configure-node.sh --role app --db-host 10.0.1.5 --redis-host 10.0.1.5 \
+  --ssl false --site-url https://suap.instituicao.edu.br --trusted-proxies 10.0.0.10 --yes
+```
+
+Sem opções, em terminal interativo, ele pergunta cada item mostrando o valor atual. Senhas só por prompt silencioso ou variáveis de ambiente. `celery-beat` e `celery-flower` devem rodar em **um único** nó do cluster. O passo a passo completo (papéis, balanceador/HAProxy, drain protocol, mídia compartilhada, atualização sem downtime) está em [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#parte-b--docker-suap_deploy).
 
 Para desfazer, use `R) Reverter > Reverter ambiente prod via Docker` (ou `bash docker/prod/docker-setup-revert.sh`). Como derruba a produção, pede confirmação antes de executar `make down`. O volume `suap_pgdata` (banco local), as imagens e o diretório `SUAP_DEPLOY_DIR` (`.env`, `deploy/media`, `deploy/backup`) só são apagados com confirmação separada.
 
@@ -380,7 +427,7 @@ O [Dockhand](https://dockhand.pro/) é uma interface web para gerenciamento de c
 
 O script é idempotente (`docker compose up -d`): se nada mudou, o container não é recriado.
 
-Para usar outra porta, defina `DOCKHAND_PORT` no `.env` ou no ambiente (ex.: `DOCKHAND_PORT=8080 bash docker/dockhand-setup.sh`) e rode o script de novo: o compose recria o container com a nova porta, mantendo o volume `dockhand_data`.
+Para usar outra porta, defina `DOCKHAND_PORT` no `.env` ou no ambiente (ex.: `DOCKHAND_PORT=9094 bash docker/dockhand-setup.sh`; evite 80, 443 e 8080 se o Nginx do suap_deploy rodar no mesmo servidor) e rode o script de novo: o compose recria o container com a nova porta, mantendo o volume `dockhand_data`.
 
 Para desfazer, use `R) Reverter > Reverter Dockhand` (ou `bash docker/dockhand-revert.sh`). Executa `docker compose down`; o volume, a imagem e o diretório do stack só são apagados com confirmação.
 
@@ -602,6 +649,8 @@ suap-setup/
 │   │   └── docker-setup-revert.sh    # Reversão do ambiente dev Docker
 │   └── prod/
 │       ├── docker-setup.sh           # Delegação → suap_deploy (Makefile)
+│       ├── suap-deploy.sh            # Atalho não interativo (build/up/down/update/check…)
+│       ├── configure-node.sh         # Papel do nó (multi-servidor / multi-nó)
 │       └── docker-setup-revert.sh    # Reversão do ambiente prod Docker
 ├── nginx/
 │   ├── suap                          # Config para instalação nativa

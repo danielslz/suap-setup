@@ -40,6 +40,12 @@ O suap_deploy:
 3. Apresenta menu interativo com opções de gerenciamento
 4. Delega para os targets do Makefile
 
+**Atalhos (`docker/prod/`):**
+- `suap-deploy.sh <comando>`: opera o suap_deploy sem trocar de pasta (build, up, down, restart, `update`,
+  logs, scale, exec, backup, restore, `check`…). Camada fina: delega para `make -C` e `docker compose`.
+- `configure-node.sh`: define o papel do nó (`single`, `app`, `async-primary`, `async`, `homolog`) e as
+  conexões de DB/Redis/SSL/S3 no `.env` do suap_deploy, com backup e `--dry-run`.
+
 **Variáveis necessárias no `.env` do suap-setup:**
 - `SUAP_DEPLOY_DIR` - Caminho para o repositório suap_deploy
 - `SUAP_DEPLOY_GIT_URL` - URL git do suap_deploy

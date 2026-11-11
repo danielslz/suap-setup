@@ -10,8 +10,8 @@
 6. [Instalação de Redis](#instalação-de-redis)
 7. [Instalação de Nginx](#instalação-de-nginx)
 8. [Instalação de PostgreSQL](#instalação-de-postgresql)
-9. [Ambiente Docker — Desenvolvimento](#ambiente-docker-desenvolvimento)
-10. [Ambiente Docker — Produção](#ambiente-docker-produção)
+9. [Ambiente Docker — Desenvolvimento](#ambiente-docker--desenvolvimento)
+10. [Ambiente Docker — Produção](#ambiente-docker--produção)
 11. [Instalação do Docker](#instalação-do-docker)
 12. [Stacks Docker Compose](#stacks-docker-compose)
     - [Dockhand — Gerenciamento Docker via Web](#dockhand)
@@ -975,6 +975,20 @@ docker compose -f docker/docker-compose.dev.yml exec web bash
 docker compose -f docker/docker-compose.dev.yml exec web python manage.py migrate
 ```
 
+### Reversão (Docker dev)
+
+**Arquivo:** `docker/dev/docker-setup-revert.sh`
+
+```
+1. Carrega .env (se existir); Docker ausente, SUAP_DIR indefinido ou compose ausente: skip
+2. Exporta as variáveis exigidas pela interpolação do compose (SUAP_IMAGE etc.)
+3. confirm_destructive: volumes (-v) e imagens locais (--rmi local)
+4. docker compose -f docker/docker-compose.dev.yml down --remove-orphans [-v] [--rmi local]
+5. Preserva SUAP_DIR (.env e settings.py gerados)
+```
+
+Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`.
+
 ---
 
 ## Ambiente Docker — Produção
@@ -1039,8 +1053,14 @@ O script apresenta um menu de gerenciamento:
 9) Executar backup do banco
 10) Executar restore do banco
 11) Executar setup interativo (make setup)
+12) Configurar o papel deste nó (multi-servidor / multi-nó)
+13) Verificar a configuração (check)
+14) Atualizar: pull/build + restart com drain (update)
 0) Sair
 ```
+
+> Com o stack já no ar (`docker compose ps -q --status running` não vazio), as opções 1 e 2
+> executam `make restart` em vez de `make up`, porque o recreate do `up -d` não dispara o drain.
 
 ### Etapas do Script
 
@@ -1061,7 +1081,7 @@ O script apresenta um menu de gerenciamento:
    - Cria (se ausentes): deploy/logs/nginx, deploy/logs/suap, deploy/media, deploy/backup
    - Corrige ownership para ${USER}:${USER} se não graváveis
    - Aplica chmod 777 em deploy/logs/nginx (Nginx roda como www-data/UID 33 no container)
-10. Exibir menu interativo de gerenciamento (11 opções + sair)
+10. Exibir menu interativo de gerenciamento (14 opções + sair)
 11. Executar target do Makefile conforme opção escolhida
 ```
 
@@ -1108,6 +1128,9 @@ Os serviços disponíveis são controlados pela variável `COMPOSE_PROFILES` no 
 | Profile | Serviços |
 |---------|----------|
 | `default` | web + nginx + pdfprinter + celery |
+| `web` | só web + nginx (nó de aplicação) |
+| `pdfprinter` | só o pdfprinter |
+| `celery` | workers celery (escaláveis) |
 | `celery-beat` | scheduler (apenas UM nó em todo o cluster) |
 | `celery-flower` | UI de monitoramento em :5555 (apenas UM nó) |
 | `ai` | serviço de IA |
@@ -1116,6 +1139,8 @@ Os serviços disponíveis são controlados pela variável `COMPOSE_PROFILES` no 
 | `local-redis` | Redis em container (só homologação) |
 
 Exemplo para nó único: `COMPOSE_PROFILES=default,celery-beat,celery-flower`
+
+Papéis de nó em multi-servidor: ver `configure-node.sh` abaixo e o guia `docs/DEPLOYMENT.md` (Parte B).
 
 ### Cert TLS
 
@@ -1133,24 +1158,99 @@ O suap_deploy inclui configs de logrotate em `logrotate/` (suap_access, suap_err
 suap_email, suap_history). Copie para `/etc/logrotate.d/` no host para rotacionar
 os logs em `deploy/logs/`.
 
+### Atalho não interativo: `suap-deploy.sh`
+
+**Arquivo:** `docker/prod/suap-deploy.sh`
+
+Camada fina sobre o Makefile e o `docker compose` do suap_deploy. Resolve o diretório com
+`resolve_suap_deploy_dir()` (de `lib/common.sh`: `SUAP_DEPLOY_DIR`, ou ao lado de `SUAP_DIR`, ou
+`~/Projetos/suap_deploy`), valida pré-requisitos e delega com `make -C <dir>` / `docker compose`.
+Não duplica a lógica do suap_deploy.
+
+| Comando | Delegação |
+|---------|-----------|
+| `setup`, `build`, `up`, `down`, `restart`, `status` | `make <alvo>` |
+| `pull` | `docker compose pull` |
+| `logs [serviço...]` | `make logs SERVICES="..."` |
+| `bash`, `shell`, `exec <cmd>` | `make bash` / `make shell` / `make exec COMMAND="..."` |
+| `begin`, `psql`, `backup`, `restore <arquivo>` | `make begin` / `psql` / `backup` / `restore DUMP=<caminho absoluto>` |
+| `update [--git-pull]` | ver abaixo |
+| `scale <n>` | `docker compose up -d --scale celery=<n> --no-recreate` |
+| `node [opções]` | `configure-node.sh` |
+| `profiles` | mostra `COMPOSE_PROFILES`, papel inferido, modo de imagem e `SSL_ENABLED` |
+| `check` | validação (ver abaixo) |
+| `drain`, `healthy` | `contrib/multi-node/drain.sh` / `healthy.sh` |
+| `compose <args>`, `dir` | `docker compose <args>` / imprime o diretório |
+
+**`update`:** detecta o modo pela `SUAP_IMAGE` do `.env` (vazia ou `suap:latest` = local).
+Local: opcionalmente `git pull --ff-only` em `src/suap` e `src/suap-pdf` (`--git-pull`) e `make build`.
+Registry: `docker compose pull`. Depois, se há containers em execução, `make restart` (down com drain + up);
+senão `make up`. Encerra com erro se algum passo falhar.
+
+**`check`:** Docker Compose >= 2.30; `make`; `.env`; `SECRET_KEY`, `DATABASE_PASSWORD`, `SUAP_PDF_ACCESS_TOKEN`;
+valores de exemplo em `SITE_URL`/`ALLOWED_HOSTS`; `DEBUG`; profiles desconhecidos/legados; beat/flower ativos e
+senha padrão do Flower; coerência entre `SSL_ENABLED`, o symlink do nginx e o certificado em
+`/etc/ssl/suap/nginx/`; nó `web` com SSL ligado; conectividade TCP com PostgreSQL e Redis
+(`host.docker.internal` é testado como `127.0.0.1`); permissões de `deploy/` (dono UID 33 ou `o+rw`) e `status.txt`;
+`DRAIN_SECONDS` numérico. Sai com código 1 se houver falhas (avisos não reprovam).
+
+### Papel do nó: `configure-node.sh`
+
+**Arquivo:** `docker/prod/configure-node.sh`
+
+Edita o `.env` do suap_deploy para configurar o papel do nó em ambientes multi-servidor/multi-nó.
+
+```
+1. Carrega .env do suap-setup; resolve SUAP_DEPLOY_DIR; exige Makefile e .env do suap_deploy
+2. Sem opções e em TTY: modo interativo (pergunta cada item mostrando o valor atual);
+   com opções (ou --yes): não interativo
+3. Valida entradas (papel, portas, --ssl true|false, DRAIN_SECONDS inteiro, flower usuario:senha) e
+   recusa em segredos espaço, $, #, aspas, crase ou barra invertida
+4. Monta as alterações; descarta as que não mudam o valor atual
+5. Mostra a lista chave: atual -> novo (segredos mascarados) e avisos de coerência
+   (nó web com SSL ligado; lembrete de nó único para beat/flower; senha padrão do Flower)
+6. --dry-run encerra aqui; no modo interativo pede confirmação
+7. Backup do .env (.env.bak-<data>), grava as chaves (mesma semântica do set_env_var do setup.sh
+   do suap_deploy: troca/descomenta ou acrescenta) e chmod 600
+8. --ssl: recria nginx/active/server.conf.template (30-https ou 20-http) e avisa se falta certificado
+```
+
+| Papel (`--role`) | `COMPOSE_PROFILES` |
+|------------------|--------------------|
+| `single` | `default,celery-beat,celery-flower` |
+| `app` | `web` |
+| `async-primary` | `celery,celery-beat,celery-flower,pdfprinter` |
+| `async` | `celery` |
+| `homolog` | `default,celery-beat,celery-flower,local-db,local-redis` |
+| `custom` | valor de `--profiles` |
+
+Opções: `--db-host/--db-port/--db-name/--db-user`, `--redis-host/--redis-port` (db 2 para cache,
+db 3 para sessão, db 1 para Celery), `--ssl`, `--site-url` (também `NGINX_SERVER_NAME` e `ALLOWED_HOSTS`),
+`--trusted-proxies`, `--drain-seconds`, `--s3-endpoint/--s3-access-key`, `--flower-auth`, `--yes`, `--dry-run`.
+Senhas somente por prompt silencioso ou `NODE_DB_PASSWORD`, `NODE_REDIS_PASSWORD`, `NODE_S3_SECRET_KEY`.
+
+### Reversão (Docker prod)
+
+**Arquivo:** `docker/prod/docker-setup-revert.sh`
+
+```
+1. Carrega .env (se existir); calcula SUAP_DEPLOY_DIR como o setup; diretório ausente: skip
+2. confirm_destructive: parar a produção
+   - make down (remove também suap_static/suap_docker/suap_docs); sem Makefile: docker compose down
+3. Volume suap_pgdata (banco local): confirm_destructive + docker volume rm
+4. Imagens do compose: confirm_destructive + docker compose down --rmi all
+5. revert_dir --destructive em SUAP_DEPLOY_DIR (.env, deploy/media, deploy/backup)
+```
+
+Se a confirmação do passo 2 for negada, nada é alterado nos serviços (o diretório ainda pode ser tratado no passo 5).
+Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`.
+
 ### Documentação Avançada do suap_deploy
 
 Para arquitetura multi-servidor, Vault, drain protocol, media compartilhada (NFS/MinIO)
-e outras configurações avançadas, consulte `docs/ADVANCED.md` no repositório suap_deploy.
+e outras configurações avançadas, consulte `docs/ADVANCED.md` no repositório suap_deploy e o
+guia de implantação (`docs/DEPLOYMENT.md`, Parte B) deste projeto.
 
-### Reversão (Docker dev)
-
-**Arquivo:** `docker/dev/docker-setup-revert.sh`
-
-```
-1. Carrega .env (se existir); Docker ausente, SUAP_DIR indefinido ou compose ausente: skip
-2. Exporta as variáveis exigidas pela interpolação do compose (SUAP_IMAGE etc.)
-3. confirm_destructive: volumes (-v) e imagens locais (--rmi local)
-4. docker compose -f docker/docker-compose.dev.yml down --remove-orphans [-v] [--rmi local]
-5. Preserva SUAP_DIR (.env e settings.py gerados)
-```
-
-Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`.
 
 ---
 

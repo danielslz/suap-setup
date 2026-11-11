@@ -152,16 +152,34 @@ echo "  8) Acessar shell do container web"
 echo "  9) Executar backup do banco"
 echo "  10) Executar restore do banco"
 echo "  11) Executar setup interativo (make setup)"
+echo "  12) Configurar o papel deste nó (multi-servidor / multi-nó)"
+echo "  13) Verificar a configuração (check)"
+echo "  14) Atualizar: pull/build + restart com drain (update)"
 echo "  0) Sair"
 echo ""
-read -rp "Escolha uma opção [0-11]: " PROD_CHOICE
+read -rp "Escolha uma opção [0-14]: " PROD_CHOICE
+
+# Em um stack já no ar, 'make up' não dispara o drain protocol (o recreate troca o
+# web com o nó ainda no pool do balanceador). Por isso, com o stack rodando, as
+# opções 1 e 2 usam 'make restart' (down com drain + up).
+_stack_running() {
+  [ -n "$(docker compose ps -q --status running 2>/dev/null)" ]
+}
+_up_or_restart() {
+  if _stack_running; then
+    msg_action "Stack em execução: reiniciando com drain (make restart)..."
+    make restart
+  else
+    msg_action "Iniciando serviços..."
+    make up
+  fi
+}
 
 case "${PROD_CHOICE}" in
   1)
     msg_action "Fazendo pull das imagens..."
     docker compose pull
-    msg_action "Iniciando serviços..."
-    make up
+    _up_or_restart
     echo ""
     msg_action "Serviços iniciados."
     make status
@@ -169,8 +187,7 @@ case "${PROD_CHOICE}" in
   2)
     msg_action "Fazendo build das imagens a partir do código-fonte..."
     make build
-    msg_action "Iniciando serviços..."
-    make up
+    _up_or_restart
     echo ""
     msg_action "Serviços iniciados."
     make status
@@ -228,6 +245,15 @@ case "${PROD_CHOICE}" in
     msg_action "Executando setup interativo do suap_deploy..."
     make setup
     ;;
+  12)
+    bash "${SCRIPT_DIR}/docker/prod/configure-node.sh"
+    ;;
+  13)
+    bash "${SCRIPT_DIR}/docker/prod/suap-deploy.sh" check
+    ;;
+  14)
+    bash "${SCRIPT_DIR}/docker/prod/suap-deploy.sh" update
+    ;;
   0)
     echo "Saindo..."
     exit 0
@@ -256,6 +282,9 @@ echo "  make begin            Criar DB + carga inicial (banco novo)"
 echo "  make backup           Dump do banco em deploy/backup/"
 echo "  make restore DUMP=... Restaurar dump"
 echo "  make psql             Abrir psql usando credenciais do .env"
+echo ""
+echo "  Sem entrar no diretório (de qualquer pasta):"
+echo "    bash ${SCRIPT_DIR}/docker/prod/suap-deploy.sh help"
 echo ""
 echo "  Profiles controlam quais serviços sobem (variável COMPOSE_PROFILES no .env):"
 echo "    default             = web + nginx + pdfprinter + celery"

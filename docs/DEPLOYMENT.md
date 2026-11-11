@@ -2,59 +2,90 @@
 ## Ambientes de Homologação e Produção com Automação via `suap-setup`
 
 **Projeto de automação:** [suap-setup](https://github.com/danielslz/suap-setup)
+**Projeto de deploy em containers:** `suap_deploy` (GitLab COSINF/IFRN)
 **Sistema:** [SUAP — Sistema Unificado de Administração Pública](https://portal.suap.ifrn.edu.br)
 
----
+> **Como ler este guia.** As seções 1 a 8 são comuns. Depois, escolha **uma** rota:
+> a **Parte A** (máquina física ou VM, instalação nativa) ou a **Parte B** (Docker, via `suap_deploy`).
+> A **Parte C** (banco de dados, balanceamento, mídia, backup, monitoramento e checklist) vale para as duas.
 
 ## Sumário
-
-- [Guia de Implantação do SUAP em Produção](#guia-de-implantação-do-suap-em-produção)
-  - [Ambientes de Homologação e Produção com Automação via `suap-setup`](#ambientes-de-homologação-e-produção-com-automação-via-suap-setup)
-  - [Sumário](#sumário)
-  - [1. Introdução](#1-introdução)
-  - [2. Visão geral do SUAP](#2-visão-geral-do-suap)
-  - [3. Filosofia de automação: por que usar o suap-setup](#3-filosofia-de-automação-por-que-usar-o-suap-setup)
-  - [4. Planejamento de ambientes](#4-planejamento-de-ambientes)
-  - [5. Dimensionamento de máquinas/VMs](#5-dimensionamento-de-máquinasvms)
-    - [5.1. Homologação (configuração mínima)](#51-homologação-configuração-mínima)
-    - [5.2. Produção (configuração recomendada — segmentada)](#52-produção-configuração-recomendada--segmentada)
-    - [5.3. Por que segmentar em VMs separadas?](#53-por-que-segmentar-em-vms-separadas)
-  - [6. Arquitetura de referência](#6-arquitetura-de-referência)
-  - [7. Pré-requisitos gerais](#7-pré-requisitos-gerais)
-  - [8. Implantação do ambiente de Homologação](#8-implantação-do-ambiente-de-homologação)
-    - [8.1. Passo a passo](#81-passo-a-passo)
-    - [8.2. Ajustes específicos de homologação](#82-ajustes-específicos-de-homologação)
-  - [9. Implantação do ambiente de Produção](#9-implantação-do-ambiente-de-produção)
-    - [9.1. VM(s) de Aplicação](#91-vms-de-aplicação)
-    - [9.2. Instalação do Nginx (rota nativa)](#92-instalação-do-nginx-rota-nativa)
-    - [9.3. VM de Banco de Dados + Redis](#93-vm-de-banco-de-dados--redis)
-    - [9.4. VM de Tarefas Assíncronas (Celery)](#94-vm-de-tarefas-assíncronas-celery)
-  - [10. Configuração de banco de dados](#10-configuração-de-banco-de-dados)
-    - [10.1. Escolha da versão](#101-escolha-da-versão)
-    - [10.2. Instalação](#102-instalação)
-    - [10.3. Estrutura de diretórios e disco](#103-estrutura-de-diretórios-e-disco)
-    - [10.4. Criação do banco e usuário de aplicação](#104-criação-do-banco-e-usuário-de-aplicação)
-    - [10.5. Controle de acesso (`pg_hba.conf`)](#105-controle-de-acesso-pg_hbaconf)
-    - [10.6. Tuning de performance (`postgresql.conf`)](#106-tuning-de-performance-postgresqlconf)
-    - [10.7. Connection pooling (recomendado)](#107-connection-pooling-recomendado)
-    - [10.8. Réplicas de leitura (opcional)](#108-réplicas-de-leitura-opcional)
-    - [10.9. Backup do banco](#109-backup-do-banco)
-    - [10.10. Preparação da aplicação e primeiro acesso](#1010-preparação-da-aplicação-e-primeiro-acesso)
-  - [11. Balanceamento de carga e alta disponibilidade](#11-balanceamento-de-carga-e-alta-disponibilidade)
-  - [12. Armazenamento de mídia (NFS / MinIO)](#12-armazenamento-de-mídia-nfs--minio)
-    - [12.1. NFS](#121-nfs)
-    - [12.2. MinIO (alternativa escalável)](#122-minio-alternativa-escalável)
-      - [Instalação via suap-setup](#instalação-via-suap-setup)
-      - [Integração com o SUAP](#integração-com-o-suap)
-      - [Migração de NFS para MinIO](#migração-de-nfs-para-minio)
-  - [13. Rotina de atualização](#13-rotina-de-atualização)
-    - [13.1. Rota nativa](#131-rota-nativa)
-    - [13.2. Rota Docker](#132-rota-docker)
-    - [13.3. Política de atualização recomendada](#133-política-de-atualização-recomendada)
-  - [14. Backup e recuperação de desastres](#14-backup-e-recuperação-de-desastres)
-  - [15. Monitoramento e logs](#15-monitoramento-e-logs)
-  - [16. Checklist final de go-live](#16-checklist-final-de-go-live)
-  - [17. Referências](#17-referências)
+- [1. Introdução](#1-introdução)
+- [2. Visão geral do SUAP](#2-visão-geral-do-suap)
+- [3. Filosofia de automação: por que usar o suap-setup](#3-filosofia-de-automação-por-que-usar-o-suap-setup)
+- [4. Escolha da rota de implantação](#4-escolha-da-rota-de-implantação)
+  - [4.1. Onde cada tarefa vive no suap-setup](#41-onde-cada-tarefa-vive-no-suap-setup)
+- [5. Planejamento de ambientes](#5-planejamento-de-ambientes)
+- [6. Dimensionamento de máquinas/VMs](#6-dimensionamento-de-máquinasvms)
+  - [6.1. Homologação (configuração mínima)](#61-homologação-configuração-mínima)
+  - [6.2. Produção (configuração recomendada — segmentada)](#62-produção-configuração-recomendada--segmentada)
+  - [6.3. Por que segmentar em VMs separadas?](#63-por-que-segmentar-em-vms-separadas)
+- [7. Arquitetura de referência](#7-arquitetura-de-referência)
+- [8. Pré-requisitos gerais](#8-pré-requisitos-gerais)
+- [Parte A — Máquina física ou VM (instalação nativa)](#parte-a--máquina-física-ou-vm-instalação-nativa)
+- [9. Implantação nativa — Homologação](#9-implantação-nativa--homologação)
+  - [9.1. Passo a passo](#91-passo-a-passo)
+  - [9.2. Ajustes específicos de homologação](#92-ajustes-específicos-de-homologação)
+- [10. Implantação nativa — Produção](#10-implantação-nativa--produção)
+  - [10.1. VM(s) de Aplicação](#101-vms-de-aplicação)
+  - [10.2. Instalação do Nginx (rota nativa)](#102-instalação-do-nginx-rota-nativa)
+  - [10.3. VM de Banco de Dados + Redis](#103-vm-de-banco-de-dados--redis)
+  - [10.4. VM de Tarefas Assíncronas (Celery)](#104-vm-de-tarefas-assíncronas-celery)
+- [11. Atualização nativa](#11-atualização-nativa)
+  - [11.1. Executando a atualização](#111-executando-a-atualização)
+- [Parte B — Docker (suap_deploy)](#parte-b--docker-suap_deploy)
+- [12. Visão geral da rota Docker](#12-visão-geral-da-rota-docker)
+  - [12.1. O que é o suap_deploy](#121-o-que-é-o-suap_deploy)
+  - [12.2. Modos de imagem: local ou registry](#122-modos-de-imagem-local-ou-registry)
+  - [12.3. Profiles: o papel de cada nó](#123-profiles-o-papel-de-cada-nó)
+  - [12.4. Drain protocol (deploy sem downtime)](#124-drain-protocol-deploy-sem-downtime)
+  - [12.5. Volumes e dados](#125-volumes-e-dados)
+  - [12.6. Referências do suap_deploy](#126-referências-do-suap_deploy)
+- [13. Preparando o host Docker](#13-preparando-o-host-docker)
+  - [13.1. Rede do Docker](#131-rede-do-docker)
+  - [13.2. Portas](#132-portas)
+- [14. Docker — Homologação (nó único)](#14-docker--homologação-nó-único)
+  - [14.1. Passo a passo](#141-passo-a-passo)
+  - [14.2. Configuração do `.env` e primeira subida](#142-configuração-do-env-e-primeira-subida)
+- [15. Docker — Produção multi-servidor e multi-nó](#15-docker--produção-multi-servidor-e-multi-nó)
+  - [15.1. Papéis e profiles](#151-papéis-e-profiles)
+  - [15.2. Ordem recomendada de implantação](#152-ordem-recomendada-de-implantação)
+  - [15.3. Configurando cada nó com `configure-node.sh`](#153-configurando-cada-nó-com-configure-nodesh)
+  - [15.4. TLS e Nginx](#154-tls-e-nginx)
+  - [15.5. Balanceador e drain protocol](#155-balanceador-e-drain-protocol)
+  - [15.6. Mídia compartilhada](#156-mídia-compartilhada)
+  - [15.7. Vault (opcional)](#157-vault-opcional)
+  - [15.8. Validação](#158-validação)
+- [16. Operação diária (suap-deploy.sh)](#16-operação-diária-suap-deploysh)
+  - [16.1. Rotinas recomendadas](#161-rotinas-recomendadas)
+  - [16.2. Escalando workers](#162-escalando-workers)
+- [17. Docker — Atualização sem downtime](#17-docker--atualização-sem-downtime)
+  - [17.1. Rolling update em vários nós](#171-rolling-update-em-vários-nós)
+- [18. Serviços de apoio em containers](#18-serviços-de-apoio-em-containers)
+- [Parte C — Comum às duas rotas](#parte-c--comum-às-duas-rotas)
+- [19. Configuração de banco de dados](#19-configuração-de-banco-de-dados)
+  - [19.1. Escolha da versão](#191-escolha-da-versão)
+  - [19.2. Instalação](#192-instalação)
+  - [19.3. Estrutura de diretórios e disco](#193-estrutura-de-diretórios-e-disco)
+  - [19.4. Criação do banco e usuário de aplicação](#194-criação-do-banco-e-usuário-de-aplicação)
+  - [19.5. Controle de acesso (`pg_hba.conf`)](#195-controle-de-acesso-pg_hbaconf)
+  - [19.6. Tuning de performance (`postgresql.conf`)](#196-tuning-de-performance-postgresqlconf)
+  - [19.7. Connection pooling (recomendado)](#197-connection-pooling-recomendado)
+  - [19.8. Réplicas de leitura (opcional)](#198-réplicas-de-leitura-opcional)
+  - [19.9. Backup do banco](#199-backup-do-banco)
+  - [19.10. Preparação da aplicação e primeiro acesso](#1910-preparação-da-aplicação-e-primeiro-acesso)
+- [20. Balanceamento de carga e alta disponibilidade](#20-balanceamento-de-carga-e-alta-disponibilidade)
+- [21. Armazenamento de mídia (NFS / MinIO)](#21-armazenamento-de-mídia-nfs--minio)
+  - [21.1. NFS](#211-nfs)
+  - [21.2. MinIO (alternativa escalável)](#212-minio-alternativa-escalável)
+    - [Instalação via suap-setup](#instalação-via-suap-setup)
+    - [Integração com o SUAP](#integração-com-o-suap)
+    - [Migração de NFS para MinIO](#migração-de-nfs-para-minio)
+- [22. Política de atualização](#22-política-de-atualização)
+- [23. Backup e recuperação de desastres](#23-backup-e-recuperação-de-desastres)
+- [24. Monitoramento e logs](#24-monitoramento-e-logs)
+- [25. Checklist final de go-live](#25-checklist-final-de-go-live)
+- [26. Referências](#26-referências)
 
 ---
 
@@ -62,7 +93,12 @@
 
 Este documento descreve o planejamento e a execução da implantação do **SUAP** (Sistema Unificado de Administração Pública) em ambientes de **homologação** e **produção**.
 
-Diferente de tutoriais baseados em instalação manual passo a passo, esta documentação adota como eixo central o **[suap-setup](https://github.com/danielslz/suap-setup)**, um conjunto de scripts de automação criado para eliminar a repetição manual, reduzir erros humanos e padronizar a preparação de ambientes SUAP — seja em instalação nativa (Debian, RHEL/Fedora/AlmaLinux, Arch) seja via **Docker**.
+Diferente de tutoriais baseados em instalação manual passo a passo, esta documentação adota como eixo central o **[suap-setup](https://github.com/danielslz/suap-setup)**, um conjunto de scripts de automação criado para eliminar a repetição manual, reduzir erros humanos e padronizar a preparação de ambientes SUAP.
+
+Há duas rotas de implantação, documentadas separadamente:
+
+- **Parte A — Máquina física ou VM (instalação nativa):** pacotes do sistema operacional, `uv`/virtualenv, Supervisor e Nginx instalados diretamente no servidor (Debian, RHEL/Fedora/AlmaLinux, Arch).
+- **Parte B — Docker:** imagens e containers orquestrados pelo projeto `suap_deploy`, que o `suap-setup` prepara e opera (inclusive em configurações multi-servidor e multi-nó).
 
 O objetivo é que qualquer desenvolvedor consiga, com o mínimo de intervenção manual, provisionar um ambiente completo, íntegro e reprodutível, tanto para testes/homologação quanto para produção crítica com múltiplos usuários simultâneos.
 
@@ -86,10 +122,10 @@ Do ponto de vista de infraestrutura, o SUAP é uma aplicação **Django** que de
 
 O SUAP pode ser implantado de duas formas:
 
-- **Instalação nativa** — pacotes do SO + `uv`/virtualenv + Supervisor + Nginx.
-- **Instalação via Docker** — imagens pré-construídas orquestradas pelo projeto `suap_deploy`, com Makefile para gerenciamento dos serviços.
+- **Instalação nativa (Parte A)** — pacotes do SO + `uv`/virtualenv + Supervisor + Nginx, em máquina física ou VM.
+- **Instalação via Docker (Parte B)** — imagens orquestradas pelo projeto `suap_deploy`, com Makefile para gerenciamento dos serviços.
 
-Ambas as formas são suportadas pelo `suap-setup`.
+Ambas as formas são suportadas pelo `suap-setup`; a seção 4 ajuda a escolher.
 
 ---
 
@@ -110,13 +146,45 @@ O `suap-setup` resolve esses problemas por meio de:
 - **Idempotência**: reexecutar um script pula etapas já concluídas sem corromper o que já está pronto.
 - **Halt em falhas críticas**: se uma dependência falha ao instalar, o script interrompe imediatamente.
 - **Separação de responsabilidades por script**: `suap-dev.sh`, `suap-prod.sh`, `suap-update.sh`, `install-redis.sh`, `install-nginx.sh`.
+- **Operação sem trocar de pasta** na rota Docker: `docker/prod/suap-deploy.sh` (build, up, down, update, logs, backup, check…) e `docker/prod/configure-node.sh` (papel do nó em configurações multi-servidor e multi-nó).
 - **Delegação para os repositórios oficiais** nas rotas Docker: o suap-setup não mantém `Dockerfile`/`docker-compose` próprios — delega para o compose nativo do SUAP (dev) e para o Makefile do `suap_deploy` (produção).
 - **Rollback automático** no script de atualização: se `git pull` ou a instalação de dependências falhar, os serviços são reiniciados automaticamente antes do script encerrar com erro.
 - **Cobertura de testes** (via `bats-core`) validando idempotência, roteamento do menu, geração do `.env` e ausência de artefatos Docker locais indevidos.
 
 ---
 
-## 4. Planejamento de ambientes
+## 4. Escolha da rota de implantação
+
+O SUAP roda em produção de duas formas. Ambas são suportadas pelo `suap-setup` e podem ser combinadas (por exemplo, banco e Redis nativos no host e a aplicação em Docker).
+
+| Critério | Nativa (Parte A) | Docker (Parte B) |
+|---|---|---|
+| Como roda | Pacotes do SO + `uv`/virtualenv + Supervisor + Nginx | Containers via `docker compose` (projeto `suap_deploy`) |
+| Onde roda | Máquina física ou VM com Debian 12+, RHEL-like 9+ ou Arch | Qualquer host Linux com Docker Engine e Compose v2 (Debian 11+, AlmaLinux) |
+| Reprodutibilidade | Depende do estado do SO e dos pacotes | Alta: a mesma imagem em todos os nós |
+| WAF | Não incluso | OWASP ModSecurity CRS no Nginx do container |
+| Limites de recursos | Manual (systemd/Supervisor) | Por container (`DOCKER_*_MAX_MEMORY_SIZE`) |
+| Papéis em vários nós | Uma VM por papel; Supervisor escolhe web/Celery | `COMPOSE_PROFILES` por nó (`web`, `celery`, `pdfprinter`…) |
+| Atualização sem downtime | Rolling update manual (um nó por vez) | Drain protocol automático no `make restart` (Compose >= 2.30) |
+| Atualização | `git pull` + `uv` + reinício do Supervisor | `pull` ou `build` + `restart` |
+| Customização do código | Direta no clone | Build local (`./src/suap`) ou imagem de registry |
+
+**Recomendação:** use a **rota Docker** sempre que possível. Ela reduz a divergência entre nós, traz o WAF e o drain protocol prontos e simplifica atualizações. Use a **rota nativa** quando a política da instituição não permitir containers ou quando for necessário integrar a um parque já existente.
+
+### 4.1. Onde cada tarefa vive no suap-setup
+
+| Tarefa | Rota nativa | Rota Docker |
+|---|---|---|
+| Configurar a aplicação | Menu "Configurar ambiente de produção" (`{distro}/suap-prod.sh`) | Menu "SUAP prod (suap_deploy)" (`docker/prod/docker-setup.sh`) |
+| Atualizar | Menu "Atualizar SUAP (produção)" (`{distro}/suap-update.sh`) | `bash docker/prod/suap-deploy.sh update` |
+| Servidor web | Menu "Instalar Nginx" | Container Nginx do `suap_deploy` |
+| PostgreSQL e Redis | Menus "Instalar PostgreSQL" e "Instalar Redis" (no host) | No host (mesmos menus) **ou** em containers (menus "Redis" e "PostgreSQL" do grupo "Via Docker") |
+| Configurar o papel de um nó | Escolha do menu do Supervisor (SUAP / Celery / Ambos) | `bash docker/prod/configure-node.sh` |
+| Validar a configuração | — | `bash docker/prod/suap-deploy.sh check` |
+
+---
+
+## 5. Planejamento de ambientes
 
 Recomenda-se manter **três ambientes logicamente isolados**, sem compartilhamento de banco de dados ou mídia entre si:
 
@@ -132,9 +200,9 @@ O `suap-setup` favorece essa separação porque cada ambiente tem seu próprio `
 
 ---
 
-## 5. Dimensionamento de máquinas/VMs
+## 6. Dimensionamento de máquinas/VMs
 
-### 5.1. Homologação (configuração mínima)
+### 6.1. Homologação (configuração mínima)
 
 Ambiente de homologação pode operar em **servidor único**, concentrando aplicação, banco de dados e tarefas assíncronas:
 
@@ -145,7 +213,7 @@ Ambiente de homologação pode operar em **servidor único**, concentrando aplic
 | Disco (partição de dados/`/opt`) | 60 GB (SSD) |
 | Sistema Operacional | Debian 12 (Bookworm) ou AlmaLinux 9 |
 
-### 5.2. Produção (configuração recomendada — segmentada)
+### 6.2. Produção (configuração recomendada — segmentada)
 
 Para produção, a recomendação é **segmentar os serviços em VMs distintas**, isolando cargas de trabalho com perfis de consumo diferentes e permitindo escalar cada camada de forma independente:
 
@@ -159,7 +227,7 @@ Para produção, a recomendação é **segmentar os serviços em VMs distintas**
 
 > **Nota:** os valores refletem o piso recomendado para uma instituição de porte médio. O número de nós de aplicação deve ser recalculado a partir de testes de carga reais (picos de matrícula, editais, etc.).
 
-### 5.3. Por que segmentar em VMs separadas?
+### 6.3. Por que segmentar em VMs separadas?
 
 - **Isolamento de falhas**: pico de carga na aplicação não compromete o banco.
 - **Escalabilidade independente**: novos nós de aplicação sem replicar banco.
@@ -169,7 +237,7 @@ Para produção, a recomendação é **segmentar os serviços em VMs distintas**
 
 ---
 
-## 6. Arquitetura de referência
+## 7. Arquitetura de referência
 
 ```
                                    ┌────────────┐
@@ -202,17 +270,19 @@ Para produção, a recomendação é **segmentar os serviços em VMs distintas**
        └───────────────┘ └────────────────┘ └───────────────┘ └───────────────┘
 ```
 
+Na rota Docker, esses blocos correspondem aos papéis e *profiles* descritos na seção 15.1.
+
 ---
 
-## 7. Pré-requisitos gerais
+## 8. Pré-requisitos gerais
 
 Antes de iniciar a implantação em qualquer ambiente, são necessários os seguintes pré-requisitos:
 
 - Conta no GitLab da instituição de origem do código com acesso de leitura aos projetos `suap` e, se aplicável, `suap_deploy` e `suap-pdf`.
 - Chave SSH cadastrada no GitLab.
-- Se optar pela rota Docker: token de acesso pessoal ao registry (escopo `read_registry`).
+- Se optar pela rota Docker: token de acesso pessoal ao registry (escopo `read_registry`), caso use imagens de registry; e o preparo do host descrito na seção 13.
 - Acesso `sudo`/root nos servidores de homologação e produção.
-- Sistema operacional suportado: **Debian 12+**, **AlmaLinux 9** (ou qualquer RHEL-like 9+: Rocky Linux, CentOS Stream, Fedora), **Arch Linux**.
+- Sistema operacional suportado: **Debian 12+**, **AlmaLinux 9** (ou qualquer RHEL-like 9+: Rocky Linux, CentOS Stream, Fedora), **Arch Linux** (rota nativa); na rota Docker, qualquer Linux com Docker Engine e Compose v2 (testado em Debian 11+ e AlmaLinux).
 - DNS configurado apontando para o balanceador (produção) ou para o servidor único (homologação).
 - Certificado SSL válido (ou processo de emissão automatizada, ex. Let's Encrypt).
 - Firewall liberando apenas portas necessárias (443/80 no balanceador; portas internas restritas à rede privada).
@@ -226,59 +296,45 @@ cd suap-setup
 
 ---
 
-## 8. Implantação do ambiente de Homologação
+## Parte A — Máquina física ou VM (instalação nativa)
 
-Para homologação, a recomendação é usar a **rota Docker de produção** do `suap-setup` (mesmo perfil de execução da produção, porém em servidor único), garantindo que o que for validado reflita fielmente o comportamento em produção.
+Nesta rota a aplicação é instalada diretamente no sistema operacional. O `suap-setup` automatiza cada etapa e deve ser executado **em cada servidor**, conforme o papel dele.
 
-### 8.1. Passo a passo
+## 9. Implantação nativa — Homologação
+
+Em homologação, um **servidor único** concentra aplicação, banco, Redis e tarefas assíncronas (dimensionamento mínimo na seção 6.1).
+
+### 9.1. Passo a passo
+
+Em ordem, no servidor de homologação:
 
 ```bash
+git clone https://github.com/danielslz/suap-setup.git
 cd suap-setup
 bash setup.sh
 ```
 
-No menu interativo, selecione:
+No menu, execute (uma de cada vez, repetindo `bash setup.sh`):
 
-```
-=== SUAP Setup ===
-8) SUAP prod (suap_deploy)
-```
+1. **Instalar PostgreSQL** — repositório PGDG, cluster, banco e usuário de aplicação (seção 10.3);
+2. **Instalar Redis**;
+3. **Configurar ambiente de produção** — dependências do SO, locale/timezone, código, virtualenv e Supervisor. No menu do Supervisor escolha **Ambos** (SUAP + Celery);
+4. **Instalar Nginx** — proxy reverso com a configuração do SUAP.
 
-Na primeira execução, o wizard solicitará as variáveis principais:
+Os scripts equivalentes podem ser chamados diretamente:
 
-| Variável | Descrição | Exemplo |
-|---|---|---|
-| `SUAP_DEPLOY_DIR` | Diretório do repositório `suap_deploy` | `/opt/suap_deploy` |
-| `SUAP_DEPLOY_GIT_URL` | URL Git do `suap_deploy` (**obrigatório**) | `git@gitlab.instituicao.edu.br:org/suap_deploy.git` |
-
-> **Nota:** as variáveis de imagem Docker (`SUAP_IMAGE`, `SUAP_PDF_IMAGE`, `SUAP_AI_IMAGE`) são configuradas dentro do `.env` do próprio repositório `suap_deploy` (gerado pelo `make setup` a partir do `env.sample`), não no `.env` do suap-setup.
-
-O script então:
-
-1. Verifica se o Docker está disponível (oferece instalação automática caso não esteja);
-2. Clona o repositório `suap_deploy` em `SUAP_DEPLOY_DIR`;
-3. Executa `make setup` interativo (escolhe modo de imagem, gera `.env`, ativa template nginx, gera cert SSL);
-4. Cria os diretórios de logs e volumes (`deploy/logs/nginx`, `deploy/logs/suap`, `deploy/media`, `deploy/backup`) com permissões corretas para o container Nginx (UID 33);
-5. Apresenta o menu de gerenciamento:
-
-```
-1) Fazer pull das imagens e iniciar serviços (modo registry)
-2) Fazer build local das imagens e iniciar (modo local)
-3) Apenas iniciar serviços (make up)
-4) Parar todos os serviços (make down)
-5) Reiniciar serviços (make restart)
-6) Ver status dos containers
-7) Ver logs
-8) Acessar shell do container web
-9) Executar backup do banco
-10) Executar restore do banco
-11) Executar setup interativo (make setup)
-0) Sair
+```bash
+sudo bash deb/install-postgres.sh   # ou rpm/ ou arch/ conforme a distribuição
+sudo bash deb/install-redis.sh
+sudo bash deb/suap-prod.sh
+sudo bash deb/install-nginx.sh
 ```
 
-Para o primeiro provisionamento, selecione **1)** (modo registry) ou **2)** (modo local/build).
+Variáveis solicitadas pelo wizard na primeira execução da produção nativa: `PYTHON_VERSION`, `BASE_DIR`, `SUAP_DIR`, `VENV_DIR`, `SUAP_GIT_URL`, `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `CELERY_MAX_WORKERS`, `CELERY_MIN_WORKERS`, `CELERY_BROKER_URL` e `CELERY_FLOWER_AUTH`.
 
-### 8.2. Ajustes específicos de homologação
+Depois, prepare a aplicação e o primeiro acesso (seção 19.10).
+
+### 9.2. Ajustes específicos de homologação
 
 - Utilize um domínio distinto de produção (ex.: `suap-hml.instituicao.edu.br`).
 - Configure um banner visual indicando "AMBIENTE DE HOMOLOGAÇÃO".
@@ -287,64 +343,21 @@ Para o primeiro provisionamento, selecione **1)** (modo registry) ou **2)** (mod
 
 ---
 
-## 9. Implantação do ambiente de Produção
+## 10. Implantação nativa — Produção
 
-A produção deve seguir a arquitetura segmentada descrita na seção 6, com o `suap-setup` executado **em cada VM**, cada uma assumindo um papel específico.
-
-### 9.1. VM(s) de Aplicação
-
-Em cada nó de aplicação:
+A produção deve seguir a arquitetura segmentada descrita na seção 7, com o `suap-setup` executado **em cada VM**, cada uma assumindo um papel específico. Em todas, comece por:
 
 ```bash
+git clone https://github.com/danielslz/suap-setup.git
 cd suap-setup
 bash setup.sh
 ```
 
-Selecione **SUAP prod (suap_deploy)**, no grupo "Via Docker" (recomendado), ou **Configurar ambiente de produção** (instalação nativa).
+### 10.1. VM(s) de Aplicação
 
-**Rota Docker (recomendada):** delega para o Makefile do `suap_deploy`, que já traz:
+Selecione **Configurar ambiente de produção** no menu (script `{distro}/suap-prod.sh`).
 
-- Dois modos de imagem: **registry** (pull de imagens pré-construídas) e **local** (build a partir do código-fonte);
-- **OWASP ModSecurity CRS** como WAF integrado ao Nginx;
-- Resource limits por container;
-- Controle de serviços via `COMPOSE_PROFILES` no `.env`.
-
-Gerenciamento via Makefile:
-
-```bash
-cd /opt/suap_deploy
-make up            # Iniciar serviços (respeita COMPOSE_PROFILES)
-make status        # Ver status
-make logs          # Ver logs
-make down          # Parar serviços
-make restart       # Reiniciar (down + up)
-make bash          # Shell no container web
-make backup        # Backup do banco
-```
-
-**Atribuição de `COMPOSE_PROFILES` por papel (rota Docker multi-nó):**
-
-| Papel da VM | `COMPOSE_PROFILES` |
-|---|---|
-| Nó único (tudo junto) | `default,celery-beat,celery-flower` |
-| Aplicação (web + nginx) | `web` |
-| Tarefas assíncronas (nó primário) | `celery,celery-beat,celery-flower,pdfprinter` |
-| Tarefas assíncronas (nós adicionais) | `celery` |
-| Homologação (com DB/Redis locais) | `default,celery-beat,celery-flower,local-db,local-redis` |
-
-> **Importante:** `celery-beat` e `celery-flower` devem rodar em **apenas um nó** do cluster. Duplicar o `celery-beat` faz com que tarefas agendadas executem em dobro. O profile `cron` é legado — o agendamento atual é feito pelo `celery-beat`.
-
-Para DB e Redis externos (recomendado em produção), use `host.docker.internal` (resolve para o host via `extra_hosts: host-gateway`, já configurado no compose) ou o IP/hostname do servidor:
-
-```ini
-DATABASE_HOST=host.docker.internal
-REDIS_URL=redis://host.docker.internal:6379/2
-CELERY_BROKER_URL=redis://host.docker.internal:6379/1
-```
-
-Para detalhes completos sobre arquitetura multi-servidor, Vault, drain protocol e cert TLS, consulte a documentação do suap_deploy em `docs/ADVANCED.md`.
-
-**Rota nativa (alternativa):** o script `suap-prod.sh` realiza:
+O script `suap-prod.sh` realiza:
 
 - Instalação de dependências do sistema (halt em falha);
 - Configuração de locale (`pt_BR.UTF-8`) e timezone;
@@ -362,7 +375,7 @@ Caminhos do Supervisor por distribuição:
 | Fedora/RHEL/AlmaLinux/Rocky | `/etc/supervisord.d/` |
 | Arch Linux | `/etc/supervisor.d/` |
 
-### 9.2. Instalação do Nginx (rota nativa)
+### 10.2. Instalação do Nginx (rota nativa)
 
 ```bash
 bash deb/install-nginx.sh   # ou rpm/ ou arch/ conforme a distribuição
@@ -378,7 +391,7 @@ A configuração provida automaticamente inclui:
 - Buffers de proxy aumentados para respostas grandes;
 - Bloco de servidor secundário na porta 8001 (para uso interno/monitoramento).
 
-### 9.3. VM de Banco de Dados + Redis
+### 10.3. VM de Banco de Dados + Redis
 
 Instalar os serviços de banco e cache nesta VM:
 
@@ -394,8 +407,6 @@ sudo bash deb/install-redis.sh      # ou rpm/ ou arch/ conforme distribuição
 sudo bash deb/install-postgres.sh   # ou rpm/ ou arch/ conforme distribuição
 ```
 
-> **Alternativa em containers:** o grupo "Via Docker" do menu também oferece **Redis (porta 6379 exposta)** e **PostgreSQL (porta 5432 exposta)**, que sobem containers via Docker Compose (`docker/redis-setup.sh` e `docker/postgres-setup.sh`, com os stacks em `/opt/docker/redis/` e `/opt/docker/postgres/`) acessíveis por outras máquinas, com senha obrigatória e dados em volumes Docker. O PostgreSQL em container usa a collation padrão da imagem (sem `pt_BR.UTF-8`). Use o grupo "Serviços (no host)" se precisar de instalação nativa.
-
 O script de instalação do PostgreSQL (`install-postgres.sh`) realiza automaticamente:
 
 1. Adiciona o repositório oficial PGDG (versão configurável via `POSTGRES_VERSION`, padrão: 16);
@@ -407,9 +418,9 @@ O script de instalação do PostgreSQL (`install-postgres.sh`) realiza automatic
 7. Pergunta se o PostgreSQL deve escutar apenas em localhost ou em todos os endereços (para VMs separadas);
 8. Exibe resumo com string de conexão.
 
-Para tuning avançado, réplicas de leitura e connection pooling, ver seção 10.
+Para tuning avançado, réplicas de leitura e connection pooling, ver seção 19. Para subir Redis/PostgreSQL em containers, ver a seção 18.
 
-### 9.4. VM de Tarefas Assíncronas (Celery)
+### 10.4. VM de Tarefas Assíncronas (Celery)
 
 Nesta VM, configure **apenas o Celery** no menu do Supervisor (worker + beat), sem subir o processo web. Isso garante que picos de processamento assíncrono não disputem CPU com requisições HTTP em tempo real.
 
@@ -428,15 +439,531 @@ Variáveis relevantes no `.env`:
 
 ---
 
-## 10. Configuração de banco de dados
+## 11. Atualização nativa
 
-### 10.1. Escolha da versão
+O `suap-setup` fornece scripts dedicados de atualização para a rota nativa (menu **Atualizar SUAP (produção)**).
+
+### 11.1. Executando a atualização
+
+```bash
+sudo bash deb/suap-update.sh   # ou rpm/ ou arch/ conforme distribuição
+```
+
+Fluxo executado automaticamente:
+
+1. Para todos os serviços do Supervisor;
+2. Atualiza o código-fonte (`git pull`);
+3. Atualiza dependências Python via `uv`;
+4. Pergunta ao operador se deseja rodar `migrate`;
+5. Pergunta se deseja rodar `collectstatic`;
+6. Pergunta se deseja rodar `sync_permissions`;
+7. Corrige permissões dos diretórios (`chown www-data`);
+8. Reinicia os serviços do Supervisor;
+9. Exibe status e resumo das ações realizadas.
+
+> **Rollback automático:** se o `git pull` ou a instalação de dependências falhar, os serviços são reiniciados automaticamente na versão anterior antes do script encerrar com erro.
+
+Em ambientes com múltiplos nós, aplique **um nó por vez** e consulte a política de atualização (seção 22).
+
+---
+
+## Parte B — Docker (suap_deploy)
+
+Nesta rota a aplicação roda em containers orquestrados pelo projeto **`suap_deploy`**. O `suap-setup` **não mantém** `Dockerfile` nem `docker-compose` próprios: ele clona o `suap_deploy`, executa o `make setup` dele e oferece atalhos para operá-lo. Toda a lógica de composição, profiles e drain protocol vive no `suap_deploy`.
+
+## 12. Visão geral da rota Docker
+
+### 12.1. O que é o suap_deploy
+
+Repositório de deploy que orquestra o SUAP com Docker Compose, sem depender de Vault ou de registry (ambos são opcionais). Não contém código de aplicação: o código do SUAP e do `suap-pdf` vem de repositórios próprios, clonados em `./src/` (modo local) ou embutidos nas imagens (modo registry).
+
+Serviços do `docker-compose.yml`:
+
+| Serviço | Função |
+|---|---|
+| `nginx` | Terminação TLS, WAF (OWASP ModSecurity CRS) e proxy reverso para o web (portas 80, 443 e 8080) |
+| `web` | Gunicorn rodando o Django; health check em `/ht/` |
+| `celery` | Workers assíncronos (escaláveis) |
+| `celery-beat` | Scheduler de tarefas agendadas (**um único nó** do cluster) |
+| `celery-flower` | Painel de monitoramento do Celery na porta 5555 (**um único nó**) |
+| `pdfprinter` | Geração de PDFs (`suap-pdf`) |
+| `ai` | Serviço de IA (opcional) |
+| `db` / `redis` | PostgreSQL e Redis em container — **somente homologação** |
+| `cron` | Legado/descontinuado — substituído pelo `celery-beat` |
+
+### 12.2. Modos de imagem: local ou registry
+
+O `make setup` pergunta `URL do registry (ou 'local')`:
+
+| Modo | O que faz | Quando usar |
+|---|---|---|
+| `local` | Clona `./src/suap` e `./src/suap-pdf`, ativa o `docker-compose.override.yml` (bind do código) e exige `make build` (10–20 min na primeira vez) | Quando você customiza o SUAP ou não tem registry |
+| URL de registry | Grava `SUAP_IMAGE`, `SUAP_PDF_IMAGE` e `SUAP_AI_IMAGE` apontando para o registry; não clona nem faz build; usa `docker compose pull` | Produção e múltiplos nós (rápido e idêntico em todos) |
+
+O `make setup` é idempotente: pode ser executado várias vezes e lê o modo atual a partir de `SUAP_IMAGE`. Para trocar de modo, execute-o de novo e responda diferente no prompt.
+
+### 12.3. Profiles: o papel de cada nó
+
+O `COMPOSE_PROFILES` no `.env` define **quais containers sobem** em cada nó:
+
+| Profile | Sobe |
+|---|---|
+| `default` | web, nginx, pdfprinter, celery (nó de aplicação completo) |
+| `web` | só web + nginx (separar o front em outro nó) |
+| `pdfprinter` | só o pdfprinter (isolar a geração de PDF) |
+| `celery` | workers celery (escaláveis para várias instâncias) |
+| `celery-beat` | scheduler (**apenas UM nó** em todo o cluster) |
+| `celery-flower` | UI de monitoramento em `:5555` (**apenas UM nó**) |
+| `ai` | serviço de IA |
+| `local-db`, `local-redis` | PostgreSQL e Redis em container (**só homologação**) |
+
+`default` já inclui `web`, `pdfprinter` e `celery`; os profiles granulares servem para **fatiar** os serviços entre nós. `celery-beat` e `celery-flower` ficam fora do `default` justamente para não serem duplicados. A combinação por papel está na seção 15.1.
+
+### 12.4. Drain protocol (deploy sem downtime)
+
+O endpoint `/ht/` do SUAP lê `deploy/status.txt`: `healthy` responde 200 (o balanceador mantém o nó) e `drain` responde 503 (o balanceador retira o nó sem matar requisições em voo). Com Docker Compose >= 2.30 isso é automático:
+
+- ao **parar** (`down`/`stop`/`restart`), o Nginx escreve `drain`, espera `DRAIN_SECONDS` e só então encerra graciosamente (`SIGQUIT`, até 6 min para a requisição mais longa); o web para depois;
+- ao **subir**, o web escreve `healthy`.
+
+> **Atenção:** o drain **não** roda no recreate do `docker compose up -d`. Para atualizar um stack em execução use sempre `restart` (ou o comando `update` do `suap-deploy.sh`), nunca `up`.
+
+### 12.5. Volumes e dados
+
+`make down` para os containers e remove os volumes `suap_static`, `suap_docker` e `suap_docs` (são recriados atualizados no próximo `up`), mas **preserva** `suap_pgdata`. `docker compose down -v` apaga todos, inclusive o banco local — use apenas de propósito. Os dados de runtime (logs, uploads, backups, sessões) ficam no diretório `deploy/` do `suap_deploy`, que **não é código**, apesar do nome.
+
+### 12.6. Referências do suap_deploy
+
+A documentação do próprio projeto é a fonte da verdade para o que acontece dentro dos containers: `README.md`, `docs/ADVANCED.md` (multi-servidor, registry, TLS, mídia), `docs/FAQ.md` (problemas comuns), `contrib/multi-node/README.md` (drain e HAProxy) e `contrib/vault/README.md` (geração do `.env` via Vault).
+
+---
+
+## 13. Preparando o host Docker
+
+O `suap_deploy` só orquestra containers: ele **não instala** o Docker nem prepara o sistema operacional. Em um host limpo, faça o seguinte **antes** do `suap-setup`:
+
+| Item | Detalhe |
+|---|---|
+| Docker Engine + Compose v2 | O `suap-setup` oferece instalar (`docker/install-docker.sh`) quando não encontra o Docker. Para o drain protocol é necessário Compose >= 2.30 |
+| `git`, `make`, `openssl`, `python3`, `sudo` | Usados pelo `make setup` |
+| Usuário `www-data` com **UID/GID 33** | Os containers escrevem em `deploy/` com esse id |
+| Locale `pt_BR.UTF-8` e timezone | Ex.: `America/Recife` ou sua região |
+| NTP (chrony) | Em cluster, relógios desalinhados quebram tarefas agendadas e tokens |
+| Recursos mínimos (nó único) | 8 vCPU, 16 GB de RAM e ~100 GB livres na partição de `/opt` |
+
+**Debian 11+:**
+
+```bash
+apt-get update && apt-get install -y git make build-essential ca-certificates curl gnupg
+dpkg-reconfigure locales   # marque pt_BR.UTF-8
+dpkg-reconfigure tzdata
+id www-data || useradd www-data; usermod -u 33 -o www-data   # UID/GID 33
+```
+
+**AlmaLinux / RHEL:**
+
+```bash
+yum install -y git make
+systemctl enable --now chronyd
+localectl set-locale LANG=pt_BR.UTF-8
+timedatectl set-timezone America/Recife
+useradd www-data; usermod -u 33 www-data   # UID/GID 33
+```
+
+### 13.1. Rede do Docker
+
+O Docker usa por padrão `172.16.0.0–172.31.x`. Se a rede da instituição usa esse bloco, os containers deixam de enxergar serviços externos (DB, Redis, LDAP). Mude a sub-rede em `/etc/docker/daemon.json`:
+
+```json
+{
+  "bip": "198.18.251.1/24",
+  "default-address-pools": [
+    { "base": "198.18.252.0/22", "size": 26 }
+  ]
+}
+```
+
+`198.18.0.0/15` é reservado a benchmarking (RFC 2544) e raramente roteado. Depois: `systemctl restart docker` e recrie os containers.
+
+### 13.2. Portas
+
+O Nginx do `suap_deploy` publica as portas **80**, **443** e **8080**. Os padrões dos utilitários do `suap-setup` não colidem com elas (Dockhand em 9093, Arcane em 3552, Redis em 6379, PostgreSQL em 5432), mas, ao alterar `DOCKHAND_PORT` ou `ARCANE_PORT`, evite 80, 443 e 8080 **no mesmo host**. Libere no firewall apenas o necessário: 80/443 no balanceador; no nó de aplicação, apenas o balanceador deve alcançar a 80; DB e Redis só na rede interna.
+
+---
+
+## 14. Docker — Homologação (nó único)
+
+Para homologação, use a rota Docker em **servidor único**, com PostgreSQL e Redis em containers (profiles `local-db` e `local-redis`). Assim o que for validado reflete o comportamento da produção.
+
+### 14.1. Passo a passo
+
+```bash
+git clone https://github.com/danielslz/suap-setup.git
+cd suap-setup
+bash setup.sh
+```
+
+No menu, selecione, no grupo "Via Docker":
+
+```
+SUAP prod (suap_deploy)
+```
+
+Na primeira execução, o wizard solicita:
+
+| Variável | Descrição | Exemplo |
+|---|---|---|
+| `SUAP_DEPLOY_DIR` | Diretório do repositório `suap_deploy` | `/opt/suap_deploy` |
+| `SUAP_DEPLOY_GIT_URL` | URL Git do `suap_deploy` (**obrigatório**) | `git@gitlab.instituicao.edu.br:org/suap_deploy.git` |
+
+> **Nota:** as variáveis de imagem (`SUAP_IMAGE`, `SUAP_PDF_IMAGE`, `SUAP_AI_IMAGE`) ficam no `.env` do próprio `suap_deploy` (gerado pelo `make setup` a partir do `env.sample`), não no `.env` do `suap-setup`.
+
+O script então:
+
+1. Verifica se o Docker está disponível (oferece instalar);
+2. Clona o `suap_deploy` em `SUAP_DEPLOY_DIR`;
+3. Executa o `make setup` interativo: escolhe o modo de imagem, gera o `.env` (com `SECRET_KEY` e `SUAP_PDF_ACCESS_TOKEN`), ativa o template do Nginx conforme `SSL_ENABLED`, gera um certificado autoassinado se necessário e ajusta as permissões de `deploy/` para o UID 33;
+4. Cria os diretórios de runtime (`deploy/logs/nginx`, `deploy/logs/suap`, `deploy/media`, `deploy/backup`);
+5. Apresenta o menu de gerenciamento:
+
+```
+1) Fazer pull das imagens e iniciar serviços (modo registry)
+2) Fazer build local das imagens e iniciar (modo local)
+3) Apenas iniciar serviços (make up)
+4) Parar todos os serviços (make down)
+5) Reiniciar serviços (make restart)
+6) Ver status dos containers
+7) Ver logs
+8) Acessar shell do container web
+9) Executar backup do banco
+10) Executar restore do banco
+11) Executar setup interativo (make setup)
+12) Configurar o papel deste nó (multi-servidor / multi-nó)
+13) Verificar a configuração (check)
+14) Atualizar: pull/build + restart com drain (update)
+0) Sair
+```
+
+> Com o stack já no ar, as opções 1 e 2 usam `make restart` (que dispara o drain) em vez de `make up`.
+
+### 14.2. Configuração do `.env` e primeira subida
+
+Edite o `.env` do `suap_deploy` (em `SUAP_DEPLOY_DIR`) e ajuste, no mínimo, `SITE_URL`, `NGINX_SERVER_NAME`, `ALLOWED_HOSTS`, `DATABASE_*`, `EMAIL_*`. Para homologação com DB e Redis locais, o papel é `homolog`:
+
+```bash
+bash docker/prod/configure-node.sh --role homolog --site-url https://suap-hml.instituicao.edu.br --yes
+```
+
+Depois, escolha o modo e suba:
+
+```bash
+# Modo local (build a partir do código)
+bash docker/prod/suap-deploy.sh build
+bash docker/prod/suap-deploy.sh up
+
+# Modo registry
+bash docker/prod/suap-deploy.sh pull
+bash docker/prod/suap-deploy.sh up
+```
+
+Em banco vazio, inicialize e crie o superusuário:
+
+```bash
+bash docker/prod/suap-deploy.sh begin          # create_db + carga_inicial
+bash docker/prod/suap-deploy.sh exec python manage.py createsuperuser
+```
+
+> O `SUAP_PDF_ACCESS_TOKEN` é gerado pelo `make setup`. Configure o **mesmo valor** no SUAP (Configurações do módulo comum → "Token da API do SuapPDF"); caso contrário a geração de PDF responde `401`. Para ver o valor: `grep ^SUAP_PDF_ACCESS_TOKEN= <SUAP_DEPLOY_DIR>/.env`.
+
+Acesse o endereço de `SITE_URL`. Em homologação, o certificado autoassinado faz o navegador avisar — é esperado. Para os demais ajustes de homologação (domínio, e-mail, dados anonimizados), ver a seção 9.2.
+
+---
+
+## 15. Docker — Produção multi-servidor e multi-nó
+
+Em produção, separe a pilha em papéis dedicados. O `suap_deploy` já suporta isso por meio de **profiles**, e o `suap-setup` automatiza a configuração de cada nó com o `configure-node.sh`.
+
+### 15.1. Papéis e profiles
+
+```mermaid
+graph TD
+    C[clientes] <--> LB["Balanceador<br/>(HAProxy; TLS opcional)"]
+    LB <--> APP["Nós APP<br/>web + nginx"]
+    APP <--> ASYNC["Nós ASYNC<br/>celery (+ beat, flower, pdfprinter no primário)"]
+    APP <--> DB[("Servidor DB + Redis<br/>externos ao Compose")]
+    ASYNC <--> DB
+    APP <--> MIDIA[("Mídia compartilhada<br/>MinIO ou NFS")]
+    ASYNC <--> MIDIA
+```
+
+| Papel (`--role`) | `COMPOSE_PROFILES` | Quantos nós | Observação |
+|---|---|---|---|
+| `single` | `default,celery-beat,celery-flower` | 1 | Tudo junto (nó único) |
+| `app` | `web` | 2 ou mais | Front (web + nginx) atrás do balanceador |
+| `async-primary` | `celery,celery-beat,celery-flower,pdfprinter` | **exatamente 1** | Único nó com beat, flower e pdfprinter |
+| `async` | `celery` | 0 ou mais | Workers adicionais; escalam à vontade |
+| `homolog` | `default,celery-beat,celery-flower,local-db,local-redis` | 1 | Homologação com DB/Redis em container |
+| `custom` | lista própria via `--profiles` | — | Qualquer combinação válida |
+
+> **Importante:** `celery-beat` e `celery-flower` devem rodar em **apenas um nó** do cluster. Duplicar o `celery-beat` faz as tarefas agendadas executarem em dobro. O `check` avisa quando um nó os ativa. O profile `cron` é legado.
+
+Dimensionamento e partições de disco por papel: seção 6.2 (aplicação e async usam `/opt`; banco e Redis usam `/var`).
+
+### 15.2. Ordem recomendada de implantação
+
+1. **Servidor de DB + Redis** — nativo (seção 10.3) ou em containers (seção 18). Crie o banco e o usuário de aplicação (seção 19.4).
+2. **Mídia compartilhada** — MinIO ou NFS (seção 21).
+3. **Nó `async-primary`** (beat, flower, pdfprinter, workers).
+4. **Nós `async` adicionais**, se necessário.
+5. **Nós `app`** (um por vez).
+6. **Balanceador** com health check no `/ht/` (seção 15.5 e 20).
+7. **Inicialização do banco** em **um único nó**: `begin` e `createsuperuser` (somente em banco novo).
+
+Em cada nó de aplicação ou async, o fluxo é o mesmo:
+
+```bash
+git clone https://github.com/danielslz/suap-setup.git && cd suap-setup
+bash setup.sh                                  # "SUAP prod (suap_deploy)": clona o suap_deploy e roda o make setup
+bash docker/prod/configure-node.sh             # define o papel e as conexões deste nó
+bash docker/prod/suap-deploy.sh check          # valida a configuração
+bash docker/prod/suap-deploy.sh update         # pull/build e sobe (ou reinicia com drain)
+```
+
+### 15.3. Configurando cada nó com `configure-node.sh`
+
+O script edita o `.env` do `suap_deploy` com segurança: faz **backup** (`.env.bak-<data>`), mostra o que muda (segredos mascarados), grava com permissão `600` e ajusta o symlink do Nginx. Sem argumentos e em terminal interativo ele pergunta cada item mostrando o valor atual; com opções, é totalmente não interativo (`--yes`). `--dry-run` mostra as alterações sem gravar.
+
+Senhas **não** são aceitas por argumento (ficariam no histórico do shell): use o prompt silencioso ou as variáveis `NODE_DB_PASSWORD`, `NODE_REDIS_PASSWORD` e `NODE_S3_SECRET_KEY`. Elas não podem conter espaço, `$`, `#`, aspas, crase ou barra invertida (o `make` e o Compose as interpretariam).
+
+**Nó de aplicação (atrás do balanceador que termina o TLS):**
+
+```bash
+NODE_DB_PASSWORD='...' NODE_REDIS_PASSWORD='...' \
+bash docker/prod/configure-node.sh --role app \
+  --db-host 10.0.1.5 --db-name suap --db-user suap_app \
+  --redis-host 10.0.1.5 \
+  --ssl false --site-url https://suap.instituicao.edu.br \
+  --trusted-proxies 10.0.0.10 --drain-seconds 20 --yes
+```
+
+**Nó async primário:**
+
+```bash
+NODE_DB_PASSWORD='...' NODE_REDIS_PASSWORD='...' \
+bash docker/prod/configure-node.sh --role async-primary \
+  --db-host 10.0.1.5 --db-user suap_app --redis-host 10.0.1.5 \
+  --flower-auth operador:SenhaForte123 --yes
+```
+
+**Nós async adicionais:**
+
+```bash
+bash docker/prod/configure-node.sh --role async --db-host 10.0.1.5 --redis-host 10.0.1.5 --yes
+```
+
+**Storage de mídia em MinIO/S3 (qualquer papel):**
+
+```bash
+NODE_S3_SECRET_KEY='...' bash docker/prod/configure-node.sh \
+  --s3-endpoint http://10.0.1.20 --s3-access-key suap-app --yes
+```
+
+Opções completas: `bash docker/prod/configure-node.sh --help`. O que o script altera no `.env`:
+
+| Opção | Variáveis do `.env` |
+|---|---|
+| `--role` / `--profiles` | `COMPOSE_PROFILES` |
+| `--db-*` | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD` |
+| `--redis-host` / `--redis-port` | `REDIS_URL`, `REDIS_LOCATION` (db 2), `SESSION_LOCATION` (db 3), `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` (db 1); senha em `REDIS_PASSWORD` e `SESSION_PASSWORD` |
+| `--ssl` | `SSL_ENABLED` e o symlink `nginx/active/server.conf.template` |
+| `--site-url` | `SITE_URL`, `NGINX_SERVER_NAME`, `ALLOWED_HOSTS` |
+| `--trusted-proxies` / `--drain-seconds` | `TRUSTED_PROXIES`, `DRAIN_SECONDS` |
+| `--s3-*` | `DEFAULT_FILE_STORAGE`, `AWS_S3_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
+| `--flower-auth` | `FLOWER_BASIC_AUTH` |
+
+Os demais itens do `.env` (e-mail, limites de memória, OAuth gov.br, Sentry etc.) continuam sendo editados à mão, conforme o `env.sample`.
+
+Para DB e Redis externos, o `host.docker.internal` (já configurado no compose via `extra_hosts: host-gateway`) resolve para o próprio host do nó, útil quando o banco roda **no mesmo servidor**. Em servidores separados use o IP ou hostname.
+
+### 15.4. TLS e Nginx
+
+- **Atrás de balanceador que termina o TLS:** use `SSL_ENABLED=false` (`--ssl false`). O Nginx passa a escutar só na porta 80 e o health check do balanceador fica correto. Com `SSL_ENABLED=true` a porta 80 responde `301` para tudo, e o HAProxy conta `3xx` como saudável e nunca enxerga o `drain`.
+- **Nó único sem balanceador:** `SSL_ENABLED=true` com certificado em `/etc/ssl/suap/nginx/fullchain.crt` e `privkey.key` (`chmod 644` no `.crt` e `600` no `.key`). Em produção use certificado real (Let's Encrypt ou CA institucional); o autoassinado do `scripts/gen-cert.sh` serve apenas para homologação. A renovação (por exemplo, `certbot`) fica a cargo do host. Depois de trocar o certificado: `bash docker/prod/suap-deploy.sh restart`.
+- `TRUSTED_PROXIES` deve conter o IP/CIDR do balanceador para que os logs e o Django vejam o IP real do cliente. Para mais de um proxy, o `suap_deploy` exige repetir a diretiva `set_real_ip_from` dentro do valor (ver o comentário no `env.sample`).
+- O `nginx/active/server.conf.template` é um **symlink gerado em runtime**; sem ele o Nginx não sobe. O `make setup` e o `configure-node.sh --ssl` o criam. O alvo precisa ser **relativo** (`../templates/...`).
+
+### 15.5. Balanceador e drain protocol
+
+O `sleep` do drain só funciona se durar pelo menos o tempo que o balanceador leva para retirar o nó do pool. Backend HAProxy recomendado:
+
+```haproxy
+backend suap-app
+    option httpchk
+    http-check send meth GET uri /ht/ ver HTTP/1.1\r\nHost:\ suap.instituicao.edu.br
+    retries 3
+    option redispatch 1
+    timeout connect 5s
+    timeout server 10m
+    server web1 10.0.0.1:80 check inter 10000 fastinter 2000 fall 3 rise 2
+    server web2 10.0.0.2:80 check inter 10000 fastinter 2000 fall 3 rise 2
+```
+
+- Tempo para retirar o nó = `inter + (fall-1) × fastinter` = 10 + 2×2 = **14 s**. `DRAIN_SECONDS` deve ser maior que isso mais uma margem (padrão: 20). Sem balanceador (nó único), use 0.
+- `option redispatch 1`: conexão recusada (Nginx parado, nó caído) é repetida em outro servidor, sem erro para o cliente.
+- `timeout connect 5s`: valores altos seguram requisições de um nó que some sem responder.
+- **pfSense** (*Services → HAProxy → Backend*): em cada servidor, campo *Advanced*: `fastinter 2000 fall 3 rise 2`; em *Advanced settings → Backend pass thru*: `option redispatch 1`; *Connection timeout*: `5000`.
+
+**Teste do drain** (num nó): `bash docker/prod/suap-deploy.sh drain` e acompanhe o HAProxy — o servidor deve ficar DOWN em ~14 s. Depois, `bash docker/prod/suap-deploy.sh healthy`. O drain manual **não sobrevive** a um `up`/`restart`, porque o web escreve `healthy` a cada início; rode `drain` de novo depois de subir se o nó deve continuar fora do pool.
+
+### 15.6. Mídia compartilhada
+
+Em cluster, nós de aplicação e async precisam ver os mesmos uploads. Use **MinIO** (recomendado; sem mount, configurado pelo `.env` com `--s3-endpoint`) ou **NFS** montado em `<SUAP_DEPLOY_DIR>/deploy/media` em cada nó (com dono 33:33). Detalhes e `fstab` na seção 21.
+
+### 15.7. Vault (opcional)
+
+Instituições que guardam segredos no HashiCorp Vault podem gerar o `.env` com `contrib/vault/generate-env.sh` (requer `envconsul` e um token com leitura em `secret/data/suap/*`). Ele mescla `secret/data/suap/principal` com `secret/data/suap/<domínio>` (o do host vence). Depois, use `configure-node.sh` apenas para o papel e a rede do nó. Ver `contrib/vault/README.md` no `suap_deploy`.
+
+### 15.8. Validação
+
+```bash
+bash docker/prod/suap-deploy.sh check
+```
+
+O comando valida: Docker Compose >= 2.30; `make`; presença do `.env`; `SECRET_KEY`, `DATABASE_PASSWORD` e `SUAP_PDF_ACCESS_TOKEN`; valores de exemplo em `SITE_URL`/`ALLOWED_HOSTS`; `DEBUG`; profiles desconhecidos ou legados; beat/flower ativos (lembrete de nó único) e senha padrão do Flower; coerência entre `SSL_ENABLED`, o template do Nginx e o certificado; conectividade TCP com PostgreSQL e Redis; permissões de `deploy/` e `status.txt`. Termina com código de saída 1 se houver falhas.
+
+---
+
+## 16. Operação diária (suap-deploy.sh)
+
+Para operar o `suap_deploy` **sem mudar de diretório** e sem decorar os alvos do Makefile, use o atalho `docker/prod/suap-deploy.sh`. Ele é uma camada fina: resolve `SUAP_DEPLOY_DIR` (do `.env` do `suap-setup`), valida pré-requisitos e delega para o `make` e o `docker compose` do `suap_deploy`. Funciona de qualquer pasta, é não interativo e serve para SSH, cron e automações.
+
+```bash
+bash docker/prod/suap-deploy.sh help
+```
+
+| Comando | Equivale a | Observação |
+|---|---|---|
+| `setup` | `make setup` | Bootstrap interativo do `suap_deploy` |
+| `build` | `make build` | Modo local |
+| `pull` | `docker compose pull` | Modo registry |
+| `up` | `make up` | Sobe respeitando `COMPOSE_PROFILES` |
+| `down` | `make down` | Dispara o drain automático |
+| `restart` | `make restart` | `down` + `up` |
+| `update [--git-pull]` | build/pull + `make restart` (ou `make up` se parado) | Detecta o modo pela `SUAP_IMAGE`; `--git-pull` atualiza `src/suap` e `src/suap-pdf` |
+| `status` | `make status` | |
+| `logs [serviço...]` | `make logs SERVICES="..."` | Ex.: `logs web nginx` |
+| `scale <n>` | `docker compose up -d --scale celery=<n>` | Só workers celery |
+| `bash` / `shell` | `make bash` / `make shell` | Shell no web / Django shell |
+| `exec <cmd...>` | `make exec COMMAND="..."` | Ex.: `exec python manage.py migrate` |
+| `begin` | `make begin` | `create_db` + `carga_inicial` (banco novo) |
+| `psql` | `make psql` | Usa o serviço `db` do compose; com banco externo, o FAQ do `suap_deploy` recomenda o `psql` do próprio host |
+| `backup` | `make backup` | Dump em `deploy/backup/` |
+| `restore <arquivo>` | `make restore DUMP=...` | |
+| `node [opções]` | `configure-node.sh` | Papel do nó |
+| `profiles` | — | Mostra profiles, papel inferido, modo de imagem e SSL |
+| `check` | — | Valida a configuração (seção 15.8) |
+| `drain` / `healthy` | `contrib/multi-node/*.sh` | Tira/devolve o nó do pool sem derrubar containers |
+| `compose <args...>` | `docker compose <args>` | Escape hatch no diretório do `suap_deploy` |
+| `dir` | — | Imprime o diretório do `suap_deploy` |
+
+Exemplos:
+
+```bash
+bash docker/prod/suap-deploy.sh status
+bash docker/prod/suap-deploy.sh logs web nginx
+bash docker/prod/suap-deploy.sh exec python manage.py sync
+bash docker/prod/suap-deploy.sh scale 3
+bash docker/prod/suap-deploy.sh backup
+```
+
+> **Quando usar o atalho e quando usar o `make` direto?** O atalho é equivalente ao `make` para tudo que está na tabela. Se você já está em `SUAP_DEPLOY_DIR`, o `make` direto continua válido. O atalho acrescenta `update`, `scale`, `profiles`, `check`, `node` e a resolução do diretório.
+
+### 16.1. Rotinas recomendadas
+
+```cron
+# Backup diário do banco (host)
+0 2 * * *  root  bash /opt/suap-setup/docker/prod/suap-deploy.sh backup   # ajuste o caminho do suap-setup
+
+# PDFs e temporários se acumulam: limpe no HOST (não no container)
+0 *  * * *  root  tmpwatch 4h /tmp
+0 0  * * *  root  tmpwatch --mtime --all 72 /opt/suap_deploy/deploy/media/tmp/
+```
+
+Os logs de aplicação ficam em `deploy/logs/`. Copie as configurações de `logrotate/` do `suap_deploy` para `/etc/logrotate.d/` do host para rotacioná-los.
+
+### 16.2. Escalando workers
+
+`celery` (workers) escala: `bash docker/prod/suap-deploy.sh scale 3`. **Não** escale `celery-beat` nem `celery-flower`.
+
+---
+
+## 17. Docker — Atualização sem downtime
+
+A forma correta depende do modo de imagem. O comando `update` encapsula as duas e escolhe `restart` (com drain) se o stack está no ar, ou `up` se está parado:
+
+```bash
+bash docker/prod/suap-deploy.sh update              # modo registry: pull + restart | modo local: build + restart
+bash docker/prod/suap-deploy.sh update --git-pull   # modo local: git pull em src/suap e src/suap-pdf antes
+```
+
+Equivalente manual, dentro de `SUAP_DEPLOY_DIR`:
+
+```bash
+# Modo registry
+docker compose pull && make restart
+
+# Modo local
+(cd src/suap && git pull) && make build && make restart
+```
+
+> **Nunca use `make up` para atualizar um stack em execução.** O recreate do `up -d` não dispara o `pre_stop` do Nginx: o web é trocado com o nó ainda no pool do balanceador e o usuário vê `502`. O `restart` faz o `down` (com drain) e depois o `up`.
+
+### 17.1. Rolling update em vários nós
+
+1. Valide a nova versão em **homologação**.
+2. Se a versão tiver migrações de banco, execute-as **uma única vez**, a partir de um nó, antes de reiniciar os demais: `bash docker/prod/suap-deploy.sh exec python manage.py migrate`.
+3. Atualize **um nó de cada vez**: `bash docker/prod/suap-deploy.sh update`. O drain retira o nó do pool, termina as requisições em voo e o devolve ao subir.
+4. Comece pelo nó `async-primary` e pelos `async` (ou pelos `app`, conforme a política da instituição) e confirme com `status` e `logs` antes de passar ao próximo.
+5. Para voltar de modo (`local` ↔ `registry`), reexecute o `make setup`; ele ajusta `SUAP_IMAGE` e o `docker-compose.override.yml`.
+
+Para a política de janelas de atualização, ver a seção 22.
+
+---
+
+## 18. Serviços de apoio em containers
+
+O grupo "Via Docker" do menu do `suap-setup` oferece utilitários independentes, todos via Docker Compose, com os stacks em `/opt/docker/<nome>/` (`compose.yaml` + `.env` com segredos, permissão 600). Cada um tem reversão no submenu **Reverter**.
+
+| Item do menu | Script | Porta | Uso típico |
+|---|---|---|---|
+| Redis (porta 6379 exposta) | `docker/redis-setup.sh` | 6379 | Redis do cluster (senha obrigatória) |
+| PostgreSQL (porta 5432 exposta) | `docker/postgres-setup.sh` | 5432 | Banco do cluster (senha obrigatória; collation padrão da imagem, sem `pt_BR.UTF-8`) |
+| MinIO (object storage S3) | `docker/minio-setup.sh` | 80 / 9001 | Mídia compartilhada (seção 21) |
+| Arcane | `docker/arcane-setup.sh` | 3552 | Interface web livre (BSD-3-Clause) para gerenciar o Docker |
+| Dockhand | `docker/dockhand-setup.sh` | 9093 | Interface web para gerenciar o Docker (licença BSL 1.1: uso empresarial em produção exige plano pago) |
+
+Pontos de atenção:
+
+- **Redis/PostgreSQL em container** são uma alternativa à instalação nativa no host (seção 10.3). Em produção, avalie desempenho e backup do volume Docker antes de adotar.
+- **Portas:** o Nginx do `suap_deploy` ocupa 80, 443 e 8080 no host. Não use 8080 (nem 80/443) nos utilitários acima quando rodarem no mesmo servidor.
+- O **Arcane** enxerga os stacks de `/opt/docker` (Redis, PostgreSQL, Dockhand…) por usar essa pasta como pasta de projetos.
+- Para mudar a configuração (porta, imagem), defina a variável e rode o script de novo: o Compose recria apenas o que mudou, mantendo os volumes. Detalhes no README do `suap-setup`, seção "Stacks Docker Compose".
+
+---
+
+## Parte C — Comum às duas rotas
+
+As seções a seguir valem tanto para a instalação nativa quanto para Docker.
+
+## 19. Configuração de banco de dados
+
+### 19.1. Escolha da versão
 
 A versão compatível é **16+** (ou a que o IFRN recomendar à época). Recomenda-se adotar a **versão mais recente suportada oficialmente pela versão do SUAP em uso** — confirme com a equipe de desenvolvimento qual versão é homologada. O valor pode ser ajustado via a variável `POSTGRES_VERSION` no `.env` do suap-setup.
 
-### 10.2. Instalação
+### 19.2. Instalação
 
-A forma mais rápida de instalar é via `suap-setup` (item "Instalar PostgreSQL" do menu ou executando diretamente o script `install-postgres.sh` da distribuição — ver seção 9.3). O script já adiciona o repositório oficial, instala os pacotes, inicializa o cluster e configura acesso.
+A forma mais rápida de instalar é via `suap-setup` (item "Instalar PostgreSQL" do menu ou executando diretamente o script `install-postgres.sh` da distribuição — ver seção 10.3). O script já adiciona o repositório oficial, instala os pacotes, inicializa o cluster e configura acesso.
 
 Para instalação manual ou quando é necessário controle adicional:
 
@@ -461,7 +988,7 @@ sudo /usr/pgsql-16/bin/postgresql-16-setup initdb
 sudo systemctl enable --now postgresql-16
 ```
 
-### 10.3. Estrutura de diretórios e disco
+### 19.3. Estrutura de diretórios e disco
 
 O diretório de dados deve residir em partição própria, preferencialmente em NVMe:
 
@@ -485,9 +1012,9 @@ sudo chown -R postgres:postgres /mnt/pgdata
 sudo systemctl start postgresql-16
 ```
 
-### 10.4. Criação do banco e usuário de aplicação
+### 19.4. Criação do banco e usuário de aplicação
 
-> **Nota:** Se você utilizou o `install-postgres.sh` (seção 9.3) e respondeu "Sim" à criação do banco/usuário, estes passos já foram executados automaticamente. Os comandos abaixo são para referência ou criação manual.
+> **Nota:** Se você utilizou o `install-postgres.sh` (seção 10.3) e respondeu "Sim" à criação do banco/usuário, estes passos já foram executados automaticamente. Os comandos abaixo são para referência ou criação manual.
 
 ```bash
 sudo -u postgres psql
@@ -509,7 +1036,7 @@ sudo locale-gen pt_BR.UTF-8
 sudo update-locale
 ```
 
-### 10.5. Controle de acesso (`pg_hba.conf`)
+### 19.5. Controle de acesso (`pg_hba.conf`)
 
 Restrinja o acesso apenas à rede interna dos nós de aplicação:
 
@@ -527,7 +1054,7 @@ password_encryption = scram-sha-256
 listen_addresses = '10.0.1.5'   # apenas interface da rede interna
 ```
 
-### 10.6. Tuning de performance (`postgresql.conf`)
+### 19.6. Tuning de performance (`postgresql.conf`)
 
 Valores de referência para uma VM com 16 GB de RAM (ajustar proporcionalmente):
 
@@ -548,7 +1075,7 @@ effective_io_concurrency = 200    # SSD/NVMe
 
 > ⚠️ Estes valores são um ponto de partida. **Valide com testes de carga em homologação** antes de aplicar em produção.
 
-### 10.7. Connection pooling (recomendado)
+### 19.7. Connection pooling (recomendado)
 
 Com múltiplos nós de aplicação, é comum esgotar `max_connections` rapidamente. Recomenda-se **PgBouncer** (modo `transaction pooling`) entre aplicação e banco:
 
@@ -567,7 +1094,7 @@ default_pool_size = 40
 
 A aplicação aponta para o endereço do PgBouncer em vez de diretamente para o PostgreSQL.
 
-### 10.8. Réplicas de leitura (opcional)
+### 19.8. Réplicas de leitura (opcional)
 
 Para alta disponibilidade e escala de leitura, configure um cluster PostgreSQL com nó WRITE e múltiplos nós READ, coordenados por **Pgpool-II**:
 
@@ -591,7 +1118,7 @@ sudo -u postgres pg_basebackup -h 10.0.1.5 -D /mnt/pgdata -U replicator -P -R
 
 > Essa topologia adiciona complexidade operacional. Recomenda-se implantá-la apenas após o ambiente básico estar estável, sempre testada primeiro em homologação.
 
-### 10.9. Backup do banco
+### 19.9. Backup do banco
 
 ```bash
 # Backup lógico diário (cron)
@@ -607,19 +1134,19 @@ archive_command = 'test ! -f /mnt/wal_archive/%f && cp %p /mnt/wal_archive/%f'
 
 Ou use **pgBackRest** para backup incremental e WAL archiving de forma integrada.
 
-### 10.10. Preparação da aplicação e primeiro acesso
+### 19.10. Preparação da aplicação e primeiro acesso
 
 Independentemente da rota (nativa ou Docker):
 
 1. **Banco e usuário criados** conforme 10.4, com `bytea_output = 'escape'`.
-2. **Rodar as migrações** (`manage.py migrate` ou via Makefile).
-3. **Criar o superusuário inicial**: `python manage.py createsuperuser`
+2. **Rodar as migrações** (`manage.py migrate`; na rota Docker, `bash docker/prod/suap-deploy.sh exec python manage.py migrate` ou `begin` em banco novo).
+3. **Criar o superusuário inicial**: `python manage.py createsuperuser` (Docker: `bash docker/prod/suap-deploy.sh exec python manage.py createsuperuser`)
 4. Acessar `/comum/configuracao/` e revisar configurações institucionais.
 5. Se aplicável, configurar autenticação LDAP/AD em `/admin/ldap_backend/ldapconf/`.
 
 ---
 
-## 11. Balanceamento de carga e alta disponibilidade
+## 20. Balanceamento de carga e alta disponibilidade
 
 - Utilize **HAProxy** ou **Nginx** como balanceador com política `least_conn`.
 - Configure **health checks** ativos contra um endpoint leve do SUAP.
@@ -627,13 +1154,15 @@ Independentemente da rota (nativa ou Docker):
 - Para eliminar ponto único de falha, considere **VRRP/keepalived** entre dois balanceadores.
 - **Terminação SSL** no balanceador, tráfego interno em rede privada.
 
+Na rota Docker, o health check deve apontar para `/ht/` na porta 80 de cada nó `app` (com `SSL_ENABLED=false`) e o drain protocol cuida da retirada do nó em atualizações. A configuração de backend HAProxy e do pfSense está na seção 15.5.
+
 ---
 
-## 12. Armazenamento de mídia (NFS / MinIO)
+## 21. Armazenamento de mídia (NFS / MinIO)
 
 Com múltiplos nós de aplicação, os arquivos enviados pelos usuários precisam estar acessíveis de forma consistente em todos os nós.
 
-### 12.1. NFS
+### 21.1. NFS
 
 No servidor de NFS:
 
@@ -669,9 +1198,9 @@ mount -a
 
 > **Nota:** para a rota nativa, prefira NFSv4 (melhor segurança e firewall simplificado). Para a rota Docker, o suap_deploy recomenda NFSv3 com opções otimizadas (`rsize=65536,wsize=65536,nolock`). Garanta que o ponto de montagem pertence ao UID/GID 33 (`www-data`).
 
-### 12.2. MinIO (alternativa escalável)
+### 21.2. MinIO (alternativa escalável)
 
-MinIO oferece armazenamento de objetos compatível com S3, com escalabilidade horizontal e tolerância a falhas nativa via erasure coding. Na rota Docker, é a opção recomendada pelo suap_deploy — não exige mount NFS e configura-se via variáveis `S3_*` no `.env`.
+MinIO oferece armazenamento de objetos compatível com S3, com escalabilidade horizontal e tolerância a falhas nativa via erasure coding. Na rota Docker, é a opção recomendada pelo suap_deploy — não exige mount NFS e configura-se pelas variáveis `DEFAULT_FILE_STORAGE` e `AWS_*` no `.env` (o `configure-node.sh --s3-endpoint` preenche essas variáveis).
 
 **Instalação de referência:** Projeto `suap-minio` (GitLab COSINF/IFRN)
 
@@ -758,99 +1287,78 @@ Detalhes completos na documentação do projeto suap-minio.
 
 ---
 
-## 13. Rotina de atualização
-
-O `suap-setup` fornece scripts dedicados de atualização para a rota nativa, e o Makefile do `suap_deploy` para a rota Docker.
-
-### 13.1. Rota nativa
-
-```bash
-sudo bash deb/suap-update.sh   # ou rpm/ ou arch/ conforme distribuição
-```
-
-Fluxo executado automaticamente:
-
-1. Para todos os serviços do Supervisor;
-2. Atualiza o código-fonte (`git pull`);
-3. Atualiza dependências Python via `uv`;
-4. Pergunta ao operador se deseja rodar `migrate`;
-5. Pergunta se deseja rodar `collectstatic`;
-6. Pergunta se deseja rodar `sync_permissions`;
-7. Corrige permissões dos diretórios (`chown www-data`);
-8. Reinicia os serviços do Supervisor;
-9. Exibe status e resumo das ações realizadas.
-
-> **Rollback automático:** se o `git pull` ou a instalação de dependências falhar, os serviços são reiniciados automaticamente na versão anterior antes do script encerrar com erro.
-
-### 13.2. Rota Docker
-
-```bash
-cd /opt/suap_deploy
-docker compose pull    # Pull das imagens atualizadas do registry
-make down              # Parar serviços atuais
-make up                # Iniciar com as novas imagens
-```
-
-Ou, para modo local (build a partir do código-fonte):
-
-```bash
-cd /opt/suap_deploy
-cd src/suap && git pull && cd ../..
-make build             # Rebuild das imagens
-make restart           # Reiniciar serviços
-```
-
-### 13.3. Política de atualização recomendada
+## 22. Política de atualização
 
 - Atualizações **críticas** (com migrações de tabelas) devem ocorrer em janelas de menor impacto.
 - Atualizações **corretivas** de baixo risco podem ser aplicadas no mesmo dia.
 - Em ambientes com múltiplos nós, aplique **um nó por vez** (rolling update).
 - **Sempre validar em homologação antes de promover para produção.**
 
+Procedimentos por rota: seção 11 (nativa) e seção 17 (Docker).
+
 ---
 
-## 14. Backup e recuperação de desastres
+## 23. Backup e recuperação de desastres
 
 - **Banco de dados:** dump diário completo (`pg_dump`) + WAL archiving para *point-in-time recovery*.
 - **Mídia:** backup incremental do volume NFS/MinIO, com retenção mínima de 30 dias.
 - **Configurações:** versionar `.env`, configurações de Nginx e Supervisor customizadas em um repositório interno privado.
 - **Teste de restauração:** validar periodicamente (ex.: trimestralmente) que os backups restauram um ambiente funcional, preferencialmente restaurando no ambiente de homologação.
+- **Rota Docker:** `bash docker/prod/suap-deploy.sh backup` grava o dump em `deploy/backup/dump_<data>.sql` (via container `db`, com as credenciais do `.env`) e `restore <arquivo>` o restaura. Para banco externo, prefira o `pg_dump` do próprio servidor de banco (seção 19.9). Os volumes Docker do `suap-setup` (Redis, PostgreSQL, MinIO) também precisam de rotina de backup própria.
+- **Segredos:** guarde o `.env` do `suap_deploy` (e a chave `ENCRYPTION_KEY` do Arcane, se usado) em cofre; o `configure-node.sh` mantém cópias `.env.bak-<data>`, que também contêm segredos.
 
 ---
 
-## 15. Monitoramento e logs
+## 24. Monitoramento e logs
 
 - **Logs de aplicação e Nginx:** via `make logs` (Docker) ou diretamente em `/var/log/nginx/` e logs do Supervisor (rota nativa).
 - **Monitor do Celery:** painel **Flower**, protegido por autenticação forte e acessível apenas via rede interna.
 - **Métricas de infraestrutura:** recomenda-se Prometheus + Grafana (ou solução equivalente) para CPU, memória, conexões de banco e filas do Celery.
 - **Auditoria:** manter logs de acesso administrativo auditáveis.
+- **Estado e saúde (Docker):** `bash docker/prod/suap-deploy.sh status` e `check`; o `/ht/` de cada nó responde 200 (`healthy`) ou 503 (`drain`).
 
 ---
 
-## 16. Checklist final de go-live
+## 25. Checklist final de go-live
+
+**Comum às duas rotas**
 
 - [ ] Ambiente de homologação validado com o mesmo fluxo planejado para produção.
-- [ ] Todas as VMs provisionadas conforme dimensionamento da seção 5.2.
+- [ ] Todas as VMs provisionadas conforme dimensionamento da seção 6.2.
 - [ ] Balanceador de carga configurado com health check e política `least_conn`.
 - [ ] Certificado SSL válido com renovação automática.
 - [ ] Banco de dados com `bytea_output` ajustado, usuário com privilégios restritos.
 - [ ] Redis, Celery worker e beat operacionais; Flower com autenticação não-padrão.
 - [ ] Armazenamento de mídia compartilhado montado e testado em todos os nós.
 - [ ] Rotina de backup configurada e testada (restauração validada).
-- [ ] Scripts de atualização (`suap-update.sh` ou Makefile) testados em homologação.
 - [ ] Firewall revisado — PostgreSQL e Redis não expostos à internet.
 - [ ] Configurações institucionais (`/comum/configuracao/`) preenchidas.
 
+**Rota nativa**
+
+- [ ] Script de atualização (`suap-update.sh`) testado em homologação.
+
+**Rota Docker**
+
+- [ ] `bash docker/prod/suap-deploy.sh check` sem falhas em todos os nós.
+- [ ] Exatamente **um** nó com `celery-beat` e **um** com `celery-flower`.
+- [ ] Nós `app` com `SSL_ENABLED=false` (TLS no balanceador) e `TRUSTED_PROXIES` com o IP do balanceador.
+- [ ] `DRAIN_SECONDS` maior que o tempo do balanceador para retirar o nó; teste de `drain`/`healthy` feito.
+- [ ] Atualização feita com `update`/`restart` (nunca `up`) e validada em homologação.
+- [ ] `SUAP_PDF_ACCESS_TOKEN` igual no `.env` e na configuração do SUAP.
+- [ ] Limites de memória (`DOCKER_*_MAX_MEMORY_SIZE`) e `GUNICORN_WORKERS` ajustados à RAM de cada nó.
+- [ ] Logrotate e limpeza de temporários (`tmpwatch`) configurados no host.
+
 ---
 
-## 17. Referências
+## 26. Referências
 
 - Repositório de automação: [danielslz/suap-setup](https://github.com/danielslz/suap-setup)
 - Portal institucional do SUAP: [portal.suap.ifrn.edu.br](https://portal.suap.ifrn.edu.br)
 - Wiki COSINF/IFRN — Instalação em produção (Debian)
 - Wiki COSINF/IFRN — Múltiplas Instâncias do SUAP
 - Wiki COSINF/IFRN — Instalação do SUAP em produção usando Docker
-- Projeto `suap_deploy` (GitLab COSINF/IFRN)
+- Projeto `suap_deploy` (GitLab COSINF/IFRN) — `README.md`, `docs/ADVANCED.md`, `docs/FAQ.md`, `contrib/multi-node/README.md`, `contrib/vault/README.md`
 - Projeto `suap-minio` (GitLab COSINF/IFRN)
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)
 - [MinIO Documentation](https://min.io/docs/minio/linux/index.html)
