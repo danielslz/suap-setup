@@ -241,7 +241,7 @@ No menu interativo, selecione:
 
 ```
 === SUAP Setup ===
-6) Configurar ambiente prod via Docker
+8) SUAP prod (suap_deploy)
 ```
 
 Na primeira execução, o wizard solicitará as variáveis principais:
@@ -300,7 +300,7 @@ cd suap-setup
 bash setup.sh
 ```
 
-Selecione **6) Configurar ambiente prod via Docker** (recomendado) ou **2) Configurar ambiente de produção** (instalação nativa).
+Selecione **SUAP prod (suap_deploy)**, no grupo "Via Docker" (recomendado), ou **Configurar ambiente de produção** (instalação nativa).
 
 **Rota Docker (recomendada):** delega para o Makefile do `suap_deploy`, que já traz:
 
@@ -387,12 +387,14 @@ cd suap-setup
 bash setup.sh
 ```
 
-Selecione **3) Instalar Redis** e depois **9) Instalar PostgreSQL**, ou execute-os diretamente:
+Selecione **Instalar Redis** e depois **Instalar PostgreSQL** (grupo "Serviços (no host)"), ou execute-os diretamente:
 
 ```bash
 sudo bash deb/install-redis.sh      # ou rpm/ ou arch/ conforme distribuição
 sudo bash deb/install-postgres.sh   # ou rpm/ ou arch/ conforme distribuição
 ```
+
+> **Alternativa em containers:** o grupo "Via Docker" do menu também oferece **Redis (porta 6379 exposta)** e **PostgreSQL (porta 5432 exposta)**, que sobem containers (`docker/redis-setup.sh` e `docker/postgres-setup.sh`) acessíveis por outras máquinas, com senha obrigatória e dados em volumes Docker. O PostgreSQL em container usa a collation padrão da imagem (sem `pt_BR.UTF-8`). Use o grupo "Serviços (no host)" se precisar de instalação nativa.
 
 O script de instalação do PostgreSQL (`install-postgres.sh`) realiza automaticamente:
 
@@ -434,7 +436,7 @@ A versão compatível é **16+** (ou a que o IFRN recomendar à época). Recomen
 
 ### 10.2. Instalação
 
-A forma mais rápida de instalar é via `suap-setup` (opção 9 do menu ou executando diretamente o script `install-postgres.sh` da distribuição — ver seção 9.3). O script já adiciona o repositório oficial, instala os pacotes, inicializa o cluster e configura acesso.
+A forma mais rápida de instalar é via `suap-setup` (item "Instalar PostgreSQL" do menu ou executando diretamente o script `install-postgres.sh` da distribuição — ver seção 9.3). O script já adiciona o repositório oficial, instala os pacotes, inicializa o cluster e configura acesso.
 
 Para instalação manual ou quando é necessário controle adicional:
 
@@ -677,12 +679,12 @@ MinIO oferece armazenamento de objetos compatível com S3, com escalabilidade ho
 
 #### Instalação via suap-setup
 
-O `suap-setup` oferece instalação automatizada do MinIO via a opção **10) Instalar MinIO (via Docker)** do menu (ou opção 5 no macOS):
+O `suap-setup` oferece instalação automatizada do MinIO via o item **MinIO (object storage S3)** do grupo "Via Docker" do menu:
 
 ```bash
 cd suap-setup
 bash setup.sh
-# Selecione: 10) Instalar MinIO (via Docker)
+# Selecione: MinIO (object storage S3), no grupo "Via Docker"
 ```
 
 Na primeira execução, o wizard solicita:

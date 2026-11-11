@@ -26,6 +26,7 @@ if [ "${DISTRO_TYPE}" = "macos" ]; then
     "5|SUAP dev (docker compose)"
     "6|SUAP prod (suap_deploy)"
     "7|Dockhand (gerenciador Docker web)"
+    "13|Arcane (gerenciador Docker web)"
     "10|MinIO (object storage S3)"
     "11|Redis (porta 6379 exposta)"
     "12|PostgreSQL (porta 5432 exposta)"
@@ -44,6 +45,7 @@ else
     "5|SUAP dev (docker compose)"
     "6|SUAP prod (suap_deploy)"
     "7|Dockhand (gerenciador Docker web)"
+    "13|Arcane (gerenciador Docker web)"
     "10|MinIO (object storage S3)"
     "11|Redis (porta 6379 exposta)"
     "12|PostgreSQL (porta 5432 exposta)"
@@ -95,6 +97,7 @@ run_revert_submenu() {
     items+=("Reverter ambiente dev via Docker|docker/dev/docker-setup-revert.sh")
     items+=("Reverter ambiente prod via Docker|docker/prod/docker-setup-revert.sh")
     items+=("Reverter Dockhand|docker/dockhand-revert.sh")
+    items+=("Reverter Arcane|docker/arcane-revert.sh")
     items+=("Reverter MinIO|docker/minio-revert.sh")
     items+=("Reverter Redis (Docker)|docker/redis-revert.sh")
     items+=("Reverter PostgreSQL (Docker)|docker/postgres-revert.sh")
@@ -106,6 +109,7 @@ run_revert_submenu() {
     items+=("Reverter ambiente dev via Docker|docker/dev/docker-setup-revert.sh")
     items+=("Reverter ambiente prod via Docker|docker/prod/docker-setup-revert.sh")
     items+=("Reverter Dockhand|docker/dockhand-revert.sh")
+    items+=("Reverter Arcane|docker/arcane-revert.sh")
     items+=("Reverter PostgreSQL|${DISTRO_TYPE}/install-postgres-revert.sh")
     items+=("Reverter MinIO|docker/minio-revert.sh")
     items+=("Reverter Redis (Docker)|docker/redis-revert.sh")
@@ -173,6 +177,7 @@ fi
 #   10 (minio):     SUAP_MINIO_DIR, SUAP_MINIO_GIT_URL
 #   11 (redis docker): nenhuma
 #   12 (postgres docker): nenhuma
+#   13 (arcane): nenhuma
 
 ensure_env_for_option "${ENV_FILE}" "${INTERNAL_CHOICE}"
 
@@ -195,6 +200,7 @@ case "${INTERNAL_CHOICE}" in
   10) TARGET_SCRIPT="${SCRIPT_DIR}/docker/minio-setup.sh" ;;
   11) TARGET_SCRIPT="${SCRIPT_DIR}/docker/redis-setup.sh" ;;
   12) TARGET_SCRIPT="${SCRIPT_DIR}/docker/postgres-setup.sh" ;;
+  13) TARGET_SCRIPT="${SCRIPT_DIR}/docker/arcane-setup.sh" ;;
 esac
 
 # Verificar existência do script antes de executar

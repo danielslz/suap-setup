@@ -14,11 +14,12 @@
 10. [Ambiente Docker — Produção](#ambiente-docker-produção)
 11. [Instalação do Docker](#instalação-do-docker)
 12. [Dockhand — Gerenciamento Docker via Web](#dockhand)
-13. [MinIO — Object Storage S3-compatível](#minio-object-storage)
-14. [Configuração Nginx Detalhada](#configuração-nginx-detalhada)
-15. [Configuração Supervisor Detalhada](#configuração-supervisor-detalhada)
-16. [Variáveis de Ambiente](#variáveis-de-ambiente)
-17. [Testes Automatizados](#testes-automatizados)
+13. [Arcane — Gerenciamento Docker via Web](#arcane)
+14. [MinIO — Object Storage S3-compatível](#minio-object-storage)
+15. [Configuração Nginx Detalhada](#configuração-nginx-detalhada)
+16. [Configuração Supervisor Detalhada](#configuração-supervisor-detalhada)
+17. [Variáveis de Ambiente](#variáveis-de-ambiente)
+18. [Testes Automatizados](#testes-automatizados)
 
 ---
 
@@ -175,8 +176,8 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 2. Source lib/common.sh (carrega todas as funções utilitárias)
 3. Detecta distribuição/OS via detect_distro()
 4. Exibe menu adaptativo conforme plataforma:
-   - Linux: 12 opções agrupadas em seções (Ambiente SUAP, Serviços no host, Via Docker)
-   - macOS: 7 opções (dev e as opções Via Docker, incluindo redis e postgres docker)
+   - Linux: 13 opções agrupadas em seções (Ambiente SUAP, Serviços no host, Via Docker)
+   - macOS: 8 opções (dev e as opções Via Docker, incluindo arcane, redis e postgres docker)
 5. Valida entrada do usuário
 6. Traduz a opção exibida (sequencial) para o id interno via lista `MENU_IDS`
 7. Coleta variáveis via ensure_env_for_option (wizard se necessário)
@@ -203,6 +204,7 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 | 9 | `{distro}/install-postgres.sh` | POSTGRES_VERSION |
 | 10 | `docker/minio-setup.sh` | SUAP_MINIO_DIR, SUAP_MINIO_GIT_URL |
 | 11 | `docker/redis-setup.sh` | nenhuma (opcionais: REDIS_DOCKER_PORT, REDIS_DOCKER_PASSWORD, REDIS_DOCKER_IMAGE) |
+| 13 | `docker/arcane-setup.sh` | nenhuma (opcionais: ARCANE_PORT, ARCANE_IMAGE, ARCANE_PROJECTS_DIR, ARCANE_APP_URL, ARCANE_ENCRYPTION_KEY) |
 | 12 | `docker/postgres-setup.sh` | nenhuma (opcionais: POSTGRES_VERSION, POSTGRES_DOCKER_PORT, POSTGRES_DOCKER_DB, POSTGRES_DOCKER_USER, POSTGRES_DOCKER_PASSWORD, POSTGRES_DOCKER_IMAGE) |
 
 **macOS (opção exibida → id interno):**
@@ -213,9 +215,10 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 | 2 | 5 | `docker/dev/docker-setup.sh` |
 | 3 | 6 | `docker/prod/docker-setup.sh` |
 | 4 | 7 | `docker/dockhand-setup.sh` |
-| 5 | 10 | `docker/minio-setup.sh` |
-| 6 | 11 | `docker/redis-setup.sh` |
-| 7 | 12 | `docker/postgres-setup.sh` |
+| 5 | 13 | `docker/arcane-setup.sh` |
+| 6 | 10 | `docker/minio-setup.sh` |
+| 7 | 11 | `docker/redis-setup.sh` |
+| 8 | 12 | `docker/postgres-setup.sh` |
 
 ---
 
@@ -1303,6 +1306,76 @@ Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`. Idempotente. O socket `/var/
 
 ---
 
+## Arcane
+
+**Arquivo:** `docker/arcane-setup.sh`
+
+### O que é
+
+O [Arcane](https://getarcane.app/) (BSD-3-Clause) é uma interface web para gerenciar containers, stacks Compose, imagens, volumes e redes. Adotado como alternativa ao Dockhand (BSL 1.1, com licença paga para uso empresarial em produção). O script segue a [instalação oficial](https://getarcane.app/docs/get-started/installation).
+
+### Especificações Técnicas
+
+| Propriedade | Valor |
+|-------------|-------|
+| Imagem | `ghcr.io/getarcaneapp/manager:latest` (sobrescrevível via `ARCANE_IMAGE`) |
+| Porta host | 3552 (padrão; configurável via `ARCANE_PORT`) |
+| Porta container | 3552 |
+| Volume de dados | `arcane-data` → `/app/data` |
+| Projetos Compose | `ARCANE_PROJECTS_DIR` (padrão `/opt/docker`), montado no mesmo caminho |
+| Docker Socket | `/var/run/docker.sock` montado como volume |
+| cgroup | `--cgroupns host` |
+| Restart policy | `unless-stopped` |
+| Nome do container | `arcane` |
+| Variáveis do container | `APP_URL`, `PUID`/`PGID` (do usuário atual), `ENCRYPTION_KEY`, `PROJECTS_DIRECTORY` |
+
+### Etapas
+
+```
+1. Source lib/common.sh; carrega .env se existir (opcional)
+2. check_docker_available() → verifica Docker
+3. Container "arcane" já ativo: msg_skip + URL → exit 0
+   Container existente e parado: docker start → exit 0
+4. Chave de criptografia (ENCRYPTION_KEY, 32 bytes em hex):
+   - ARCANE_ENCRYPTION_KEY, se definida
+   - senão, a de <state>/arcane.key, se existir
+   - senão, gera (openssl rand -hex 32, ou /dev/urandom) e grava em
+     <state>/arcane.key com umask 077
+   (<state> = _manifest_state_dir: .state/ no repositório ou /var/lib/suap-setup)
+5. Cria ARCANE_PROJECTS_DIR (sudo se necessário) e ajusta o dono
+6. SELinux Enforcing (getenforce): adiciona --security-opt label=disable
+   e :z no mount da pasta de projetos
+7. docker pull ${ARCANE_IMAGE}
+8. docker run -d --name arcane -p ${ARCANE_PORT:-3552}:3552 --cgroupns host \
+     -v /var/run/docker.sock:/var/run/docker.sock -v arcane-data:/app/data \
+     -v <projetos>:<projetos>[:z] -e APP_URL -e PUID -e PGID \
+     -e ENCRYPTION_KEY -e PROJECTS_DIRECTORY --restart unless-stopped <imagem>
+9. Verifica o container e exibe URL, login inicial, pasta de projetos e chave
+```
+
+> **Chave de criptografia:** é guardada fora do `.env` porque o wizard reescreve
+> esse arquivo. Perder a chave torna ilegíveis os dados do volume `arcane-data`.
+> O login inicial é `arcane` / `arcane-admin`, com troca de senha obrigatória.
+
+### Reversão
+
+**Arquivo:** `docker/arcane-revert.sh`
+
+```
+1. Carrega .env (se existir); Docker ausente: pula container, volume e imagem
+2. Container "arcane" existe: docker rm -f
+3. Volume arcane-data: confirm_destructive + docker volume rm
+4. Imagem ${ARCANE_IMAGE}: confirm_destructive + docker rmi
+5. Chave <state>/arcane.key:
+   - volume ainda existe: preservada (ele precisa dela)
+   - senão: confirm_destructive + revert_file
+6. Pasta de projetos: nunca apagada (apenas informada)
+```
+
+Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`. Idempotente.
+
+---
+
 ## MinIO — Object Storage S3-compatível {#minio-object-storage}
 
 **Arquivo:** `docker/minio-setup.sh`
@@ -1653,8 +1726,8 @@ na primeira execução do `setup.sh`.
 | `SUAP_DEPLOY_GIT_URL` | URL | *(obrigatório, sem padrão)* | URL do repositório suap_deploy |
 
 > **Nota:** As variáveis `SUAP_IMAGE`, `SUAP_PDF_IMAGE` e `SUAP_AI_IMAGE` só são
-> gravadas no `.env` quando definidas (ou seja, quando o usuário executa a opção 5 —
-> Docker dev). Se o usuário nunca selecionou essa opção, essas variáveis não estarão
+> gravadas no `.env` quando definidas (ou seja, quando o usuário executa o Docker dev —
+> "SUAP dev (docker compose)"). Se o usuário nunca selecionou essa opção, essas variáveis não estarão
 > presentes no arquivo.
 
 ### Variáveis MinIO
@@ -1702,7 +1775,7 @@ CELERY_QUEUE=geral,celery_beat
 POSTGRES_VERSION=16
 
 # --- Docker ---
-# Variáveis de imagem: presentes apenas se a opção 5 (Docker dev) foi executada
+# Variáveis de imagem: presentes apenas se o Docker dev foi executado
 # SUAP_IMAGE=registry.exemplo.com:5000/org/suap
 # SUAP_PDF_IMAGE=registry.exemplo.com:5000/org/suap-pdf:latest
 # SUAP_AI_IMAGE=registry.exemplo.com:5000/org/suap-ai:latest

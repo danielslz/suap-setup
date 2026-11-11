@@ -50,6 +50,14 @@ Instala e inicia o Dockhand (interface web para gerenciamento Docker).
 Este é um utilitário independente e não depende dos projetos acima.
 Reversão em `docker/dockhand-revert.sh`.
 
+## Arcane (`docker/arcane-setup.sh`)
+
+Utilitário independente, alternativa livre (BSD-3-Clause) ao Dockhand. Sobe o
+container `arcane` (`ghcr.io/getarcaneapp/manager`) na porta `3552`, com volume
+`arcane-data` e pasta de projetos Compose (`/opt/docker`). A `ENCRYPTION_KEY` é
+gerada e guardada em `.state/arcane.key`; faça backup dela. Reversão em
+`docker/arcane-revert.sh`.
+
 ## MinIO (`docker/minio-setup.sh`)
 
 Utiliza o projeto **suap-minio** para provisionar um servidor de object storage
@@ -93,7 +101,7 @@ volume `suap-postgres-data`. Reversão em `docker/postgres-revert.sh`.
 ## Reversões
 
 Cada setup Docker tem um `*-revert.sh` correspondente (acionado por `R` no `setup.sh`):
-`install-docker-revert.sh`, `dockhand-revert.sh`, `minio-revert.sh`, `redis-revert.sh`,
+`install-docker-revert.sh`, `dockhand-revert.sh`, `arcane-revert.sh`, `minio-revert.sh`, `redis-revert.sh`,
 `postgres-revert.sh`, `dev/docker-setup-revert.sh` e `prod/docker-setup-revert.sh`.
 Todos usam `confirm_destructive` para volumes, imagens e diretórios, e aceitam
 `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`.

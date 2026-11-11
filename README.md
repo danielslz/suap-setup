@@ -72,6 +72,7 @@ bash arch/install-nginx.sh
 bash docker/dev/docker-setup.sh
 bash docker/prod/docker-setup.sh
 bash docker/dockhand-setup.sh
+bash docker/arcane-setup.sh
 bash docker/install-docker.sh
 bash docker/minio-setup.sh
 bash docker/redis-setup.sh
@@ -103,9 +104,10 @@ Via Docker
    7) SUAP dev (docker compose)
    8) SUAP prod (suap_deploy)
    9) Dockhand (gerenciador Docker web)
-  10) MinIO (object storage S3)
-  11) Redis (porta 6379 exposta)
-  12) PostgreSQL (porta 5432 exposta)
+  10) Arcane (gerenciador Docker web)
+  11) MinIO (object storage S3)
+  12) Redis (porta 6379 exposta)
+  13) PostgreSQL (porta 5432 exposta)
 
    R) Reverter uma funcionalidade
    0) Sair
@@ -123,9 +125,10 @@ Via Docker
    2) SUAP dev (docker compose)
    3) SUAP prod (suap_deploy)
    4) Dockhand (gerenciador Docker web)
-   5) MinIO (object storage S3)
-   6) Redis (porta 6379 exposta)
-   7) PostgreSQL (porta 5432 exposta)
+   5) Arcane (gerenciador Docker web)
+   6) MinIO (object storage S3)
+   7) Redis (porta 6379 exposta)
+   8) PostgreSQL (porta 5432 exposta)
 
    R) Reverter uma funcionalidade
    0) Sair
@@ -155,9 +158,9 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `CELERY_FLOWER_AUTH` | Autenticação do Flower | — | `admin:admin` |
 | `CELERY_MAX_WORKERS` | Máximo de workers Celery | — | `5` |
 | `CELERY_MIN_WORKERS` | Mínimo de workers Celery | — | `2` |
-| `SUAP_IMAGE` | Imagem Docker do SUAP no registry | — | *(solicitado pelo wizard, opção 5)* |
-| `SUAP_PDF_IMAGE` | Imagem Docker do serviço de PDF | — | *(solicitado pelo wizard, opção 5)* |
-| `SUAP_AI_IMAGE` | Imagem Docker do serviço de IA | — | *(solicitado pelo wizard, opção 5)* |
+| `SUAP_IMAGE` | Imagem Docker do SUAP no registry | — | *(solicitado pelo wizard no Docker dev)* |
+| `SUAP_PDF_IMAGE` | Imagem Docker do serviço de PDF | — | *(solicitado pelo wizard no Docker dev)* |
+| `SUAP_AI_IMAGE` | Imagem Docker do serviço de IA | — | *(solicitado pelo wizard no Docker dev)* |
 | `SUAP_DEPLOY_DIR` | Diretório do repositório suap_deploy | — | `/opt/suap_deploy` |
 | `SUAP_DEPLOY_GIT_URL` | URL Git do suap_deploy | — | *(solicitado pelo wizard)* |
 | `SUAP_MINIO_DIR` | Diretório do repositório suap-minio | — | `/opt/suap-minio` |
@@ -193,6 +196,8 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `docker/prod/docker-setup-revert.sh` | Todas | Reverte o ambiente prod Docker (make down; banco, imagens e diretório com confirmação) |
 | `docker/dockhand-setup.sh` | Todas | Interface web para gerenciamento Docker |
 | `docker/dockhand-revert.sh` | Todas | Reverte o Dockhand (container; volumes e imagem com confirmação) |
+| `docker/arcane-setup.sh` | Todas | Arcane: interface web para gerenciamento Docker (alternativa livre ao Dockhand) |
+| `docker/arcane-revert.sh` | Todas | Reverte o Arcane (container; volume, imagem e chave com confirmação) |
 | `docker/minio-setup.sh` | Todas | Setup do MinIO (object storage S3-compatível) via Docker |
 | `docker/minio-revert.sh` | Todas | Reverte o MinIO (containers; volumes, imagens e diretório com confirmação) |
 | `docker/redis-setup.sh` | Todas | Redis em container Docker com porta 6379 exposta |
@@ -263,7 +268,7 @@ Os scripts Docker do suap-setup **não mantêm Dockerfiles nem docker-compose pr
 
 Isso garante que a configuração de build esteja sempre sincronizada com o upstream.
 
-### Variáveis Docker (solicitadas pelo wizard na opção 5)
+### Variáveis Docker (solicitadas pelo wizard do Docker dev)
 
 | Variável | Descrição | Exemplo |
 |----------|-----------|---------|
@@ -378,6 +383,34 @@ Para usar outra porta, defina `DOCKHAND_PORT` no `.env` ou no ambiente (ex.: `DO
 
 Para desfazer, use `R) Reverter > Reverter Dockhand` (ou `bash docker/dockhand-revert.sh`). O container é removido; volumes associados (dados do Dockhand) e a imagem só são apagados com confirmação.
 
+### Arcane
+
+O [Arcane](https://getarcane.app/) é uma interface web livre (BSD-3-Clause) para gerenciamento de containers Docker, stacks Compose, imagens, volumes e redes. É a alternativa ao Dockhand, cuja licença (BSL 1.1) exige plano pago para uso empresarial em produção. O script `docker/arcane-setup.sh` segue a [instalação oficial](https://getarcane.app/docs/get-started/installation).
+
+| Propriedade | Valor |
+|-------------|-------|
+| Imagem | `ghcr.io/getarcaneapp/manager:latest` (sobrescrevível via `ARCANE_IMAGE`) |
+| Container | `arcane` (`--restart unless-stopped`, `--cgroupns host`) |
+| Porta de acesso | `http://localhost:3552` (configurável via `ARCANE_PORT`) |
+| Volume de dados | `arcane-data` → `/app/data` |
+| Projetos Compose | `/opt/docker` (configurável via `ARCANE_PROJECTS_DIR`) |
+| Socket Docker | `/var/run/docker.sock` |
+| Login inicial | `arcane` / `arcane-admin` (troca de senha exigida no primeiro acesso) |
+| Variáveis opcionais | `ARCANE_PORT`, `ARCANE_IMAGE`, `ARCANE_PROJECTS_DIR`, `ARCANE_APP_URL`, `ARCANE_ENCRYPTION_KEY` |
+
+O script:
+
+1. Verifica Docker disponível
+2. Se o container já está ativo, apenas exibe a URL; se está parado, inicia o existente
+3. Gera uma `ENCRYPTION_KEY` de 32 bytes (hex) e a guarda em `.state/arcane.key` (modo 600), reutilizando-a nas próximas execuções. Sem a mesma chave, os dados do volume `arcane-data` ficam ilegíveis; **faça backup desse arquivo**
+4. Cria a pasta de projetos Compose, se necessário
+5. Em hosts com SELinux em modo Enforcing, aplica `--security-opt label=disable` e `:z` na pasta de projetos (recomendação da documentação oficial)
+6. Baixa a imagem e inicia o container
+
+Para acessar de outra máquina, defina `ARCANE_APP_URL` (ex.: `http://servidor:3552`) e libere a porta no firewall. Para mudar a porta depois, remova o container (`docker rm -f arcane`) e rode o script novamente; a chave e o volume são reaproveitados.
+
+Para desfazer, use `R) Reverter > Reverter Arcane` (ou `bash docker/arcane-revert.sh`). O container é removido; o volume `arcane-data` e a imagem só são apagados com confirmação. A chave de criptografia é mantida enquanto o volume existir, e a pasta de projetos nunca é apagada.
+
 ### MinIO (Object Storage)
 
 O [MinIO](https://min.io/) é um servidor de object storage compatível com a API S3, utilizado pelo SUAP para armazenamento de arquivos de mídia e temporários. O script `docker/minio-setup.sh` delega para o projeto `suap-minio`, que fornece MinIO + Nginx como proxy.
@@ -440,7 +473,7 @@ O script `docker/postgres-setup.sh` sobe um PostgreSQL em container, com a porta
 | Ajuste | `bytea_output=escape` (compatível com o SUAP) |
 | Variáveis opcionais | `POSTGRES_VERSION`, `POSTGRES_DOCKER_PORT`, `POSTGRES_DOCKER_DB`, `POSTGRES_DOCKER_USER`, `POSTGRES_DOCKER_PASSWORD`, `POSTGRES_DOCKER_IMAGE` |
 
-Idempotente como o Redis. Diferença para a instalação nativa (opção 6): o banco é criado com a collation padrão da imagem (UTF-8), sem `pt_BR.UTF-8`. Para remover, use `R` no menu (ou `bash docker/postgres-revert.sh`); o volume só é apagado com confirmação.
+Idempotente como o Redis. Diferença para a instalação nativa ("Instalar PostgreSQL", em Serviços no host): o banco é criado com a collation padrão da imagem (UTF-8), sem `pt_BR.UTF-8`. Para remover, use `R` no menu (ou `bash docker/postgres-revert.sh`); o volume só é apagado com confirmação.
 
 ## Configuração Nginx
 
@@ -541,6 +574,8 @@ suap-setup/
 │   ├── install-docker-revert.sh      # Reversão da instalação do Docker
 │   ├── dockhand-setup.sh             # Dockhand
 │   ├── dockhand-revert.sh            # Reversão do Dockhand
+│   ├── arcane-setup.sh               # Arcane (gerenciador Docker web)
+│   ├── arcane-revert.sh              # Reversão do Arcane
 │   ├── minio-setup.sh               # Setup do MinIO (suap-minio)
 │   ├── minio-revert.sh              # Reversão do MinIO
 │   ├── redis-setup.sh               # Redis via Docker (porta 6379)
@@ -588,7 +623,7 @@ suap-setup/
 - **Docker auto-install**: se Docker não estiver disponível, os scripts Docker oferecem instalação automática.
 - **Delegação Docker**: scripts Docker não mantêm Dockerfiles locais — delegam para repositórios upstream (suap para dev, suap_deploy para prod).
 - **UID/GID 33 do www-data**: scripts de produção e atualização garantem que o usuário `www-data` possui UID/GID 33 para compatibilidade com volumes Docker do suap_deploy. Se outro usuário/grupo ocupa UID/GID 33, o script encerra com erro.
-- **Variáveis de imagens Docker** (`SUAP_IMAGE`, `SUAP_PDF_IMAGE`, `SUAP_AI_IMAGE`) são solicitadas pelo wizard do suap-setup apenas para Docker dev (opção 5) e só são gravadas no `.env` quando definidas. Para Docker prod (opção 6), essas variáveis são gerenciadas pelo `.env` do próprio suap_deploy (via `make setup`).
+- **Variáveis de imagens Docker** (`SUAP_IMAGE`, `SUAP_PDF_IMAGE`, `SUAP_AI_IMAGE`) são solicitadas pelo wizard do suap-setup apenas para Docker dev ("SUAP dev (docker compose)") e só são gravadas no `.env` quando definidas. Para Docker prod ("SUAP prod (suap_deploy)"), essas variáveis são gerenciadas pelo `.env` do próprio suap_deploy (via `make setup`).
 - As opções Docker funcionam em qualquer sistema com Docker, independente da distribuição.
 
 ## Licença
