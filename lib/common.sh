@@ -1537,3 +1537,156 @@ revert_apply() {
   fi
   [ "${failures}" -eq 0 ]
 }
+
+# =============================================================================
+# Stacks Docker Compose (Redis, PostgreSQL, Dockhand, Arcane)
+# =============================================================================
+# Cada serviço vive em ${DOCKER_STACKS_DIR:-/opt/docker}/<nome>/ com:
+#   compose.yaml  gerado pelo script de setup (fonte da verdade: variáveis + .env)
+#   .env          valores do stack (senhas/chaves), permissão 600
+# Volumes têm nome explícito no compose para reaproveitar os criados antes pelos
+# scripts baseados em 'docker run'.
+
+# stack_init(nome)
+# Define STACK_DIR, STACK_ENV e STACK_FILE; cria o diretório (sudo se preciso).
+stack_init() {
+  local nome="${1}"
+  local base="${DOCKER_STACKS_DIR:-/opt/docker}"
+  STACK_DIR="${base}/${nome}"
+  STACK_ENV="${STACK_DIR}/.env"
+  STACK_FILE="${STACK_DIR}/compose.yaml"
+  if [ ! -d "${STACK_DIR}" ]; then
+    msg_action "Criando ${STACK_DIR}..."
+    mkdir -p "${STACK_DIR}" 2>/dev/null || sudo mkdir -p "${STACK_DIR}"
+  fi
+  if [ ! -w "${STACK_DIR}" ]; then
+    sudo chown -R "$(id -u):$(id -g)" "${STACK_DIR}"
+  fi
+}
+
+# stack_env_load(chave...)
+# Para cada chave ainda não definida no ambiente, lê o valor de ${STACK_ENV}
+# (formato CHAVE='valor'). Precedência: ambiente > .env do stack > padrão do script.
+stack_env_load() {
+  local key val
+  [ -f "${STACK_ENV}" ] || return 0
+  for key in "$@"; do
+    if [ -z "${!key:-}" ]; then
+      val="$(sed -n "s/^${key}='\(.*\)'$/\1/p" "${STACK_ENV}" | head -n1)"
+      [ -n "${val}" ] && export "${key}=${val}"
+    fi
+  done
+  return 0
+}
+
+# stack_env_write(chave...)
+# Grava ${STACK_ENV} (chmod 600) com CHAVE='valor' para cada chave informada.
+# Valores com aspas simples ou quebra de linha são recusados.
+stack_env_write() {
+  local key val tmp
+  tmp="$(mktemp)"
+  for key in "$@"; do
+    val="${!key:-}"
+    if [[ "${val}" == *"'"* || "${val}" == *$'\n'* ]]; then
+      msg_error "O valor de ${key} não pode conter aspas simples nem quebra de linha."
+      rm -f "${tmp}"
+      return 1
+    fi
+    printf "%s='%s'\n" "${key}" "${val}" >> "${tmp}"
+  done
+  chmod 600 "${tmp}"
+  mv "${tmp}" "${STACK_ENV}"
+}
+
+# stack_compose(nome-do-projeto, args...)
+# Executa 'docker compose' no stack atual (STACK_FILE/STACK_ENV).
+stack_compose() {
+  local project="${1}"; shift
+  docker compose --project-name "${project}" --env-file "${STACK_ENV}" -f "${STACK_FILE}" "$@"
+}
+
+# stack_adopt_legacy(container, projeto)
+# Se existir um container com esse nome que NÃO foi criado pelo compose (criado
+# antes por 'docker run'), oferece removê-lo para que o compose assuma. Os volumes
+# são preservados. Retorna 1 se o usuário recusar.
+stack_adopt_legacy() {
+  local container="${1}" project="${2}" label
+  docker inspect "${container}" &>/dev/null || return 0
+  label="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "${container}" 2>/dev/null || true)"
+  [ "${label}" = "${project}" ] && return 0
+  echo ""
+  msg_skip "O container '${container}' existe e foi criado fora do compose (docker run)."
+  echo "  Para gerenciá-lo pelo compose ele será removido e recriado; volumes e dados são preservados."
+  local resp
+  read -rp "  Migrar agora? [s/N]: " resp
+  if [[ "${resp:-N}" =~ ^[sS]$ ]]; then
+    docker rm -f "${container}" >/dev/null || { msg_error "Falha ao remover '${container}'."; return 1; }
+    return 0
+  fi
+  msg_error "Migração recusada. Remova o container manualmente (docker rm -f ${container}) e rode novamente."
+  return 1
+}
+
+# stack_revert(nome, projeto, container, volume, imagem)
+# Reversão padrão de um stack: derruba o compose (ou remove o container legado),
+# e pede confirmação para apagar volume, imagem e o diretório do stack. O
+# diretório (que guarda senhas/chaves) é preservado enquanto o volume existir.
+# Suporta REVERT_DRY_RUN=1 e REVERT_ASSUME_YES=1.
+stack_revert() {
+  local nome="${1}" project="${2}" container="${3}" volume="${4}" image="${5}"
+  local base="${DOCKER_STACKS_DIR:-/opt/docker}"
+  local dir="${base}/${nome}"
+
+  if command -v docker &>/dev/null; then
+    if [ -f "${dir}/compose.yaml" ] && docker compose version &>/dev/null; then
+      if _dry; then
+        echo "  ${YELLOW}[dry-run]${NO_COLOR} executaria: docker compose down em ${dir}"
+      else
+        msg_action "Parando e removendo o stack ${nome}..."
+        docker compose --project-name "${project}" --env-file "${dir}/.env" -f "${dir}/compose.yaml" down --remove-orphans \
+          || { msg_error "Falha em 'docker compose down'."; return 1; }
+      fi
+    elif docker ps -a --filter "name=^${container}$" --format '{{.Names}}' | grep -q "^${container}$"; then
+      if _dry; then
+        echo "  ${YELLOW}[dry-run]${NO_COLOR} removeria o container ${container}"
+      else
+        msg_action "Removendo container ${container}..."
+        docker rm -f "${container}" >/dev/null || { msg_error "Falha ao remover ${container}."; return 1; }
+      fi
+    else
+      msg_skip "Container ${container} não existe."
+    fi
+
+    if docker volume ls --format '{{.Name}}' | grep -q "^${volume}$"; then
+      if confirm_destructive "APAGAR o volume Docker '${volume}' (dados do serviço, irreversível)"; then
+        msg_action "Removendo volume ${volume}..."
+        docker volume rm "${volume}" >/dev/null || msg_error "Falha ao remover o volume ${volume}."
+      else
+        msg_skip "Volume ${volume} preservado."
+      fi
+    else
+      msg_skip "Volume ${volume} não existe."
+    fi
+
+    if docker image inspect "${image}" &>/dev/null; then
+      if confirm_destructive "remover a imagem Docker '${image}'"; then
+        msg_action "Removendo imagem ${image}..."
+        docker rmi "${image}" >/dev/null 2>&1 || msg_error "Não foi possível remover a imagem ${image} (em uso?)."
+      else
+        msg_skip "Imagem ${image} preservada."
+      fi
+    else
+      msg_skip "Imagem ${image} não existe."
+    fi
+  else
+    msg_skip "Docker não encontrado. Pulando container, volume e imagem."
+  fi
+
+  if [ -d "${dir}" ]; then
+    if command -v docker &>/dev/null && docker volume ls --format '{{.Name}}' | grep -q "^${volume}$"; then
+      msg_skip "Diretório ${dir} preservado (guarda a configuração e segredos que o volume ${volume} ainda usa)."
+    else
+      revert_dir "${dir}" --destructive
+    fi
+  fi
+}

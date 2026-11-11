@@ -13,7 +13,8 @@
 9. [Ambiente Docker — Desenvolvimento](#ambiente-docker-desenvolvimento)
 10. [Ambiente Docker — Produção](#ambiente-docker-produção)
 11. [Instalação do Docker](#instalação-do-docker)
-12. [Dockhand — Gerenciamento Docker via Web](#dockhand)
+12. [Stacks Docker Compose](#stacks-docker-compose)
+    - [Dockhand — Gerenciamento Docker via Web](#dockhand)
 13. [Arcane — Gerenciamento Docker via Web](#arcane)
 14. [MinIO — Object Storage S3-compatível](#minio-object-storage)
 15. [Configuração Nginx Detalhada](#configuração-nginx-detalhada)
@@ -1235,6 +1236,56 @@ Suporta `REVERT_DRY_RUN=1` (apenas lista as etapas) e `REVERT_ASSUME_YES=1`. É 
 
 ---
 
+## Stacks Docker Compose
+
+**Arquivos:** `docker/redis-setup.sh`, `docker/postgres-setup.sh`, `docker/dockhand-setup.sh`, `docker/arcane-setup.sh` e os respectivos `*-revert.sh`. Funções compartilhadas em `lib/common.sh`.
+
+### Layout
+
+Cada serviço vive em `${DOCKER_STACKS_DIR:-/opt/docker}/<nome>/`:
+
+| Arquivo | Conteúdo |
+|---------|----------|
+| `compose.yaml` | Gerado pelo script a cada execução (fonte da verdade: variáveis + `.env`) |
+| `.env` | `CHAVE='valor'` das variáveis do stack, chmod 600 (senhas e chaves) |
+
+Os volumes têm nome explícito (`suap-redis-data`, `suap-postgres-data`, `dockhand_data`, `arcane-data`), o que permite reaproveitar os criados antes por `docker run`.
+
+### Funções (`lib/common.sh`)
+
+| Função | Descrição |
+|--------|-----------|
+| `stack_init <nome>` | Define `STACK_DIR`, `STACK_ENV`, `STACK_FILE`; cria o diretório (sudo se preciso) |
+| `stack_env_load <chaves>` | Carrega do `.env` do stack as chaves ainda não definidas (precedência: ambiente > `.env` do stack > padrão do script) |
+| `stack_env_write <chaves>` | Grava o `.env` (chmod 600); recusa valores com aspas simples ou quebra de linha |
+| `stack_compose <projeto> <args>` | Executa `docker compose --project-name … --env-file … -f …` |
+| `stack_adopt_legacy <container> <projeto>` | Se o container não foi criado pelo compose (label `com.docker.compose.project`), pede confirmação e o remove, preservando volumes |
+| `stack_revert <nome> <projeto> <container> <volume> <imagem>` | Reversão padrão (ver abaixo) |
+
+### Reversão padrão (`stack_revert`)
+
+```
+1. compose.yaml existe: docker compose down --remove-orphans
+   senão, container legado: docker rm -f
+2. Volume: confirm_destructive + docker volume rm
+3. Imagem: confirm_destructive + docker rmi
+4. Diretório do stack (guarda segredos): preservado enquanto o volume existir;
+   senão, revert_dir --destructive
+```
+
+Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`. Idempotente.
+
+### Redis e PostgreSQL
+
+| Serviço | Stack | Container | Volume | Particularidades |
+|---------|-------|-----------|--------|------------------|
+| Redis | `redis/` | `suap-redis` | `suap-redis-data` | `requirepass` via variável de ambiente do container (evita expandir `$` na senha); AOF habilitado; `--bind 0.0.0.0` |
+| PostgreSQL | `postgres/` | `suap-postgres` | `suap-postgres-data` | `listen_addresses=*`, `bytea_output=escape`; `POSTGRES_DB/USER/PASSWORD` só valem na primeira inicialização do volume; collation padrão da imagem (sem `pt_BR.UTF-8`) |
+
+As senhas são solicitadas (ou geradas) apenas quando ainda não existem no ambiente nem no `.env` do stack, e ficam em `.env` (chmod 600).
+
+---
+
 ## Dockhand
 
 **Arquivo:** `docker/dockhand-setup.sh`
@@ -1243,12 +1294,14 @@ Suporta `REVERT_DRY_RUN=1` (apenas lista as etapas) e `REVERT_ASSUME_YES=1`. É 
 
 O [Dockhand](https://dockhand.pro/) é uma interface web para gerenciamento
 visual de containers Docker. Permite visualizar, iniciar, parar e inspecionar
-containers através do navegador.
+containers através do navegador. Sobe via Docker Compose (ver
+[Stacks Docker Compose](#stacks-docker-compose)).
 
 ### Especificações Técnicas
 
 | Propriedade | Valor |
 |-------------|-------|
+| Stack | `${DOCKER_STACKS_DIR:-/opt/docker}/dockhand/` (`compose.yaml` + `.env`) |
 | Imagem | `fnsys/dockhand:latest` (Docker Hub; sobrescrevível via `DOCKHAND_IMAGE`) |
 | Volume de dados | `dockhand_data` → `/app/data` |
 | Porta host | 9093 (padrão; configurável via `DOCKHAND_PORT`) |
@@ -1260,49 +1313,25 @@ containers através do navegador.
 ### Etapas
 
 ```
-1. Source lib/common.sh
+1. Source lib/common.sh; carrega .env do suap-setup se existir
 2. check_docker_available() → verifica Docker
-3. Verificar se container "dockhand" já está ativo:
-   - Se sim: msg_skip + exibir URL → exit 0
-4. docker pull fnsys/dockhand:latest
-5. docker run -d --name dockhand -p ${DOCKHAND_PORT:-9093}:3000 \
-     -v /var/run/docker.sock:/var/run/docker.sock \
-     -v dockhand_data:/app/data \
-     --restart unless-stopped fnsys/dockhand:latest
-6. Verificar se container iniciou com sucesso
-7. Exibir URL de acesso: http://localhost:${DOCKHAND_PORT:-9093}
+3. stack_init "dockhand"; stack_env_load DOCKHAND_PORT DOCKHAND_IMAGE
+4. stack_adopt_legacy: container "dockhand" criado por docker run → confirmação e remoção
+5. stack_env_write (.env, chmod 600) e geração do compose.yaml
+6. docker compose pull + up -d --remove-orphans
+7. Verificar se o container está em execução
+8. Exibir URL de acesso: http://localhost:${DOCKHAND_PORT:-9093}
 ```
 
-> **Idempotência:** Se o container `dockhand` já estiver rodando, o script
-> apenas exibe a URL de acesso e encerra sem criar outro container.
-### Reversão (Docker prod)
-
-**Arquivo:** `docker/prod/docker-setup-revert.sh`
-
-```
-1. Carrega .env (se existir); calcula SUAP_DEPLOY_DIR como o setup; diretório ausente: skip
-2. confirm_destructive: parar a produção
-   - make down (remove também suap_static/suap_docker/suap_docs); sem Makefile: docker compose down
-3. Volume suap_pgdata (banco local): confirm_destructive + docker volume rm
-4. Imagens do compose: confirm_destructive + docker compose down --rmi all
-5. revert_dir --destructive em SUAP_DEPLOY_DIR (.env, deploy/media, deploy/backup)
-```
-
-Se a confirmação do passo 2 for negada, nada é alterado nos serviços (o diretório ainda pode ser tratado no passo 5). Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`.
-
+> **Idempotência:** `docker compose up -d` não recria o container se nada mudou;
+> se a porta ou a imagem mudaram, ele é recriado mantendo o volume `dockhand_data`.
 
 ### Reversão
 
-**Arquivo:** `docker/dockhand-revert.sh`
+**Arquivo:** `docker/dockhand-revert.sh` (usa `stack_revert`; ver [Stacks Docker Compose](#stacks-docker-compose))
 
-```
-1. Docker ausente: skip (exit 0)
-2. Container "dockhand" existe: registra seus volumes (docker inspect) e executa docker rm -f
-3. Para cada volume registrado: confirm_destructive + docker volume rm
-4. Imagem fnsys/dockhand:latest existe: confirm_destructive + docker rmi
-```
-
-Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`. Idempotente. O socket `/var/run/docker.sock` é apenas montado no container e não é alterado.
+Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`. Idempotente. O socket
+`/var/run/docker.sock` é apenas montado no container e não é alterado.
 
 ---
 
@@ -1312,19 +1341,20 @@ Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`. Idempotente. O socket `/var/
 
 ### O que é
 
-O [Arcane](https://getarcane.app/) (BSD-3-Clause) é uma interface web para gerenciar containers, stacks Compose, imagens, volumes e redes. Adotado como alternativa ao Dockhand (BSL 1.1, com licença paga para uso empresarial em produção). O script segue a [instalação oficial](https://getarcane.app/docs/get-started/installation).
+O [Arcane](https://getarcane.app/) (BSD-3-Clause) é uma interface web para gerenciar containers, stacks Compose, imagens, volumes e redes. Adotado como alternativa ao Dockhand (BSL 1.1, com licença paga para uso empresarial em produção). O script segue a [instalação oficial](https://getarcane.app/docs/get-started/installation) e usa Docker Compose (ver [Stacks Docker Compose](#stacks-docker-compose)).
 
 ### Especificações Técnicas
 
 | Propriedade | Valor |
 |-------------|-------|
 | Imagem | `ghcr.io/getarcaneapp/manager:latest` (sobrescrevível via `ARCANE_IMAGE`) |
+| Stack | `${DOCKER_STACKS_DIR:-/opt/docker}/arcane/` (`compose.yaml` + `.env`) |
 | Porta host | 3552 (padrão; configurável via `ARCANE_PORT`) |
 | Porta container | 3552 |
 | Volume de dados | `arcane-data` → `/app/data` |
-| Projetos Compose | `ARCANE_PROJECTS_DIR` (padrão `/opt/docker`), montado no mesmo caminho |
+| Projetos Compose | `ARCANE_PROJECTS_DIR` (padrão `DOCKER_STACKS_DIR`, ou `/opt/docker`), montado no mesmo caminho |
 | Docker Socket | `/var/run/docker.sock` montado como volume |
-| cgroup | `--cgroupns host` |
+| cgroup | `cgroup: host` |
 | Restart policy | `unless-stopped` |
 | Nome do container | `arcane` |
 | Variáveis do container | `APP_URL`, `PUID`/`PGID` (do usuário atual), `ENCRYPTION_KEY`, `PROJECTS_DIRECTORY` |
@@ -1332,47 +1362,34 @@ O [Arcane](https://getarcane.app/) (BSD-3-Clause) é uma interface web para gere
 ### Etapas
 
 ```
-1. Source lib/common.sh; carrega .env se existir (opcional)
+1. Source lib/common.sh; carrega .env do suap-setup se existir
 2. check_docker_available() → verifica Docker
-3. Container "arcane" já ativo: msg_skip + URL → exit 0
-   Container existente e parado: docker start → exit 0
+3. stack_init "arcane"; stack_env_load das variáveis ARCANE_*
 4. Chave de criptografia (ENCRYPTION_KEY, 32 bytes em hex):
-   - ARCANE_ENCRYPTION_KEY, se definida
-   - senão, a de <state>/arcane.key, se existir
-   - senão, gera (openssl rand -hex 32, ou /dev/urandom) e grava em
-     <state>/arcane.key com umask 077
-   (<state> = _manifest_state_dir: .state/ no repositório ou /var/lib/suap-setup)
+   - ARCANE_ENCRYPTION_KEY (ambiente) ou a do .env do stack
+   - senão, a de <state>/arcane.key (versão anterior do script), se existir
+   - senão, gera (openssl rand -hex 32, ou /dev/urandom)
 5. Cria ARCANE_PROJECTS_DIR (sudo se necessário) e ajusta o dono
-6. SELinux Enforcing (getenforce): adiciona --security-opt label=disable
-   e :z no mount da pasta de projetos
-7. docker pull ${ARCANE_IMAGE}
-8. docker run -d --name arcane -p ${ARCANE_PORT:-3552}:3552 --cgroupns host \
-     -v /var/run/docker.sock:/var/run/docker.sock -v arcane-data:/app/data \
-     -v <projetos>:<projetos>[:z] -e APP_URL -e PUID -e PGID \
-     -e ENCRYPTION_KEY -e PROJECTS_DIRECTORY --restart unless-stopped <imagem>
-9. Verifica o container e exibe URL, login inicial, pasta de projetos e chave
+6. SELinux Enforcing (getenforce): o compose.yaml inclui
+   security_opt: label=disable e o sufixo :z no mount da pasta de projetos
+7. stack_adopt_legacy: container "arcane" criado por docker run → confirmação e remoção
+8. stack_env_write (.env, chmod 600) e geração do compose.yaml
+9. docker compose pull + up -d --remove-orphans
+10. Verifica o container e exibe URL, login inicial, pasta de projetos e chave
 ```
 
-> **Chave de criptografia:** é guardada fora do `.env` porque o wizard reescreve
-> esse arquivo. Perder a chave torna ilegíveis os dados do volume `arcane-data`.
-> O login inicial é `arcane` / `arcane-admin`, com troca de senha obrigatória.
+> **Chave de criptografia:** fica no `.env` do stack (chmod 600), fora do `.env`
+> do suap-setup, que o wizard reescreve. Perder a chave torna ilegíveis os dados
+> do volume `arcane-data`. O login inicial é `arcane` / `arcane-admin`, com troca
+> de senha obrigatória.
 
 ### Reversão
 
-**Arquivo:** `docker/arcane-revert.sh`
+**Arquivo:** `docker/arcane-revert.sh` (usa `stack_revert`)
 
-```
-1. Carrega .env (se existir); Docker ausente: pula container, volume e imagem
-2. Container "arcane" existe: docker rm -f
-3. Volume arcane-data: confirm_destructive + docker volume rm
-4. Imagem ${ARCANE_IMAGE}: confirm_destructive + docker rmi
-5. Chave <state>/arcane.key:
-   - volume ainda existe: preservada (ele precisa dela)
-   - senão: confirm_destructive + revert_file
-6. Pasta de projetos: nunca apagada (apenas informada)
-```
-
-Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`. Idempotente.
+O diretório do stack guarda a chave: é preservado enquanto o volume `arcane-data`
+existir. A pasta de projetos nunca é apagada. Suporta `REVERT_DRY_RUN=1` e
+`REVERT_ASSUME_YES=1`. Idempotente.
 
 ---
 

@@ -51,14 +51,18 @@ setup() {
 }
 
 @test "dockhand-setup.sh filtra por nome exato do container dockhand" {
-    run grep -q 'name=.*dockhand' "$DOCKHAND_SCRIPT"
+    run grep -q 'name=.*CONTAINER_NAME\|name=.*dockhand' "$DOCKHAND_SCRIPT"
     [ "$status" -eq 0 ]
 }
 
-@test "dockhand-setup.sh sai com exit 0 quando container já existe (idempotência)" {
-    run grep -A2 'docker ps --filter' "$DOCKHAND_SCRIPT"
+@test "dockhand-setup.sh é idempotente via docker compose up -d" {
+    run grep -q 'up -d' "$DOCKHAND_SCRIPT"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q 'exit 0'
+}
+
+@test "dockhand-setup.sh assume container legado (docker run) via stack_adopt_legacy" {
+    run grep -q 'stack_adopt_legacy' "$DOCKHAND_SCRIPT"
+    [ "$status" -eq 0 ]
 }
 
 # ============================================================
@@ -86,8 +90,8 @@ setup() {
 # Requisito 27.2: container deve reiniciar automaticamente
 # ============================================================
 
-@test "dockhand-setup.sh usa --restart unless-stopped" {
-    run grep -q '\-\-restart unless-stopped' "$DOCKHAND_SCRIPT"
+@test "dockhand-setup.sh usa restart: unless-stopped no compose" {
+    run grep -q 'restart: unless-stopped' "$DOCKHAND_SCRIPT"
     [ "$status" -eq 0 ]
 }
 

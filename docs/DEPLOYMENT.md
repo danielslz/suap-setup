@@ -394,7 +394,7 @@ sudo bash deb/install-redis.sh      # ou rpm/ ou arch/ conforme distribuição
 sudo bash deb/install-postgres.sh   # ou rpm/ ou arch/ conforme distribuição
 ```
 
-> **Alternativa em containers:** o grupo "Via Docker" do menu também oferece **Redis (porta 6379 exposta)** e **PostgreSQL (porta 5432 exposta)**, que sobem containers (`docker/redis-setup.sh` e `docker/postgres-setup.sh`) acessíveis por outras máquinas, com senha obrigatória e dados em volumes Docker. O PostgreSQL em container usa a collation padrão da imagem (sem `pt_BR.UTF-8`). Use o grupo "Serviços (no host)" se precisar de instalação nativa.
+> **Alternativa em containers:** o grupo "Via Docker" do menu também oferece **Redis (porta 6379 exposta)** e **PostgreSQL (porta 5432 exposta)**, que sobem containers via Docker Compose (`docker/redis-setup.sh` e `docker/postgres-setup.sh`, com os stacks em `/opt/docker/redis/` e `/opt/docker/postgres/`) acessíveis por outras máquinas, com senha obrigatória e dados em volumes Docker. O PostgreSQL em container usa a collation padrão da imagem (sem `pt_BR.UTF-8`). Use o grupo "Serviços (no host)" se precisar de instalação nativa.
 
 O script de instalação do PostgreSQL (`install-postgres.sh`) realiza automaticamente:
 

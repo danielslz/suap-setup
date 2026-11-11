@@ -163,6 +163,7 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `SUAP_AI_IMAGE` | Imagem Docker do serviço de IA | — | *(solicitado pelo wizard no Docker dev)* |
 | `SUAP_DEPLOY_DIR` | Diretório do repositório suap_deploy | — | `/opt/suap_deploy` |
 | `SUAP_DEPLOY_GIT_URL` | URL Git do suap_deploy | — | *(solicitado pelo wizard)* |
+| `DOCKER_STACKS_DIR` | Base dos stacks Docker Compose (Redis, PostgreSQL, Dockhand, Arcane) | — | `/opt/docker` |
 | `SUAP_MINIO_DIR` | Diretório do repositório suap-minio | — | `/opt/suap-minio` |
 | `SUAP_MINIO_GIT_URL` | URL do repositório Git do suap-minio | — | *(solicitado pelo wizard)* |
 
@@ -367,7 +368,7 @@ Para desfazer, use `R) Reverter > Reverter instalação do Docker` (ou `bash doc
 
 ### Dockhand
 
-O [Dockhand](https://dockhand.pro/) é uma interface web para gerenciamento de containers Docker.
+O [Dockhand](https://dockhand.pro/) é uma interface web para gerenciamento de containers Docker. Sobe via Docker Compose (stack em `/opt/docker/dockhand/`; ver [Stacks Docker Compose](#stacks-docker-compose)).
 
 | Propriedade | Valor |
 |-------------|-------|
@@ -377,23 +378,23 @@ O [Dockhand](https://dockhand.pro/) é uma interface web para gerenciamento de c
 | Socket Docker | `/var/run/docker.sock` |
 | Restart policy | `unless-stopped` |
 
-O script é idempotente: se o container já estiver em execução, apenas exibe a URL.
+O script é idempotente (`docker compose up -d`): se nada mudou, o container não é recriado.
 
-Para usar outra porta, defina `DOCKHAND_PORT` no `.env` ou no ambiente (ex.: `DOCKHAND_PORT=8080 bash docker/dockhand-setup.sh`). A porta só vale na criação do container: para trocá-la depois, remova o container (`docker rm -f dockhand`) e rode o script de novo; os dados ficam no volume `dockhand_data`.
+Para usar outra porta, defina `DOCKHAND_PORT` no `.env` ou no ambiente (ex.: `DOCKHAND_PORT=8080 bash docker/dockhand-setup.sh`) e rode o script de novo: o compose recria o container com a nova porta, mantendo o volume `dockhand_data`.
 
-Para desfazer, use `R) Reverter > Reverter Dockhand` (ou `bash docker/dockhand-revert.sh`). O container é removido; volumes associados (dados do Dockhand) e a imagem só são apagados com confirmação.
+Para desfazer, use `R) Reverter > Reverter Dockhand` (ou `bash docker/dockhand-revert.sh`). Executa `docker compose down`; o volume, a imagem e o diretório do stack só são apagados com confirmação.
 
 ### Arcane
 
-O [Arcane](https://getarcane.app/) é uma interface web livre (BSD-3-Clause) para gerenciamento de containers Docker, stacks Compose, imagens, volumes e redes. É a alternativa ao Dockhand, cuja licença (BSL 1.1) exige plano pago para uso empresarial em produção. O script `docker/arcane-setup.sh` segue a [instalação oficial](https://getarcane.app/docs/get-started/installation).
+O [Arcane](https://getarcane.app/) é uma interface web livre (BSD-3-Clause) para gerenciamento de containers Docker, stacks Compose, imagens, volumes e redes. É a alternativa ao Dockhand, cuja licença (BSL 1.1) exige plano pago para uso empresarial em produção. O script `docker/arcane-setup.sh` segue a [instalação oficial](https://getarcane.app/docs/get-started/installation) e usa Docker Compose (stack em `/opt/docker/arcane/`).
 
 | Propriedade | Valor |
 |-------------|-------|
 | Imagem | `ghcr.io/getarcaneapp/manager:latest` (sobrescrevível via `ARCANE_IMAGE`) |
-| Container | `arcane` (`--restart unless-stopped`, `--cgroupns host`) |
+| Container | `arcane` (`restart: unless-stopped`, `cgroup: host`) |
 | Porta de acesso | `http://localhost:3552` (configurável via `ARCANE_PORT`) |
 | Volume de dados | `arcane-data` → `/app/data` |
-| Projetos Compose | `/opt/docker` (configurável via `ARCANE_PROJECTS_DIR`) |
+| Projetos Compose | `DOCKER_STACKS_DIR` (padrão `/opt/docker`; configurável via `ARCANE_PROJECTS_DIR`) |
 | Socket Docker | `/var/run/docker.sock` |
 | Login inicial | `arcane` / `arcane-admin` (troca de senha exigida no primeiro acesso) |
 | Variáveis opcionais | `ARCANE_PORT`, `ARCANE_IMAGE`, `ARCANE_PROJECTS_DIR`, `ARCANE_APP_URL`, `ARCANE_ENCRYPTION_KEY` |
@@ -401,15 +402,14 @@ O [Arcane](https://getarcane.app/) é uma interface web livre (BSD-3-Clause) par
 O script:
 
 1. Verifica Docker disponível
-2. Se o container já está ativo, apenas exibe a URL; se está parado, inicia o existente
-3. Gera uma `ENCRYPTION_KEY` de 32 bytes (hex) e a guarda em `.state/arcane.key` (modo 600), reutilizando-a nas próximas execuções. Sem a mesma chave, os dados do volume `arcane-data` ficam ilegíveis; **faça backup desse arquivo**
-4. Cria a pasta de projetos Compose, se necessário
-5. Em hosts com SELinux em modo Enforcing, aplica `--security-opt label=disable` e `:z` na pasta de projetos (recomendação da documentação oficial)
-6. Baixa a imagem e inicia o container
+2. Gera uma `ENCRYPTION_KEY` de 32 bytes (hex) e a guarda no `.env` do stack (modo 600), reutilizando-a nas próximas execuções. Sem a mesma chave, os dados do volume `arcane-data` ficam ilegíveis; **faça backup desse arquivo**. Uma chave antiga em `.state/arcane.key` (versão anterior do script) é aproveitada
+3. Cria a pasta de projetos Compose, se necessário. Como ela é a mesma do `DOCKER_STACKS_DIR`, os stacks de Redis, PostgreSQL e Dockhand aparecem no Arcane
+4. Em hosts com SELinux em modo Enforcing, gera o compose com `security_opt: label=disable` e `:z` na pasta de projetos (recomendação da documentação oficial)
+5. Assume um container criado antes por `docker run` (com confirmação) e sobe o stack
 
-Para acessar de outra máquina, defina `ARCANE_APP_URL` (ex.: `http://servidor:3552`) e libere a porta no firewall. Para mudar a porta depois, remova o container (`docker rm -f arcane`) e rode o script novamente; a chave e o volume são reaproveitados.
+Para acessar de outra máquina, defina `ARCANE_APP_URL` (ex.: `http://servidor:3552`) e libere a porta no firewall. Para mudar a porta, defina `ARCANE_PORT` e rode o script de novo.
 
-Para desfazer, use `R) Reverter > Reverter Arcane` (ou `bash docker/arcane-revert.sh`). O container é removido; o volume `arcane-data` e a imagem só são apagados com confirmação. A chave de criptografia é mantida enquanto o volume existir, e a pasta de projetos nunca é apagada.
+Para desfazer, use `R) Reverter > Reverter Arcane` (ou `bash docker/arcane-revert.sh`). Executa `docker compose down`; o volume, a imagem e o diretório do stack (que guarda a chave) só são apagados com confirmação, e o diretório é mantido enquanto o volume existir. A pasta de projetos nunca é apagada.
 
 ### MinIO (Object Storage)
 
@@ -445,35 +445,49 @@ make stop
 
 Para desfazer, use `R) Reverter > Reverter MinIO` (ou `bash docker/minio-revert.sh`). Remove os containers do suap-minio; volumes (dados), imagens e o diretório `SUAP_MINIO_DIR` (clone + `.env` com credenciais) só são apagados com confirmação.
 
+### Stacks Docker Compose
+
+Redis, PostgreSQL, Dockhand e Arcane são gerenciados por Docker Compose. Cada um vive em `${DOCKER_STACKS_DIR:-/opt/docker}/<nome>/`:
+
+| Arquivo | Conteúdo |
+|---------|----------|
+| `compose.yaml` | Gerado pelo script de setup (não edite; ele é reescrito a cada execução) |
+| `.env` | Valores do stack (porta, imagem, senhas, chaves), permissão 600 |
+
+- **Mudar configuração:** defina a variável (no ambiente, no `.env` do suap-setup ou no `.env` do stack) e rode o script de novo. A precedência é ambiente > `.env` do stack > padrão. O compose recria só o que mudou, mantendo os volumes.
+- **Migração de `docker run`:** se existir um container com o mesmo nome criado antes por `docker run`, o script pede confirmação, remove o container e sobe o stack. Os volumes (`suap-redis-data`, `suap-postgres-data`, `dockhand_data`, `arcane-data`) são reaproveitados.
+- **Gerenciar manualmente:** `cd /opt/docker/redis && docker compose --env-file .env ps` (substitua o nome do stack). Os stacks também aparecem no Arcane.
+- **Base:** `DOCKER_STACKS_DIR` (padrão `/opt/docker`) é criada com sudo, se necessário, e fica com o dono do usuário.
+
 ### Redis (via Docker)
 
-O script `docker/redis-setup.sh` sobe um Redis em container, com a porta padrão `6379` exposta para acesso a partir de outras máquinas.
+O script `docker/redis-setup.sh` sobe um Redis via Docker Compose (stack em `/opt/docker/redis/`), com a porta padrão `6379` exposta para acesso a partir de outras máquinas.
 
 | Propriedade | Valor |
 |-------------|-------|
-| Container | `suap-redis` (`redis:7-alpine`, `--restart unless-stopped`) |
+| Container | `suap-redis` (`redis:7-alpine`, `restart: unless-stopped`) |
 | Porta | `6379` (escuta em `0.0.0.0`) |
 | Dados | volume `suap-redis-data` (AOF habilitado) |
-| Autenticação | senha obrigatória (`requirepass`); solicitada ou gerada |
+| Autenticação | senha obrigatória (`requirepass`); solicitada ou gerada e guardada no `.env` do stack (modo 600) |
 | Variáveis opcionais | `REDIS_DOCKER_PORT`, `REDIS_DOCKER_PASSWORD`, `REDIS_DOCKER_IMAGE` |
 
-O script é idempotente: se o container já estiver ativo, apenas exibe o endereço; se estiver parado, ele é iniciado. Libere a porta no firewall se necessário. Para remover, use `R` no menu (ou `bash docker/redis-revert.sh`); o volume só é apagado com confirmação.
+O script é idempotente (`docker compose up -d`): valores novos (ex.: porta) recriam o container mantendo o volume. Libere a porta no firewall se necessário. Para remover, use `R` no menu (ou `bash docker/redis-revert.sh`); o volume e o diretório do stack só são apagados com confirmação.
 
 ### PostgreSQL (via Docker)
 
-O script `docker/postgres-setup.sh` sobe um PostgreSQL em container, com a porta padrão `5432` exposta para acesso a partir de outras máquinas.
+O script `docker/postgres-setup.sh` sobe um PostgreSQL via Docker Compose (stack em `/opt/docker/postgres/`), com a porta padrão `5432` exposta para acesso a partir de outras máquinas.
 
 | Propriedade | Valor |
 |-------------|-------|
-| Container | `suap-postgres` (`postgres:${POSTGRES_VERSION:-16}`, `--restart unless-stopped`) |
+| Container | `suap-postgres` (`postgres:${POSTGRES_VERSION:-16}`, `restart: unless-stopped`) |
 | Porta | `5432` (`listen_addresses='*'`) |
 | Dados | volume `suap-postgres-data` |
 | Banco/usuário | `suap` / `suap_app` (padrões; solicitados no wizard) |
-| Autenticação | senha obrigatória; solicitada ou gerada |
+| Autenticação | senha obrigatória; solicitada ou gerada e guardada no `.env` do stack (modo 600) |
 | Ajuste | `bytea_output=escape` (compatível com o SUAP) |
 | Variáveis opcionais | `POSTGRES_VERSION`, `POSTGRES_DOCKER_PORT`, `POSTGRES_DOCKER_DB`, `POSTGRES_DOCKER_USER`, `POSTGRES_DOCKER_PASSWORD`, `POSTGRES_DOCKER_IMAGE` |
 
-Idempotente como o Redis. Diferença para a instalação nativa ("Instalar PostgreSQL", em Serviços no host): o banco é criado com a collation padrão da imagem (UTF-8), sem `pt_BR.UTF-8`. Para remover, use `R` no menu (ou `bash docker/postgres-revert.sh`); o volume só é apagado com confirmação.
+Idempotente como o Redis (`POSTGRES_DB/USER/PASSWORD` só valem na primeira inicialização do volume). Diferença para a instalação nativa ("Instalar PostgreSQL", em Serviços no host): o banco é criado com a collation padrão da imagem (UTF-8), sem `pt_BR.UTF-8`. Para remover, use `R` no menu (ou `bash docker/postgres-revert.sh`); o volume e o diretório do stack só são apagados com confirmação.
 
 ## Configuração Nginx
 

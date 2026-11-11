@@ -44,6 +44,16 @@ O suap_deploy:
 - `SUAP_DEPLOY_DIR` - Caminho para o repositório suap_deploy
 - `SUAP_DEPLOY_GIT_URL` - URL git do suap_deploy
 
+## Stacks Docker Compose (Redis, PostgreSQL, Dockhand, Arcane)
+
+Os utilitários independentes abaixo usam Docker Compose. Cada um cria
+`${DOCKER_STACKS_DIR:-/opt/docker}/<nome>/` com `compose.yaml` (gerado pelo script) e
+`.env` (valores e segredos, chmod 600). Rodar o script de novo reconcilia mudanças
+(`docker compose up -d`). Containers criados antes por `docker run` são migrados
+(com confirmação) e os volumes são reaproveitados. As funções compartilhadas
+(`stack_init`, `stack_env_load`, `stack_env_write`, `stack_compose`,
+`stack_adopt_legacy`, `stack_revert`) ficam em `lib/common.sh`.
+
 ## Dockhand (`docker/dockhand-setup.sh`)
 
 Instala e inicia o Dockhand (interface web para gerenciamento Docker).
@@ -54,8 +64,8 @@ Reversão em `docker/dockhand-revert.sh`.
 
 Utilitário independente, alternativa livre (BSD-3-Clause) ao Dockhand. Sobe o
 container `arcane` (`ghcr.io/getarcaneapp/manager`) na porta `3552`, com volume
-`arcane-data` e pasta de projetos Compose (`/opt/docker`). A `ENCRYPTION_KEY` é
-gerada e guardada em `.state/arcane.key`; faça backup dela. Reversão em
+`arcane-data` e pasta de projetos Compose (a mesma dos stacks, `/opt/docker`). A `ENCRYPTION_KEY` é
+gerada e guardada no `.env` do stack; faça backup dela. Reversão em
 `docker/arcane-revert.sh`.
 
 ## MinIO (`docker/minio-setup.sh`)
