@@ -57,6 +57,7 @@
   - [15.6. Mídia compartilhada](#156-mídia-compartilhada)
   - [15.7. Vault (opcional)](#157-vault-opcional)
   - [15.8. Validação](#158-validação)
+  - [15.9. Exemplo: 3 VMs (prova de conceito / homologação distribuída)](#159-exemplo-3-vms-prova-de-conceito--homologação-distribuída)
 - [16. Operação diária (suap-deploy.sh)](#16-operação-diária-suap-deploysh)
   - [16.1. Rotinas recomendadas](#161-rotinas-recomendadas)
   - [16.2. Escalando workers](#162-escalando-workers)
@@ -180,6 +181,7 @@ O SUAP roda em produção de duas formas. Ambas são suportadas pelo `suap-setup
 | Atualizar | Menu "Atualizar SUAP (produção)" (`{distro}/suap-update.sh`) | `bash docker/prod/suap-deploy.sh update` |
 | Servidor web | Menu "Instalar Nginx" | Container Nginx do `suap_deploy` |
 | PostgreSQL e Redis | Menus "Instalar PostgreSQL" e "Instalar Redis" (no host) | No host (mesmos menus) **ou** em containers (menus "Redis" e "PostgreSQL" do grupo "Via Docker") |
+| Balanceador (HAProxy) | Menu "HAProxy (balanceador do suap_deploy)" — serve às duas rotas | Menu "HAProxy (balanceador do suap_deploy)" (`docker/haproxy-setup.sh`) |
 | Configurar o papel de um nó | Escolha do menu do Supervisor (SUAP / Celery / Ambos) | `bash docker/prod/configure-node.sh` |
 | Validar a configuração | — | `bash docker/prod/suap-deploy.sh check` |
 
@@ -704,6 +706,9 @@ graph TD
 | Papel (`--role`) | `COMPOSE_PROFILES` | Quantos nós | Observação |
 |---|---|---|---|
 | `single` | `default,celery-beat,celery-flower` | 1 | Tudo junto (nó único) |
+| `full` | `default` | 0 ou mais | Web + nginx + pdfprinter + celery **sem** beat/flower (nó completo de um cluster) |
+| `web-beat` | `web,celery-beat,celery-flower` | **exatamente 1** | Web + beat + flower (o único nó com beat e flower; os workers ficam em outros nós) |
+| `web-celery-beat` | `web,celery,celery-beat,celery-flower` | **exatamente 1** | O mesmo, **com workers** no próprio nó (permite que o Celery siga rodando se outro nó cair) |
 | `app` | `web` | 2 ou mais | Front (web + nginx) atrás do balanceador |
 | `async-primary` | `celery,celery-beat,celery-flower,pdfprinter` | **exatamente 1** | Único nó com beat, flower e pdfprinter |
 | `async` | `celery` | 0 ou mais | Workers adicionais; escalam à vontade |
@@ -801,12 +806,22 @@ Para DB e Redis externos, o `host.docker.internal` (já configurado no compose v
 
 ### 15.5. Balanceador e drain protocol
 
+**Instalação com o suap-setup.** O item **HAProxy (balanceador do suap_deploy)** do menu (`docker/haproxy-setup.sh`) sobe um HAProxy em container (stack em `/opt/docker/haproxy/`), já com o health check estrito em `/ht/`, pesos por nó, terminação TLS e página de estatísticas. Rode-o em um servidor **sem** o Nginx do `suap_deploy`, que ocupa as portas 80, 443 e 8080:
+
+```bash
+HAPROXY_BACKENDS='10.0.0.1:80:3,10.0.0.2:80:1' HAPROXY_SERVER_NAME=suap.instituicao.edu.br \
+  bash docker/haproxy-setup.sh
+```
+
+O certificado vai em `/etc/ssl/suap/haproxy/suap.pem` (certificado completo + chave privada concatenados); se não existir, o script gera um autoassinado para teste. O script valida a configuração antes de aplicar e, ao mudar nós ou pesos, recarrega o HAProxy sem derrubar conexões. A divisão por peso aparece sob concorrência (o algoritmo é `leastconn`: com requisições instantâneas os nós se alternam). O restante desta seção descreve o que a configuração gerada faz, caso você use um HAProxy próprio (ou o pfSense).
+
 O `sleep` do drain só funciona se durar pelo menos o tempo que o balanceador leva para retirar o nó do pool. Backend HAProxy recomendado:
 
 ```haproxy
 backend suap-app
     option httpchk
     http-check send meth GET uri /ht/ ver HTTP/1.1\r\nHost:\ suap.instituicao.edu.br
+    http-check expect status 200
     retries 3
     option redispatch 1
     timeout connect 5s
@@ -816,6 +831,7 @@ backend suap-app
 ```
 
 - Tempo para retirar o nó = `inter + (fall-1) × fastinter` = 10 + 2×2 = **14 s**. `DRAIN_SECONDS` deve ser maior que isso mais uma margem (padrão: 20). Sem balanceador (nó único), use 0.
+- `http-check expect status 200`: sem isso o HAProxy conta `3xx` como saudável; um nó com `SSL_ENABLED=true` (301 na porta 80) pareceria saudável e o `drain` (503) só seria visto por acaso.
 - `option redispatch 1`: conexão recusada (Nginx parado, nó caído) é repetida em outro servidor, sem erro para o cliente.
 - `timeout connect 5s`: valores altos seguram requisições de um nó que some sem responder.
 - **pfSense** (*Services → HAProxy → Backend*): em cada servidor, campo *Advanced*: `fastinter 2000 fall 3 rise 2`; em *Advanced settings → Backend pass thru*: `option redispatch 1`; *Connection timeout*: `5000`.
@@ -837,6 +853,102 @@ bash docker/prod/suap-deploy.sh check
 ```
 
 O comando valida: Docker Compose >= 2.30; `make`; presença do `.env`; `SECRET_KEY`, `DATABASE_PASSWORD` e `SUAP_PDF_ACCESS_TOKEN`; valores de exemplo em `SITE_URL`/`ALLOWED_HOSTS`; `DEBUG`; profiles desconhecidos ou legados; beat/flower ativos (lembrete de nó único) e senha padrão do Flower; coerência entre `SSL_ENABLED`, o template do Nginx e o certificado; conectividade TCP com PostgreSQL e Redis; autenticação no Redis (a senha de `REDIS_PASSWORD` e a credencial de `CELERY_BROKER_URL` são testadas com AUTH/PING) e o formato `redis://:SENHA@host` do broker; gravação do UID 33 nos diretórios de `deploy/` (`media/tmp`, `logs`, `sessions`, `pdf/tmp`…) e `status.txt`. Termina com código de saída 1 se houver falhas.
+
+### 15.9. Exemplo: 3 VMs (prova de conceito / homologação distribuída)
+
+Topologia usada como teste do ambiente de produção, com uma VM grande e duas pequenas, mais um servidor de mídia próprio:
+
+| VM | IP | Papel | `COMPOSE_PROFILES` (papel) |
+|---|---|---|---|
+| Grande (16 cores / 32 GB) | 192.0.2.50 | web + nginx + pdfprinter + celery | `default` (`full`) |
+| Pequena (4 cores / 16 GB) | 192.0.2.51 | web + celery + celery-beat + celery-flower | `web,celery,celery-beat,celery-flower` (`web-celery-beat`) |
+| Pequena (4 cores / 16 GB) | 192.0.2.52 | PostgreSQL, Redis e **HAProxy** | — |
+| Outra VM | — | Servidor de mídia (NFS) | — |
+
+**Por que o HAProxy fica na 192.0.2.52.** O Nginx do container ocupa 80, 443 e 8080 nos dois nós de aplicação, então o balanceador não pode dividir o host com ele sem um override do Compose. A .52 não roda Nginx e, como já concentra o banco, já é um ponto único de falha: colocar o balanceador ali não piora isso.
+
+**Passo a passo**
+
+1. **.52 — Postgres e Redis** acessíveis pelas outras duas VMs (`listen_addresses`, `pg_hba.conf` para .50 e .51; Redis com senha e `bind` na rede interna). Se o Redis foi criado pelo suap-setup, a senha está em `/opt/docker/redis/.env`.
+2. **.50 — papel `full`.** O `env.sample` do suap_deploy traz `COMPOSE_PROFILES=default,celery-beat,celery-flower`: uma .50 subida com a configuração padrão **já está com beat e flower**, o que duplicaria tarefas agendadas quando a .51 os rodar. Se o `COMPOSE_PROFILES` atual já é só `default`, pule o `rm`. Reconfigure e remova os containers:
+
+   ```bash
+   NODE_DB_PASSWORD='...' NODE_REDIS_PASSWORD='...' \
+   bash docker/prod/configure-node.sh --role full \
+     --db-host 192.0.2.52 --redis-host 192.0.2.52 --ssl false \
+     --site-url https://suap.instituicao.edu.br --trusted-proxies 192.0.2.52 --yes
+   bash docker/prod/suap-deploy.sh compose rm -sf celery-beat celery-flower
+   bash docker/prod/suap-deploy.sh check
+   bash docker/prod/suap-deploy.sh restart
+   ```
+
+   Só reduzir o `COMPOSE_PROFILES` e rodar `restart`/`up` **não** remove esses containers (o Compose só enxerga os profiles ativos): o `rm -sf` é necessário, e o `configure-node.sh` avisa quando um container de beat/flower segue rodando depois de sair dos profiles. Use `--db-name`/`--db-user` se o banco restaurado não usa `suap`/`postgres`. Se o `suap_deploy` foi subido sem o `suap-setup`, defina `SUAP_DEPLOY_DIR` no `.env` do `suap-setup` (`bash docker/prod/suap-deploy.sh dir` mostra o caminho resolvido).
+3. **Mídia compartilhada (obrigatória com dois nós web).** O servidor de mídia é uma VM à parte, **fora** dos nós de aplicação: se a mídia fosse exportada de um dos nós web, a queda dele travaria o outro (o NFS `hard` bloqueia os processos que acessam arquivos). Monte o NFS em `<SUAP_DEPLOY_DIR>/deploy/media` na .50 e na .51, com dono 33:33 (seção 21.1). Enquanto a mídia compartilhada não estiver mapeada, **mantenha só a .50 recebendo tráfego** (não suba o web da .51 nem a inclua nos nós do HAProxy): um upload feito na .51 ficaria só no disco local dela.
+4. **.51 — papel `web-celery-beat`** (web, workers, beat e flower):
+
+   ```bash
+   NODE_DB_PASSWORD='...' NODE_REDIS_PASSWORD='...' \
+   bash docker/prod/configure-node.sh --role web-celery-beat \
+     --db-host 192.0.2.52 --redis-host 192.0.2.52 --ssl false \
+     --site-url https://suap.instituicao.edu.br --trusted-proxies 192.0.2.52 \
+     --flower-auth operador:SenhaForte --yes
+   bash docker/prod/suap-deploy.sh check
+   bash docker/prod/suap-deploy.sh update
+   ```
+
+   Rode `begin` e `createsuperuser` **só** em banco novo e em um único nó (aqui o banco já foi restaurado de backup). Com 16 GB, web (4G) + celery (4G) + beat (1G) + flower (1G) cabem, mas os 4 cores ficam disputados.
+5. **.52 — HAProxy:**
+
+   ```bash
+   HAPROXY_BACKENDS='192.0.2.50:80:3,192.0.2.51:80:1' HAPROXY_SERVER_NAME=suap.instituicao.edu.br \
+     bash docker/haproxy-setup.sh
+   ```
+
+6. **URL do pdfprinter.** O pdfprinter roda só na .50. Em *Configurações do módulo comum*, o campo **"Caminho para o executável do LibreOffice/API do SuapPDF"** deve receber `http://192.0.2.50:9000` (porta publicada pelo compose; o nome `pdfprinter` só resolve dentro da rede Docker da .50) e o campo **"Token da API do SuapPDF"** o valor de `SUAP_PDF_ACCESS_TOKEN`. A configuração fica no banco, então vale para os dois nós. Libere a porta 9000 no firewall apenas para a .50 e a .51.
+7. **Firewall.** .50/.51: porta 80 só para a .52 (HAProxy); 5555 (Flower) só rede interna. .52: 80/443 para os clientes, 8404 (estatísticas) e as portas do banco e do Redis só para a rede interna.
+8. **Validar:** `check` em cada nó; estatísticas do HAProxy com os nós UP; `bash docker/prod/suap-deploy.sh drain` em um nó deve deixá-lo DOWN em ~14 s (e `healthy` o devolve).
+
+**Comportamento quando uma VM cai**
+
+| Queda | Continua funcionando | Para ou degrada |
+|---|---|---|
+| **.50** | Web na .51 (o HAProxy retira a .50 em ~14 s; conexões a um nó desligado levam ~5 s e são refeitas em outro), workers, beat e flower na .51 | **Geração de PDF** (pdfprinter só na .50); capacidade menor (a .51 tem 4 cores); requisições em andamento na .50 falham |
+| **.51** | Web, workers e pdfprinter na .50 | **Beat** (tarefas agendadas) e Flower: não há failover automático (ver abaixo) |
+| **.52** | Nada | Tudo: banco, Redis e a entrada do HAProxy (ponto único de falha aceito nesta topologia) |
+| **Servidor de mídia** | — | Uploads e downloads falham nos dois nós; os processos que acessam arquivos podem travar (NFS `hard`) |
+
+**PDF com a .50 fora do ar.** A geração de PDF **não é enfileirada**: no código do SUAP (`djtools/utils/pdf.py`, conferido em uma cópia local que pode diferir da sua versão), o PDF é um `requests.post` síncrono, com timeout, para `<URL>/api/v1/wkhtml_to_pdf`, e uma resposta diferente de 200 levanta uma exceção ("tente novamente em alguns minutos"). O Redis guarda apenas as tarefas do Celery, não essas chamadas. Quando o PDF é pedido por um usuário no navegador, ele recebe o erro; quando é gerado dentro de uma tarefa do Celery, a tarefa falha, e só será refeita se aquela tarefa tiver retry configurado. Ou seja, os PDFs **não** são gerados depois, sozinhos, quando a .50 volta: o usuário precisa pedir de novo (ou a tarefa precisa ser reexecutada). Se isso for inaceitável, suba o pdfprinter também na .51 (profile `pdfprinter`) e use uma URL estável para os dois (por exemplo, um listener na porta 9000 do HAProxy da .52).
+
+**Failover manual do beat (quando a .51 cai).** O beat é o agendador de tarefas e **só pode rodar em uma VM por vez**: duas VMs com beat disparam cada tarefa agendada duas vezes. Ele não migra sozinho, então, se a .51 cair, as tarefas agendadas deixam de ser disparadas até você mover o beat à mão. O que importa é quem roda o beat em cada fase:
+
+| Fase | Beat na .50 | Beat na .51 | Situação |
+|---|---|---|---|
+| Normal | não | **sim** | Correto: uma VM só |
+| .51 caiu, antes do failover | não | (fora do ar) | Tarefas agendadas paradas |
+| .51 caiu, depois do passo 2 | **sim** | (fora do ar) | Correto: uma VM só |
+| .51 voltou, antes do passo 3 | **sim** | **sim** (sobe sozinho) | **Errado: beat em duas VMs, tarefas em dobro** |
+| .51 voltou, depois do passo 3 | **sim** | não | Correto: uma VM só |
+
+1. **Confirme que a .51 está mesmo fora do ar** (desligada ou sem rede), antes de mover o beat. Se ela ainda estiver rodando, mover o beat já cria o beat em duas VMs.
+2. **Suba o beat na .50.** Na .50, rode `bash docker/prod/configure-node.sh --role single --yes` (muda só os profiles para `default,celery-beat,celery-flower`) e depois `bash docker/prod/suap-deploy.sh up`. O `up` sobe apenas o beat e o flower; o web não é tocado.
+3. **Quando a .51 voltar a ligar, derrube o beat dela imediatamente.** Todos esses containers têm `restart: always`: ao ligar, o Docker da .51 sobe de novo o que estava rodando, **inclusive o beat**, e nesse momento ele passa a rodar nas duas VMs. Na .51, rode logo:
+
+   ```bash
+   bash docker/prod/suap-deploy.sh compose rm -sf celery-beat celery-flower
+   bash docker/prod/configure-node.sh --role custom --profiles web,celery --yes
+   ```
+
+   O primeiro comando remove os containers; o segundo tira o beat e o flower dos profiles da .51, para que não voltem num próximo `restart`. Até você fazer isso, as tarefas agendadas rodam em dobro.
+4. **Decida onde o beat fica daqui em diante.** Pode ficar na .50 de forma permanente (nada mais a fazer; a .51 segue sem beat). Para voltar ao desenho original, faça nesta ordem, para nunca haver duas VMs com beat:
+   - na .50: `bash docker/prod/configure-node.sh --role full --yes` e `bash docker/prod/suap-deploy.sh compose rm -sf celery-beat celery-flower`;
+   - na .51: `bash docker/prod/configure-node.sh --role web-celery-beat --yes` e `bash docker/prod/suap-deploy.sh up`.
+
+**Limites e ajustes**
+
+- Os pesos (3:1) e os limites de memória são pontos de partida: ajuste olhando CPU e latência após um teste de carga. Cada nó deveria aguentar a carga inteira sozinho para tolerar a queda do outro, o que a .51 (4 cores) não faz com a mesma folga da .50.
+- O `bin/celery.sh` não passa `-c`, então o worker usa a concorrência padrão do Celery (um processo por CPU: 16 na .50). Dimensione `DOCKER_CELERY_MAX_MEMORY_SIZE` e some as conexões ao Postgres (workers do Gunicorn + processos Celery) para ajustar `max_connections` ou usar PgBouncer (seção 19.7).
+- O HAProxy divide os 4 cores da .52 com o banco e o Redis. Em produção real, considere uma VM própria para o balanceador.
+- A .52 é ponto único de falha (banco, Redis e balanceador). Alta disponibilidade completa exigiria replicação do banco com failover, Redis Sentinel e dois balanceadores com IP virtual, o que pede mais VMs. A topologia dá deploy sem downtime e tolerância à queda de um dos nós de aplicação, com as degradações da tabela acima.
 
 ---
 
@@ -947,6 +1059,7 @@ O grupo "Via Docker" do menu do `suap-setup` oferece utilitários independentes,
 | Redis (porta 6379 exposta) | `docker/redis-setup.sh` | 6379 | Redis do cluster (senha obrigatória) |
 | PostgreSQL (porta 5432 exposta) | `docker/postgres-setup.sh` | 5432 | Banco do cluster (senha obrigatória; collation padrão da imagem, sem `pt_BR.UTF-8`) |
 | MinIO (object storage S3) | `docker/minio-setup.sh` | 80 / 9001 | Mídia compartilhada (seção 21) |
+| HAProxy (balanceador do suap_deploy) | `docker/haproxy-setup.sh` | 80 / 443 / 8404 | Balanceador dos nós `app` (seção 15.5); rode em servidor sem o Nginx do `suap_deploy` |
 | Arcane | `docker/arcane-setup.sh` | 3552 | Interface web livre (BSD-3-Clause) para gerenciar o Docker |
 | Dockhand | `docker/dockhand-setup.sh` | 9093 | Interface web para gerenciar o Docker (licença BSL 1.1: uso empresarial em produção exige plano pago) |
 

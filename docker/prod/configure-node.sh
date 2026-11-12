@@ -32,6 +32,10 @@ configure-node.sh - configura o papel de um nó do suap_deploy
 
 Papéis (--role):
   single         Nó único: tudo junto                     default,celery-beat,celery-flower
+  full           Nó completo SEM beat/flower              default
+                 (web + nginx + pdfprinter + celery)
+  web-beat       Web + beat + flower (UM nó do cluster)   web,celery-beat,celery-flower
+  web-celery-beat Web + workers + beat + flower (UM nó)   web,celery,celery-beat,celery-flower
   app            Servidor de aplicação (web + nginx)      web
   async-primary  Async com beat/flower/pdfprinter (UM nó) celery,celery-beat,celery-flower,pdfprinter
   async          Async adicional (somente workers)        celery
@@ -203,6 +207,9 @@ _urlencode() {
 _profiles_for_role() {
   case "${1}" in
     single)        echo "default,celery-beat,celery-flower" ;;
+    full)          echo "default" ;;
+    web-beat)      echo "web,celery-beat,celery-flower" ;;
+    web-celery-beat) echo "web,celery,celery-beat,celery-flower" ;;
     app)           echo "web" ;;
     async-primary) echo "celery,celery-beat,celery-flower,pdfprinter" ;;
     async)         echo "celery" ;;
@@ -226,7 +233,7 @@ if [ "${INTERACTIVE}" = "1" ]; then
   echo "${GREEN}=== Configuração do nó (suap_deploy: ${DEPLOY_DIR}) ===${NO_COLOR}"
   echo "Enter mantém o valor atual entre colchetes."
   echo ""
-  echo "Papéis: single | app | async-primary | async | homolog | custom"
+  echo "Papéis: single | full | web-beat | web-celery-beat | app | async-primary | async | homolog | custom"
   ROLE="$(_ask "Papel deste nó" "single")"
   if [ "${ROLE}" = "custom" ]; then
     PROFILES_ARG="$(_ask "Profiles (separados por vírgula)" "$(_get COMPOSE_PROFILES)")"
@@ -246,12 +253,12 @@ if [ "${INTERACTIVE}" = "1" ]; then
   echo ""
   SSL="$(_ask "SSL_ENABLED (true no nó único; false atrás de balanceador que termina o TLS)" "$(_get SSL_ENABLED)")"
   SITE_URL_ARG="$(_ask "SITE_URL" "$(_get SITE_URL)")"
-  if [ "${ROLE}" = "app" ] || [ "${ROLE}" = "single" ]; then
+  if [ "${ROLE}" = "app" ] || [ "${ROLE}" = "single" ] || [ "${ROLE}" = "full" ] || [ "${ROLE}" = "web-beat" ] || [ "${ROLE}" = "web-celery-beat" ]; then
     TRUSTED="$(_ask "TRUSTED_PROXIES (IP/CIDR do balanceador)" "$(_get TRUSTED_PROXIES)")"
     DRAIN="$(_ask "DRAIN_SECONDS" "$(_get DRAIN_SECONDS)")"
   fi
   case "${ROLE}" in
-    single|async-primary|homolog)
+    single|web-beat|web-celery-beat|async-primary|homolog)
       FLOWER="$(_ask "FLOWER_BASIC_AUTH (usuario:senha)" "$(_get FLOWER_BASIC_AUTH)")"
       ;;
   esac
@@ -265,7 +272,7 @@ if [ -n "${ROLE}" ]; then
   elif p="$(_profiles_for_role "${ROLE}")"; then
     _set COMPOSE_PROFILES "${p}"
   else
-    msg_error "Papel inválido: ${ROLE} (use single, app, async-primary, async, homolog ou custom)."
+    msg_error "Papel inválido: ${ROLE} (use single, full, web-beat, web-celery-beat, app, async-primary, async, homolog ou custom)."
     exit 1
   fi
 elif [ -n "${PROFILES_ARG}" ]; then
@@ -443,6 +450,19 @@ if [ -n "${SSL_CHANGE}" ]; then
 fi
 
 msg_action "Configuração do nó aplicada."
+
+# Serviços que saíram dos profiles continuam rodando até serem removidos: o 'down'/'up' só
+# enxerga os profiles ativos. beat/flower duplicados executam tarefas agendadas 2x.
+if command -v docker &>/dev/null; then
+  for _svc in celery-beat celery-flower; do
+    if [[ ",$(_get COMPOSE_PROFILES)," != *",${_svc},"* ]] && \
+       [ -n "$(docker ps -q --filter "label=com.docker.compose.service=${_svc}" \
+               --filter "label=com.docker.compose.project.working_dir=${DEPLOY_DIR}" 2>/dev/null)" ]; then
+      msg_skip "O container '${_svc}' continua em execução, mas saiu dos profiles deste nó."
+      echo "  Remova-o (evita tarefas agendadas duplicadas): bash docker/prod/suap-deploy.sh compose rm -sf ${_svc}"
+    fi
+  done
+fi
 echo ""
 echo "  Próximos passos:"
 echo "    bash docker/prod/suap-deploy.sh check       # valida a configuração"

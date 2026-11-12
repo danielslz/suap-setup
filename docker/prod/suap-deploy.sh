@@ -151,19 +151,29 @@ _preflight_perms() {
 # Papel inferido a partir de COMPOSE_PROFILES
 _infer_role() {
   local p=",$(_env_get COMPOSE_PROFILES),"
+  local beat=0
+  [[ "${p}" == *,celery-beat,* || "${p}" == *,celery-flower,* ]] && beat=1
   case "${p}" in
     *,default,*)
       if [[ "${p}" == *,local-db,* || "${p}" == *,local-redis,* ]]; then
         echo "homolog (nó único com DB/Redis locais)"
-      else
+      elif [ "${beat}" = "1" ]; then
         echo "single (nó único)"
+      else
+        echo "full (web + pdfprinter + celery, sem beat/flower)"
       fi
       ;;
     *,web,*)
-      echo "app (web + nginx)"
+      if [ "${beat}" = "1" ] && [[ "${p}" == *,celery,* ]]; then
+        echo "web-celery-beat (web + workers + beat/flower)"
+      elif [ "${beat}" = "1" ]; then
+        echo "web-beat (web + beat/flower)"
+      else
+        echo "app (web + nginx)"
+      fi
       ;;
     *,celery,*)
-      if [[ "${p}" == *,celery-beat,* || "${p}" == *,celery-flower,* || "${p}" == *,pdfprinter,* ]]; then
+      if [ "${beat}" = "1" ] || [[ "${p}" == *,pdfprinter,* ]]; then
         echo "async-primary (workers + beat/flower/pdfprinter)"
       else
         echo "async (somente workers)"

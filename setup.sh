@@ -49,6 +49,7 @@ else
     "10|MinIO (object storage S3)"
     "11|Redis (porta 6379 exposta)"
     "12|PostgreSQL (porta 5432 exposta)"
+    "14|HAProxy (balanceador do suap_deploy)"
   )
 fi
 
@@ -114,6 +115,7 @@ run_revert_submenu() {
     items+=("Reverter MinIO|docker/minio-revert.sh")
     items+=("Reverter Redis (Docker)|docker/redis-revert.sh")
     items+=("Reverter PostgreSQL (Docker)|docker/postgres-revert.sh")
+    items+=("Reverter HAProxy (Docker)|docker/haproxy-revert.sh")
     items+=("Reverter instalação do Docker|docker/install-docker-revert.sh")
   fi
 
@@ -178,6 +180,7 @@ fi
 #   11 (redis docker): nenhuma
 #   12 (postgres docker): nenhuma
 #   13 (arcane): nenhuma
+#   14 (haproxy): nenhuma
 
 ensure_env_for_option "${ENV_FILE}" "${INTERNAL_CHOICE}"
 
@@ -201,6 +204,7 @@ case "${INTERNAL_CHOICE}" in
   11) TARGET_SCRIPT="${SCRIPT_DIR}/docker/redis-setup.sh" ;;
   12) TARGET_SCRIPT="${SCRIPT_DIR}/docker/postgres-setup.sh" ;;
   13) TARGET_SCRIPT="${SCRIPT_DIR}/docker/arcane-setup.sh" ;;
+  14) TARGET_SCRIPT="${SCRIPT_DIR}/docker/haproxy-setup.sh" ;;
 esac
 
 # Verificar existência do script antes de executar

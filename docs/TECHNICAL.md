@@ -177,7 +177,7 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 2. Source lib/common.sh (carrega todas as funções utilitárias)
 3. Detecta distribuição/OS via detect_distro()
 4. Exibe menu adaptativo conforme plataforma:
-   - Linux: 13 opções agrupadas em seções (Ambiente SUAP, Serviços no host, Via Docker)
+   - Linux: 14 opções agrupadas em seções (Ambiente SUAP, Serviços no host, Via Docker)
    - macOS: 8 opções (dev e as opções Via Docker, incluindo arcane, redis e postgres docker)
 5. Valida entrada do usuário
 6. Traduz a opção exibida (sequencial) para o id interno via lista `MENU_IDS`
@@ -205,6 +205,7 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 | 9 | `{distro}/install-postgres.sh` | POSTGRES_VERSION |
 | 10 | `docker/minio-setup.sh` | SUAP_MINIO_DIR, SUAP_MINIO_GIT_URL |
 | 11 | `docker/redis-setup.sh` | nenhuma (opcionais: REDIS_DOCKER_PORT, REDIS_DOCKER_PASSWORD, REDIS_DOCKER_IMAGE) |
+| 14 | `docker/haproxy-setup.sh` | nenhuma (opcionais: HAPROXY_BACKENDS, HAPROXY_SERVER_NAME, HAPROXY_TLS, HAPROXY_CERT_DIR, HAPROXY_*_PORT, HAPROXY_STATS_AUTH, HAPROXY_IMAGE) |
 | 13 | `docker/arcane-setup.sh` | nenhuma (opcionais: ARCANE_PORT, ARCANE_IMAGE, ARCANE_PROJECTS_DIR, ARCANE_APP_URL, ARCANE_ENCRYPTION_KEY) |
 | 12 | `docker/postgres-setup.sh` | nenhuma (opcionais: POSTGRES_VERSION, POSTGRES_DOCKER_PORT, POSTGRES_DOCKER_DB, POSTGRES_DOCKER_USER, POSTGRES_DOCKER_PASSWORD, POSTGRES_DOCKER_IMAGE) |
 
@@ -1227,6 +1228,9 @@ Edita o `.env` do suap_deploy para configurar o papel do nó em ambientes multi-
 | Papel (`--role`) | `COMPOSE_PROFILES` |
 |------------------|--------------------|
 | `single` | `default,celery-beat,celery-flower` |
+| `full` | `default` (sem beat/flower) |
+| `web-beat` | `web,celery-beat,celery-flower` (um nó do cluster) |
+| `web-celery-beat` | `web,celery,celery-beat,celery-flower` (um nó do cluster) |
 | `app` | `web` |
 | `async-primary` | `celery,celery-beat,celery-flower,pdfprinter` |
 | `async` | `celery` |
@@ -1394,6 +1398,32 @@ Suporta `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`. Idempotente.
 | PostgreSQL | `postgres/` | `suap-postgres` | `suap-postgres-data` | `listen_addresses=*`, `bytea_output=escape`; `POSTGRES_DB/USER/PASSWORD` só valem na primeira inicialização do volume; collation padrão da imagem (sem `pt_BR.UTF-8`) |
 
 As senhas são solicitadas (ou geradas) apenas quando ainda não existem no ambiente nem no `.env` do stack, e ficam em `.env` (chmod 600).
+
+---
+
+### HAProxy
+
+**Arquivos:** `docker/haproxy-setup.sh`, `docker/haproxy-revert.sh` (usa `stack_revert` com volume vazio).
+Stack em `${DOCKER_STACKS_DIR:-/opt/docker}/haproxy/` (`compose.yaml`, `haproxy.cfg` gerado, `.env` chmod 600).
+
+```
+1. Carrega .env do suap-setup; check_docker_available; stack_init "haproxy"; stack_env_load das HAPROXY_*
+2. Pede HAPROXY_BACKENDS e HAPROXY_SERVER_NAME (TTY) ou falha; valida portas, nomes, host[:porta[:peso 0-256]]
+3. Gera HAPROXY_STATS_AUTH (admin:<aleatório>) se vazio
+4. TLS: se /etc/ssl/suap/haproxy/suap.pem não existe, gera autoassinado (openssl; certificado + chave
+   concatenados); grupo 99 + 640 (uid/gid do haproxy na imagem), fallback 644 (sudo -n, nunca trava em prompt)
+5. Gera o haproxy.cfg em arquivo temporário (644) e o valida: docker run --rm <imagem> haproxy -c
+6. stack_adopt_legacy; escreve .env e compose.yaml (network_mode host; segredo de estatísticas por variável de
+   ambiente do container: o cfg não contém senha); SELinux Enforcing: sufixo ",z" nos mounts
+7. docker compose up -d; se o container já rodava e o cfg mudou: docker kill --signal=HUP (reload sem recriar)
+```
+
+Configuração gerada: `balance leastconn`; `option httpchk` com `http-check send meth GET uri /ht/ ver HTTP/1.1 hdr Host <site>`
+e `http-check expect status 200` (um nó com SSL ligado responde 301 e fica DOWN, em vez de parecer saudável);
+`default-server check inter 10000 fastinter 2000 fall 3 rise 2` (nó retirado em ~14 s; `DRAIN_SECONDS` do suap_deploy
+deve superar isso); `option redispatch 1`; `option forwardfor`; `X-Forwarded-Proto: https` no frontend TLS;
+redirecionamento 80 → 443 (com porta HTTPS ≠ 443, o `Location` leva a porta). `listen stats` em 8404 com `stats auth`.
+Reversão: `compose down`; imagem e diretório do stack com confirmação; o certificado nunca é apagado.
 
 ---
 

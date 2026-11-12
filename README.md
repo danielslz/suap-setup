@@ -75,6 +75,7 @@ bash docker/prod/suap-deploy.sh help      # operar o suap_deploy sem trocar de p
 bash docker/prod/configure-node.sh        # papel do nó (multi-servidor)
 bash docker/dockhand-setup.sh
 bash docker/arcane-setup.sh
+bash docker/haproxy-setup.sh              # balanceador para os nós do suap_deploy
 bash docker/install-docker.sh
 bash docker/minio-setup.sh
 bash docker/redis-setup.sh
@@ -110,6 +111,7 @@ Via Docker
   11) MinIO (object storage S3)
   12) Redis (porta 6379 exposta)
   13) PostgreSQL (porta 5432 exposta)
+  14) HAProxy (balanceador do suap_deploy)
 
    R) Reverter uma funcionalidade
    0) Sair
@@ -203,6 +205,8 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `docker/dockhand-revert.sh` | Todas | Reverte o Dockhand (container; volumes e imagem com confirmação) |
 | `docker/arcane-setup.sh` | Todas | Arcane: interface web para gerenciamento Docker (alternativa livre ao Dockhand) |
 | `docker/arcane-revert.sh` | Todas | Reverte o Arcane (container; volume, imagem e chave com confirmação) |
+| `docker/haproxy-setup.sh` | Linux | HAProxy em container: termina o TLS e balanceia os nós do suap_deploy (health check em `/ht/`, pesos, estatísticas) |
+| `docker/haproxy-revert.sh` | Linux | Reverte o HAProxy (container; imagem e diretório do stack com confirmação; certificado preservado) |
 | `docker/minio-setup.sh` | Todas | Setup do MinIO (object storage S3-compatível) via Docker |
 | `docker/minio-revert.sh` | Todas | Reverte o MinIO (containers; volumes, imagens e diretório com confirmação) |
 | `docker/redis-setup.sh` | Todas | Redis em container Docker com porta 6379 exposta |
@@ -384,6 +388,9 @@ Comandos: `setup`, `build`, `pull`, `up`, `down`, `restart`, `update`, `status`,
 | Papel (`--role`) | `COMPOSE_PROFILES` |
 |---|---|
 | `single` | `default,celery-beat,celery-flower` |
+| `full` | `default` (web + nginx + pdfprinter + celery, **sem** beat/flower) |
+| `web-beat` | `web,celery-beat,celery-flower` (web + beat + flower; **um** nó do cluster) |
+| `web-celery-beat` | `web,celery,celery-beat,celery-flower` (como `web-beat`, mais workers; **um** nó do cluster) |
 | `app` | `web` |
 | `async-primary` | `celery,celery-beat,celery-flower,pdfprinter` |
 | `async` | `celery` |
@@ -458,6 +465,27 @@ Para acessar de outra máquina, defina `ARCANE_APP_URL` (ex.: `http://servidor:3
 
 Para desfazer, use `R) Reverter > Reverter Arcane` (ou `bash docker/arcane-revert.sh`). Executa `docker compose down`; o volume, a imagem e o diretório do stack (que guarda a chave) só são apagados com confirmação, e o diretório é mantido enquanto o volume existir. A pasta de projetos nunca é apagada.
 
+### HAProxy (balanceador do suap_deploy)
+
+O `docker/haproxy-setup.sh` sobe um HAProxy via Docker Compose (stack em `/opt/docker/haproxy/`) para balancear **dois ou mais nós `app`** do suap_deploy. Rode-o em um servidor **sem** o Nginx do suap_deploy, que ocupa as portas 80, 443 e 8080.
+
+| Propriedade | Valor |
+|-------------|-------|
+| Imagem | `haproxy:lts-alpine` (sobrescrevível via `HAPROXY_IMAGE`) |
+| Rede | `network_mode: host` (preserva o IP do cliente; usa 80, 443 e 8404) |
+| Nós | `HAPROXY_BACKENDS=host[:porta[:peso]],...` (ex.: `192.0.2.50:80:3,192.0.2.51:80:1`) |
+| Health check | `GET /ht/` com o `Host` de `HAPROXY_SERVER_NAME`; só `200` é saudável (`503` = drain, `301` = nó com SSL ligado) |
+| Algoritmo | `leastconn` com pesos (a divisão por peso aparece sob concorrência) |
+| TLS | termina em 443 com `/etc/ssl/suap/haproxy/suap.pem` (certificado + chave concatenados; gera autoassinado se ausente); 80 redireciona para 443. `HAPROXY_TLS=false` = somente HTTP |
+| Estatísticas | `http://<ip>:8404/` com `HAPROXY_STATS_AUTH` (gerada e guardada no `.env` do stack) |
+
+```bash
+HAPROXY_BACKENDS='192.0.2.50:80:3,192.0.2.51:80:1' HAPROXY_SERVER_NAME=suap.instituicao.edu.br \
+  bash docker/haproxy-setup.sh
+```
+
+Sem variáveis, o script pergunta os nós e o nome do site. Ele valida o `haproxy.cfg` (`haproxy -c`) antes de aplicar; ao mudar nós ou pesos e rodar de novo, **recarrega** o HAProxy (SIGHUP) sem recriar o container. Nos nós do suap_deploy use `SSL_ENABLED=false` e `TRUSTED_PROXIES=<ip do HAProxy>`. Para desfazer: `R) Reverter > Reverter HAProxy (Docker)` (ou `bash docker/haproxy-revert.sh`); o certificado em `/etc/ssl/suap/haproxy` nunca é apagado.
+
 ### MinIO (Object Storage)
 
 O [MinIO](https://min.io/) é um servidor de object storage compatível com a API S3, utilizado pelo SUAP para armazenamento de arquivos de mídia e temporários. O script `docker/minio-setup.sh` delega para o projeto `suap-minio`, que fornece MinIO + Nginx como proxy.
@@ -494,7 +522,7 @@ Para desfazer, use `R) Reverter > Reverter MinIO` (ou `bash docker/minio-revert.
 
 ### Stacks Docker Compose
 
-Redis, PostgreSQL, Dockhand e Arcane são gerenciados por Docker Compose. Cada um vive em `${DOCKER_STACKS_DIR:-/opt/docker}/<nome>/`:
+Redis, PostgreSQL, Dockhand, Arcane e HAProxy são gerenciados por Docker Compose. Cada um vive em `${DOCKER_STACKS_DIR:-/opt/docker}/<nome>/`:
 
 | Arquivo | Conteúdo |
 |---------|----------|
@@ -637,6 +665,8 @@ suap-setup/
 │   ├── dockhand-revert.sh            # Reversão do Dockhand
 │   ├── arcane-setup.sh               # Arcane (gerenciador Docker web)
 │   ├── arcane-revert.sh              # Reversão do Arcane
+│   ├── haproxy-setup.sh              # HAProxy (balanceador do suap_deploy)
+│   ├── haproxy-revert.sh             # Reversão do HAProxy
 │   ├── minio-setup.sh               # Setup do MinIO (suap-minio)
 │   ├── minio-revert.sh              # Reversão do MinIO
 │   ├── redis-setup.sh               # Redis via Docker (porta 6379)

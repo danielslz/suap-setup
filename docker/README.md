@@ -50,7 +50,7 @@ O suap_deploy:
 - `SUAP_DEPLOY_DIR` - Caminho para o repositório suap_deploy
 - `SUAP_DEPLOY_GIT_URL` - URL git do suap_deploy
 
-## Stacks Docker Compose (Redis, PostgreSQL, Dockhand, Arcane)
+## Stacks Docker Compose (Redis, PostgreSQL, Dockhand, Arcane, HAProxy)
 
 Os utilitários independentes abaixo usam Docker Compose. Cada um cria
 `${DOCKER_STACKS_DIR:-/opt/docker}/<nome>/` com `compose.yaml` (gerado pelo script) e
@@ -73,6 +73,14 @@ container `arcane` (`ghcr.io/getarcaneapp/manager`) na porta `3552`, com volume
 `arcane-data` e pasta de projetos Compose (a mesma dos stacks, `/opt/docker`). A `ENCRYPTION_KEY` é
 gerada e guardada no `.env` do stack; faça backup dela. Reversão em
 `docker/arcane-revert.sh`.
+
+## HAProxy (`docker/haproxy-setup.sh`)
+
+Utilitário independente: balanceador (container `suap-haproxy`, `network_mode: host`) para os nós
+`app` do suap_deploy. Termina o TLS (443), redireciona 80 e faz health check em `/ht/` (só `200`
+é saudável, então o drain tira o nó do pool). Variáveis `HAPROXY_BACKENDS` (`host:porta:peso`),
+`HAPROXY_SERVER_NAME`, `HAPROXY_TLS` e portas. Rode em servidor sem o Nginx do suap_deploy.
+Reversão em `docker/haproxy-revert.sh`.
 
 ## MinIO (`docker/minio-setup.sh`)
 
@@ -117,7 +125,7 @@ volume `suap-postgres-data`. Reversão em `docker/postgres-revert.sh`.
 ## Reversões
 
 Cada setup Docker tem um `*-revert.sh` correspondente (acionado por `R` no `setup.sh`):
-`install-docker-revert.sh`, `dockhand-revert.sh`, `arcane-revert.sh`, `minio-revert.sh`, `redis-revert.sh`,
+`install-docker-revert.sh`, `dockhand-revert.sh`, `arcane-revert.sh`, `haproxy-revert.sh`, `minio-revert.sh`, `redis-revert.sh`,
 `postgres-revert.sh`, `dev/docker-setup-revert.sh` e `prod/docker-setup-revert.sh`.
 Todos usam `confirm_destructive` para volumes, imagens e diretórios, e aceitam
 `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`.

@@ -91,6 +91,7 @@ EOF
 #   9 (postgres):    POSTGRES_VERSION
 #   10 (minio):      SUAP_MINIO_DIR, SUAP_MINIO_GIT_URL
 #   11 (redis docker): nenhuma
+#   14 (haproxy):      nenhuma
 #   12 (postgres docker): nenhuma
 #   13 (arcane): nenhuma
 ensure_env_for_option() {
@@ -99,7 +100,7 @@ ensure_env_for_option() {
 
   # Opções que não precisam de variáveis
   case "${option}" in
-    3|4|7|8|9|11|12|13) return 0 ;;
+    3|4|7|8|9|11|12|13|14) return 0 ;;
   esac
 
   # Carregar variáveis existentes (se .env já existe)
@@ -1676,6 +1677,7 @@ stack_adopt_legacy() {
 }
 
 # stack_revert(nome, projeto, container, volume, imagem)
+# (volume vazio = stack sem volume de dados, ex.: HAProxy)
 # Reversão padrão de um stack: derruba o compose (ou remove o container legado),
 # e pede confirmação para apagar volume, imagem e o diretório do stack. O
 # diretório (que guarda senhas/chaves) é preservado enquanto o volume existir.
@@ -1705,7 +1707,9 @@ stack_revert() {
       msg_skip "Container ${container} não existe."
     fi
 
-    if docker volume ls --format '{{.Name}}' | grep -q "^${volume}$"; then
+    if [ -z "${volume}" ]; then
+      :
+    elif docker volume ls --format '{{.Name}}' | grep -q "^${volume}$"; then
       if confirm_destructive "APAGAR o volume Docker '${volume}' (dados do serviço, irreversível)"; then
         msg_action "Removendo volume ${volume}..."
         docker volume rm "${volume}" >/dev/null || msg_error "Falha ao remover o volume ${volume}."
@@ -1731,7 +1735,7 @@ stack_revert() {
   fi
 
   if [ -d "${dir}" ]; then
-    if command -v docker &>/dev/null && docker volume ls --format '{{.Name}}' | grep -q "^${volume}$"; then
+    if [ -n "${volume}" ] && command -v docker &>/dev/null && docker volume ls --format '{{.Name}}' | grep -q "^${volume}$"; then
       msg_skip "Diretório ${dir} preservado (guarda a configuração e segredos que o volume ${volume} ainda usa)."
     else
       revert_dir "${dir}" --destructive
