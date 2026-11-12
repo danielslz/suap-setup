@@ -1198,7 +1198,9 @@ senão `make up`. Encerra com erro se algum passo falhar.
 valores de exemplo em `SITE_URL`/`ALLOWED_HOSTS`; `DEBUG`; profiles desconhecidos/legados; beat/flower ativos e
 senha padrão do Flower; coerência entre `SSL_ENABLED`, o symlink do nginx e o certificado em
 `/etc/ssl/suap/nginx/`; nó `web` com SSL ligado; conectividade TCP com PostgreSQL e Redis
-(`host.docker.internal` é testado como `127.0.0.1`); gravação do UID 33 em `deploy/`, `media`, `media/tmp`, `logs`, `logs/suap`, `logs/nginx`, `sessions`, `pdf` e `pdf/tmp` (dono 33 com `w`, ou `w` para "outros"; reprova se não) e `status.txt`;
+(`host.docker.internal` é testado como `127.0.0.1`); formato do broker (`redis://:SENHA@host`; sem o `:` o Redis
+lê a senha como usuário), coerência entre `REDIS_PASSWORD` e `CELERY_BROKER_URL` e autenticação real no Redis
+(AUTH + PING via `/dev/tcp` com a senha de `REDIS_PASSWORD` e com a credencial do broker decodificada); gravação do UID 33 em `deploy/`, `media`, `media/tmp`, `logs`, `logs/suap`, `logs/nginx`, `sessions`, `pdf` e `pdf/tmp` (dono 33 com `w`, ou `w` para "outros"; reprova se não) e `status.txt`;
 `DRAIN_SECONDS` numérico. Sai com código 1 se houver falhas (avisos não reprovam).
 
 ### Papel do nó: `configure-node.sh`
@@ -1232,7 +1234,9 @@ Edita o `.env` do suap_deploy para configurar o papel do nó em ambientes multi-
 | `custom` | valor de `--profiles` |
 
 Opções: `--db-host/--db-port/--db-name/--db-user`, `--redis-host/--redis-port` (db 2 para cache,
-db 3 para sessão, db 1 para Celery), `--ssl`, `--site-url` (também `NGINX_SERVER_NAME` e `ALLOWED_HOSTS`),
+db 3 para sessão, db 1 para Celery; a senha é codificada e embutida em `CELERY_BROKER_URL` e
+`CELERY_RESULT_BACKEND` como `redis://:SENHA@host:porta/1`, pois o Celery não usa `REDIS_PASSWORD`;
+só a senha, sem `--redis-host`, reaproveita host e porta de `REDIS_URL`), `--ssl`, `--site-url` (também `NGINX_SERVER_NAME` e `ALLOWED_HOSTS`),
 `--trusted-proxies`, `--drain-seconds`, `--s3-endpoint/--s3-access-key`, `--flower-auth`, `--yes`, `--dry-run`.
 Senhas somente por prompt silencioso ou `NODE_DB_PASSWORD`, `NODE_REDIS_PASSWORD`, `NODE_S3_SECRET_KEY`.
 

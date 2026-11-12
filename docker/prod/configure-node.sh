@@ -46,7 +46,9 @@ Opções:
   --db-name <nome>          Nome do banco
   --db-user <usuário>       Usuário do banco
   --redis-host <host>       Servidor Redis (sobrescreve REDIS_URL, REDIS_LOCATION,
-                            SESSION_LOCATION, CELERY_BROKER_URL e CELERY_RESULT_BACKEND)
+                            SESSION_LOCATION, CELERY_BROKER_URL e CELERY_RESULT_BACKEND).
+                            Com senha, o Celery recebe redis://:SENHA@host:porta/1 (a senha
+                            vai na URL, codificada); o Django usa REDIS_PASSWORD/SESSION_PASSWORD
   --redis-port <porta>      Porta do Redis (padrão 6379)
   --ssl <true|false>        SSL_ENABLED + template do nginx (use false atrás de balanceador)
   --site-url <url>          SITE_URL (ajusta também NGINX_SERVER_NAME e ALLOWED_HOSTS)
@@ -180,8 +182,22 @@ _ask_secret() {
 _mask() {
   case "${1}" in
     *PASSWORD*|*SECRET*|*FLOWER*|SECRET_KEY|*TOKEN*) echo "********" ;;
-    *) printf '%s' "${2}" ;;
+    # URLs com credenciais (redis://:senha@host): oculta o trecho antes do @
+    *) printf '%s' "${2}" | sed -E 's#(://)[^/@]*@#\1***@#' ;;
   esac
+}
+
+# _urlencode <texto>: codifica para uso em userinfo de URL (senha com @ : / % etc.)
+_urlencode() {
+  local LC_ALL=C s="${1}" out="" c h i
+  for ((i = 0; i < ${#s}; i++)); do
+    c="${s:i:1}"
+    case "${c}" in
+      [a-zA-Z0-9.~_-]) out+="${c}" ;;
+      *) printf -v h '%%%02X' "'${c}"; out+="${h}" ;;
+    esac
+  done
+  printf '%s' "${out}"
 }
 
 _profiles_for_role() {
@@ -265,18 +281,39 @@ fi
 [ -n "${DB_USER}" ] && _set DATABASE_USER "${DB_USER}"
 [ -n "${NODE_DB_PASSWORD:-}" ] && _set DATABASE_PASSWORD "${NODE_DB_PASSWORD}"
 
-if [ -n "${REDIS_HOST}" ]; then
-  _rport="${REDIS_PORT:-6379}"
-  _valid_port "${_rport}" || { msg_error "Porta do Redis inválida: ${_rport}"; exit 1; }
-  _base="redis://${REDIS_HOST}:${_rport}"
-  _set REDIS_URL "${_base}/2"
-  _set REDIS_LOCATION "${_base}/2"
-  _set SESSION_LOCATION "${_base}/3"
-  _set CELERY_BROKER_URL "${_base}/1"
-  _set CELERY_RESULT_BACKEND "${_base}/1"
-elif [ -n "${REDIS_PORT}" ]; then
+# Redis: o Django lê a senha de REDIS_PASSWORD/SESSION_PASSWORD (variáveis separadas),
+# mas o Celery só conhece CELERY_BROKER_URL e CELERY_RESULT_BACKEND: a senha precisa
+# estar DENTRO da URL, no formato redis://:SENHA@host:porta/db (note o ":" antes da senha).
+_redis_pw="${NODE_REDIS_PASSWORD:-}"
+[ -z "${_redis_pw}" ] && _redis_pw="$(_get REDIS_PASSWORD)"
+
+if [ -n "${REDIS_PORT}" ] && [ -z "${REDIS_HOST}" ]; then
   msg_error "--redis-port exige --redis-host."
   exit 1
+fi
+
+_rhost="${REDIS_HOST}"; _rport="${REDIS_PORT:-}"
+if [ -z "${_rhost}" ] && [ -n "${NODE_REDIS_PASSWORD:-}" ]; then
+  # Nova senha sem novo host: reaproveita host e porta atuais de REDIS_URL
+  _cur="$(_get REDIS_URL)"; _cur="${_cur#*://}"; _cur="${_cur#*@}"; _cur="${_cur%%/*}"
+  _rhost="${_cur%%:*}"
+  [[ "${_cur}" == *:* ]] && _rport="${_cur##*:}"
+fi
+_rport="${_rport:-6379}"
+
+if [ -n "${_rhost}" ]; then
+  _valid_port "${_rport}" || { msg_error "Porta do Redis inválida: ${_rport}"; exit 1; }
+  _base="redis://${_rhost}:${_rport}"
+  _auth=""
+  [ -n "${_redis_pw}" ] && _auth=":$(_urlencode "${_redis_pw}")@"
+  _cbase="redis://${_auth}${_rhost}:${_rport}"
+  if [ -n "${REDIS_HOST}" ]; then
+    _set REDIS_URL "${_base}/2"
+    _set REDIS_LOCATION "${_base}/2"
+    _set SESSION_LOCATION "${_base}/3"
+  fi
+  _set CELERY_BROKER_URL "${_cbase}/1"
+  _set CELERY_RESULT_BACKEND "${_cbase}/1"
 fi
 if [ -n "${NODE_REDIS_PASSWORD:-}" ]; then
   _set REDIS_PASSWORD "${NODE_REDIS_PASSWORD}"

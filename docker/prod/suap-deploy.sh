@@ -274,6 +274,40 @@ _tcp() {
   timeout 3 bash -c "exec 3<>/dev/tcp/${1}/${2}" 2>/dev/null
 }
 
+# _redis_probe <host> <porta> <senha> -> ok | recusada | exige-senha | sem-resposta
+# Fala RESP direto por /dev/tcp (sem redis-cli): AUTH (se houver senha) + PING.
+_redis_probe() {
+  local out
+  out="$(REDIS_PW="${3}" timeout 6 bash -c '
+    exec 3<>"/dev/tcp/$0/$1" || exit 9
+    if [ -n "$REDIS_PW" ]; then
+      printf "*2\r\n\$4\r\nAUTH\r\n\$%d\r\n%s\r\n" "${#REDIS_PW}" "$REDIS_PW" >&3
+      read -r -t 3 -u 3 a; echo "$a"
+    fi
+    printf "*1\r\n\$4\r\nPING\r\n" >&3
+    read -r -t 3 -u 3 p; echo "$p"
+  ' "${1}" "${2}" 2>/dev/null)"
+  case "${out}" in
+    *WRONGPASS*|*"invalid username-password"*) echo "recusada" ;;
+    *NOAUTH*) echo "exige-senha" ;;
+    *PONG*) echo "ok" ;;
+    *) echo "sem-resposta" ;;
+  esac
+}
+
+# _url_userinfo <url> -> trecho entre :// e @ (vazio se não houver)
+_url_userinfo() {
+  local rest="${1#*://}"
+  [[ "${rest%%/*}" == *@* ]] || return 0
+  printf '%s' "${rest%%@*}"
+}
+
+# _urldecode <texto>
+_urldecode() {
+  local t="${1//+/ }"
+  printf '%b' "${t//%/\\x}"
+}
+
 # _host_port_from_url <url> <porta-padrão> -> "host porta"
 _host_port_from_url() {
   local url="${1}" def="${2}" rest hostport
@@ -401,11 +435,41 @@ cmd_check() {
     _check_reach "PostgreSQL" "$(_env_get DATABASE_HOST)" "$(_env_get DATABASE_PORT)"
   fi
   if [[ ",${profiles}," != *,local-redis,* ]]; then
-    local hp
+    local hp rhost rport rpw bu bu_info bu_pw reach
     hp="$(_host_port_from_url "$(_env_get REDIS_URL)" 6379)"
-    _check_reach "Redis" "${hp% *}" "${hp#* }"
-  fi
+    rhost="${hp% *}"; rport="${hp#* }"
+    _check_reach "Redis" "${rhost}" "${rport}"
+    rpw="$(_env_get REDIS_PASSWORD)"
+    reach="${rhost}"; [ "${rhost}" = "host.docker.internal" ] && reach="127.0.0.1"
 
+    # Celery lê o broker só da URL: a senha precisa estar nela (redis://:SENHA@host)
+    bu="$(_env_get CELERY_BROKER_URL)"
+    bu_info="$(_url_userinfo "${bu}")"
+    if [ -n "${bu_info}" ] && [[ "${bu_info}" != *:* ]]; then
+      _fail "CELERY_BROKER_URL sem ':' antes da senha: use redis://:SENHA@host:porta/1. Sem o ':' o Redis lê a senha como NOME DE USUÁRIO e recusa (invalid username-password pair)"
+    elif [ -n "${rpw}" ] && [ -z "${bu_info}" ]; then
+      _fail "REDIS_PASSWORD definido, mas CELERY_BROKER_URL não leva senha: o Celery não consegue autenticar. Use redis://:SENHA@host:porta/1 (rode: node --redis-host <host>)"
+    else
+      _ok "CELERY_BROKER_URL coerente com a senha do Redis"
+    fi
+
+    if _tcp "${reach}" "${rport}"; then
+      case "$(_redis_probe "${reach}" "${rport}" "${rpw}")" in
+        ok) _ok "Redis aceitou a senha de REDIS_PASSWORD (cache/sessão do Django)" ;;
+        recusada) _fail "Redis RECUSOU a senha de REDIS_PASSWORD (cache/sessão do Django)" ;;
+        exige-senha) _fail "Redis exige senha, mas REDIS_PASSWORD está vazio" ;;
+        *) _warn "Redis não respondeu ao PING (verifique firewall/bind)" ;;
+      esac
+      bu_pw="${bu_info#*:}"
+      [[ "${bu_info}" == *:* ]] && bu_pw="$(_urldecode "${bu_pw}")" || bu_pw=""
+      case "$(_redis_probe "${reach}" "${rport}" "${bu_pw}")" in
+        ok) _ok "Redis aceitou a credencial de CELERY_BROKER_URL" ;;
+        recusada) _fail "Redis RECUSOU a credencial de CELERY_BROKER_URL (Celery não conecta)" ;;
+        exige-senha) _fail "Redis exige senha e CELERY_BROKER_URL não a informa" ;;
+        *) : ;;
+      esac
+    fi
+  fi
   echo ""
   echo "Runtime (deploy/)"
   local d="${DEPLOY_DIR}/deploy" sub bad=0

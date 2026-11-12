@@ -779,12 +779,14 @@ Opções completas: `bash docker/prod/configure-node.sh --help`. O que o script 
 |---|---|
 | `--role` / `--profiles` | `COMPOSE_PROFILES` |
 | `--db-*` | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD` |
-| `--redis-host` / `--redis-port` | `REDIS_URL`, `REDIS_LOCATION` (db 2), `SESSION_LOCATION` (db 3), `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` (db 1); senha em `REDIS_PASSWORD` e `SESSION_PASSWORD` |
+| `--redis-host` / `--redis-port` | `REDIS_URL`, `REDIS_LOCATION` (db 2), `SESSION_LOCATION` (db 3), `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` (db 1). A senha vai em `REDIS_PASSWORD` e `SESSION_PASSWORD` (Django) **e** dentro das URLs do Celery, no formato `redis://:SENHA@host:6379/1`, codificada (ver a nota abaixo) |
 | `--ssl` | `SSL_ENABLED` e o symlink `nginx/active/server.conf.template` |
 | `--site-url` | `SITE_URL`, `NGINX_SERVER_NAME`, `ALLOWED_HOSTS` |
 | `--trusted-proxies` / `--drain-seconds` | `TRUSTED_PROXIES`, `DRAIN_SECONDS` |
 | `--s3-*` | `DEFAULT_FILE_STORAGE`, `AWS_S3_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
 | `--flower-auth` | `FLOWER_BASIC_AUTH` |
+
+> **Senha do Redis e o Celery.** O Django lê a senha de `REDIS_PASSWORD`/`SESSION_PASSWORD`, mas o Celery só conhece `CELERY_BROKER_URL` e `CELERY_RESULT_BACKEND`: a senha precisa estar **dentro** da URL, com o `:` antes dela (`redis://:SENHA@host:6379/1`). Escrever `redis://SENHA@host` faz o Redis ler a senha como *nome de usuário* e o worker fica em loop com `invalid username-password pair or user is disabled`. O `configure-node.sh` monta as URLs certas (codificando caracteres como `@`, `:`, `/` e `%`); `--redis-host` é opcional se você só quer trocar a senha (host e porta atuais são reaproveitados).
 
 Os demais itens do `.env` (e-mail, limites de memória, OAuth gov.br, Sentry etc.) continuam sendo editados à mão, conforme o `env.sample`.
 
@@ -834,7 +836,7 @@ Instituições que guardam segredos no HashiCorp Vault podem gerar o `.env` com 
 bash docker/prod/suap-deploy.sh check
 ```
 
-O comando valida: Docker Compose >= 2.30; `make`; presença do `.env`; `SECRET_KEY`, `DATABASE_PASSWORD` e `SUAP_PDF_ACCESS_TOKEN`; valores de exemplo em `SITE_URL`/`ALLOWED_HOSTS`; `DEBUG`; profiles desconhecidos ou legados; beat/flower ativos (lembrete de nó único) e senha padrão do Flower; coerência entre `SSL_ENABLED`, o template do Nginx e o certificado; conectividade TCP com PostgreSQL e Redis; gravação do UID 33 nos diretórios de `deploy/` (`media/tmp`, `logs`, `sessions`, `pdf/tmp`…) e `status.txt`. Termina com código de saída 1 se houver falhas.
+O comando valida: Docker Compose >= 2.30; `make`; presença do `.env`; `SECRET_KEY`, `DATABASE_PASSWORD` e `SUAP_PDF_ACCESS_TOKEN`; valores de exemplo em `SITE_URL`/`ALLOWED_HOSTS`; `DEBUG`; profiles desconhecidos ou legados; beat/flower ativos (lembrete de nó único) e senha padrão do Flower; coerência entre `SSL_ENABLED`, o template do Nginx e o certificado; conectividade TCP com PostgreSQL e Redis; autenticação no Redis (a senha de `REDIS_PASSWORD` e a credencial de `CELERY_BROKER_URL` são testadas com AUTH/PING) e o formato `redis://:SENHA@host` do broker; gravação do UID 33 nos diretórios de `deploy/` (`media/tmp`, `logs`, `sessions`, `pdf/tmp`…) e `status.txt`. Termina com código de saída 1 se houver falhas.
 
 ---
 

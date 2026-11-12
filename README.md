@@ -396,7 +396,7 @@ bash docker/prod/configure-node.sh --role app --db-host 10.0.1.5 --redis-host 10
   --ssl false --site-url https://suap.instituicao.edu.br --trusted-proxies 10.0.0.10 --yes
 ```
 
-Sem opções, em terminal interativo, ele pergunta cada item mostrando o valor atual. Senhas só por prompt silencioso ou variáveis de ambiente. `celery-beat` e `celery-flower` devem rodar em **um único** nó do cluster. O passo a passo completo (papéis, balanceador/HAProxy, drain protocol, mídia compartilhada, atualização sem downtime) está em [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#parte-b--docker-suap_deploy).
+Sem opções, em terminal interativo, ele pergunta cada item mostrando o valor atual. Senhas só por prompt silencioso ou variáveis de ambiente. Com senha no Redis, o Celery recebe a senha dentro de `CELERY_BROKER_URL` (`redis://:SENHA@host:6379/1`, com o `:`); o script monta isso e o `check` valida. `celery-beat` e `celery-flower` devem rodar em **um único** nó do cluster. O passo a passo completo (papéis, balanceador/HAProxy, drain protocol, mídia compartilhada, atualização sem downtime) está em [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#parte-b--docker-suap_deploy).
 
 Para desfazer, use `R) Reverter > Reverter ambiente prod via Docker` (ou `bash docker/prod/docker-setup-revert.sh`). Como derruba a produção, pede confirmação antes de executar `make down`. O volume `suap_pgdata` (banco local), as imagens e o diretório `SUAP_DEPLOY_DIR` (`.env`, `deploy/media`, `deploy/backup`) só são apagados com confirmação separada.
 
