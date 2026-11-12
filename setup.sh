@@ -50,6 +50,7 @@ else
     "11|Redis (porta 6379 exposta)"
     "12|PostgreSQL (porta 5432 exposta)"
     "14|HAProxy (balanceador do suap_deploy)"
+    "15|Arcane Agent (host remoto, modo Direct)"
   )
 fi
 
@@ -116,6 +117,7 @@ run_revert_submenu() {
     items+=("Reverter Redis (Docker)|docker/redis-revert.sh")
     items+=("Reverter PostgreSQL (Docker)|docker/postgres-revert.sh")
     items+=("Reverter HAProxy (Docker)|docker/haproxy-revert.sh")
+    items+=("Reverter Arcane Agent|docker/arcane-agent-revert.sh")
     items+=("Reverter instalação do Docker|docker/install-docker-revert.sh")
   fi
 
@@ -181,6 +183,7 @@ fi
 #   12 (postgres docker): nenhuma
 #   13 (arcane): nenhuma
 #   14 (haproxy): nenhuma
+#   15 (arcane agent): nenhuma
 
 ensure_env_for_option "${ENV_FILE}" "${INTERNAL_CHOICE}"
 
@@ -205,6 +208,7 @@ case "${INTERNAL_CHOICE}" in
   12) TARGET_SCRIPT="${SCRIPT_DIR}/docker/postgres-setup.sh" ;;
   13) TARGET_SCRIPT="${SCRIPT_DIR}/docker/arcane-setup.sh" ;;
   14) TARGET_SCRIPT="${SCRIPT_DIR}/docker/haproxy-setup.sh" ;;
+  15) TARGET_SCRIPT="${SCRIPT_DIR}/docker/arcane-agent-setup.sh" ;;
 esac
 
 # Verificar existência do script antes de executar

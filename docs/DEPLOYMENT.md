@@ -58,6 +58,7 @@
   - [15.7. Vault (opcional)](#157-vault-opcional)
   - [15.8. Validação](#158-validação)
   - [15.9. Exemplo: 3 VMs (prova de conceito / homologação distribuída)](#159-exemplo-3-vms-prova-de-conceito--homologação-distribuída)
+  - [15.10. Monitoramento dos containers com o Arcane](#1510-monitoramento-dos-containers-com-o-arcane)
 - [16. Operação diária (suap-deploy.sh)](#16-operação-diária-suap-deploysh)
   - [16.1. Rotinas recomendadas](#161-rotinas-recomendadas)
   - [16.2. Escalando workers](#162-escalando-workers)
@@ -905,7 +906,7 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
    ```
 
 6. **URL do pdfprinter.** O pdfprinter roda só na .50. Em *Configurações do módulo comum*, o campo **"Caminho para o executável do LibreOffice/API do SuapPDF"** deve receber `http://192.0.2.50:9000` (porta publicada pelo compose; o nome `pdfprinter` só resolve dentro da rede Docker da .50) e o campo **"Token da API do SuapPDF"** o valor de `SUAP_PDF_ACCESS_TOKEN`. A configuração fica no banco, então vale para os dois nós. Libere a porta 9000 no firewall apenas para a .50 e a .51.
-7. **Firewall.** .50/.51: porta 80 só para a .52 (HAProxy); 5555 (Flower) só rede interna. .52: 80/443 para os clientes, 8404 (estatísticas) e as portas do banco e do Redis só para a rede interna.
+7. **Firewall.** .50/.51: porta 80 só para a .52 (HAProxy); 5555 (Flower) só rede interna. .52: 80/443 para os clientes, 8404 (estatísticas) e as portas do banco e do Redis só para a rede interna. Se usar o Arcane (seção 15.10): 3553 na .50/.51 só para a .52, e 3552 na .52 só para a rede administrativa e os agents.
 8. **Validar:** `check` em cada nó; estatísticas do HAProxy com os nós UP; `bash docker/prod/suap-deploy.sh drain` em um nó deve deixá-lo DOWN em ~14 s (e `healthy` o devolve).
 
 **Comportamento quando uma VM cai**
@@ -949,6 +950,49 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
 - O `bin/celery.sh` não passa `-c`, então o worker usa a concorrência padrão do Celery (um processo por CPU: 16 na .50). Dimensione `DOCKER_CELERY_MAX_MEMORY_SIZE` e some as conexões ao Postgres (workers do Gunicorn + processos Celery) para ajustar `max_connections` ou usar PgBouncer (seção 19.7).
 - O HAProxy divide os 4 cores da .52 com o banco e o Redis. Em produção real, considere uma VM própria para o balanceador.
 - A .52 é ponto único de falha (banco, Redis e balanceador). Alta disponibilidade completa exigiria replicação do banco com failover, Redis Sentinel e dois balanceadores com IP virtual, o que pede mais VMs. A topologia dá deploy sem downtime e tolerância à queda de um dos nós de aplicação, com as degradações da tabela acima.
+
+### 15.10. Monitoramento dos containers com o Arcane
+
+O [Arcane](https://getarcane.app/) (BSD-3-Clause) mostra estado, logs, estatísticas e projetos Compose dos containers. O Manager vê apenas o Docker da máquina em que roda; para enxergar vários servidores, cada host remoto roda um **Arcane Agent** e aparece como um *environment*. É uma ferramenta de **gerenciamento**: não substitui um sistema de métricas históricas e alertas (por exemplo, Prometheus e Grafana, ou Uptime Kuma), que eu não verifiquei se o Arcane oferece.
+
+No exemplo das 3 VMs:
+
+| VM | Arcane | Porta |
+|---|---|---|
+| 192.0.2.52 | **Manager** (também gerencia o Redis e o HAProxy locais) | 3552 |
+| 192.0.2.50 | **Agent** (modo Direct) | 3553 |
+| 192.0.2.51 | **Agent** (modo Direct) | 3553 |
+
+**Por que o Manager na .52.** Se ele ficasse na .50 ou na .51 e esse nó caísse, você perderia a visão do ambiente justamente na hora de fazer o failover do beat (seção 15.9). A queda da .52 derruba tudo de qualquer forma, então perder a interface junto não muda o quadro; as quedas da .50 e da .51 continuam visíveis a partir dela.
+
+**Passo a passo**
+
+1. **.52 — Manager.** A `ARCANE_APP_URL` precisa ser alcançável pelos agents:
+
+   ```bash
+   ARCANE_APP_URL=http://192.0.2.52:3552 bash docker/arcane-setup.sh
+   ```
+
+   Acesse `http://192.0.2.52:3552`, entre com `arcane` / `arcane-admin` e troque a senha.
+2. **No Manager**, crie um environment para cada nó: *Environments → Add Environment → Direct*, com a *Agent API URL* `http://192.0.2.50:3553` (e outro para `http://192.0.2.51:3553`). A interface gera o token (`arc_...`) de cada um. O environment precisa existir **antes** do agent.
+3. **.50 e .51 — agent**, cada um com o seu token:
+
+   ```bash
+   ARCANE_MANAGER_URL=http://192.0.2.52:3552 ARCANE_AGENT_TOKEN='arc_...' \
+     bash docker/arcane-agent-setup.sh
+   ```
+
+   Sem as variáveis, o script pergunta a URL e o token (oculto).
+4. **Validar:** em cada environment, *Test Connection* deve dar `online`, e os containers do `suap_deploy` (web, nginx, celery, pdfprinter…) aparecem na lista.
+
+**Firewall e segurança.** O agent monta o socket do Docker e aceita comandos pela rede, o que equivale a acesso root ao host; o token fica no `.env` do stack (modo 600).
+- .50 e .51: porta **3553** liberada **somente para a .52**.
+- .52: porta **3552** para os agents (.50 e .51) e para a rede administrativa; nunca para fora da instituição.
+- Troque a senha padrão do Manager antes de qualquer outro passo.
+
+**Telemetria.** O Arcane envia por padrão um heartbeat (versão e identificador da instância) para `checkin.getarcane.app`. O suap-setup o desliga no Manager e nos agents (`ARCANE_ANALYTICS_DISABLED=true`); use `false` para mantê-lo.
+
+**Gerenciar o suap_deploy pelo Arcane.** Por padrão o agent só inspeciona (containers, logs, estatísticas). Para o Manager também gerenciar os projetos Compose daquele host, defina `ARCANE_AGENT_PROJECTS_DIR` com a pasta (por exemplo, a do `suap_deploy`) ao subir o agent. Mexer no stack do `suap_deploy` por fora do `suap-deploy.sh` ignora o pré-voo de permissões e o drain protocol: para atualizar, continue usando `update`.
 
 ---
 
@@ -1059,6 +1103,7 @@ O grupo "Via Docker" do menu do `suap-setup` oferece utilitários independentes,
 | Redis (porta 6379 exposta) | `docker/redis-setup.sh` | 6379 | Redis do cluster (senha obrigatória) |
 | PostgreSQL (porta 5432 exposta) | `docker/postgres-setup.sh` | 5432 | Banco do cluster (senha obrigatória; collation padrão da imagem, sem `pt_BR.UTF-8`) |
 | MinIO (object storage S3) | `docker/minio-setup.sh` | 80 / 9001 | Mídia compartilhada (seção 21) |
+| Arcane Agent (host remoto, modo Direct) | `docker/arcane-agent-setup.sh` | 3553 | Permite ao Arcane Manager gerenciar o Docker de outro servidor (seção 15.10) |
 | HAProxy (balanceador do suap_deploy) | `docker/haproxy-setup.sh` | 80 / 443 / 8404 | Balanceador dos nós `app` (seção 15.5); rode em servidor sem o Nginx do `suap_deploy` |
 | Arcane | `docker/arcane-setup.sh` | 3552 | Interface web livre (BSD-3-Clause) para gerenciar o Docker |
 | Dockhand | `docker/dockhand-setup.sh` | 9093 | Interface web para gerenciar o Docker (licença BSL 1.1: uso empresarial em produção exige plano pago) |

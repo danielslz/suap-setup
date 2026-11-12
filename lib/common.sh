@@ -92,6 +92,7 @@ EOF
 #   10 (minio):      SUAP_MINIO_DIR, SUAP_MINIO_GIT_URL
 #   11 (redis docker): nenhuma
 #   14 (haproxy):      nenhuma
+#   15 (arcane agent): nenhuma
 #   12 (postgres docker): nenhuma
 #   13 (arcane): nenhuma
 ensure_env_for_option() {
@@ -100,7 +101,7 @@ ensure_env_for_option() {
 
   # Opções que não precisam de variáveis
   case "${option}" in
-    3|4|7|8|9|11|12|13|14) return 0 ;;
+    3|4|7|8|9|11|12|13|14|15) return 0 ;;
   esac
 
   # Carregar variáveis existentes (se .env já existe)

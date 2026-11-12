@@ -74,6 +74,13 @@ container `arcane` (`ghcr.io/getarcaneapp/manager`) na porta `3552`, com volume
 gerada e guardada no `.env` do stack; faça backup dela. Reversão em
 `docker/arcane-revert.sh`.
 
+## Arcane Agent (`docker/arcane-agent-setup.sh`)
+
+Utilitário independente para hosts **remotos**: sobe o `arcane-agent` (`ghcr.io/getarcaneapp/agent`) em
+modo Direct (porta `3553`), que o Arcane Manager usa para gerenciar o Docker daquele host. Exige o token
+gerado ao criar o environment no Manager (`ARCANE_AGENT_TOKEN`, `ARCANE_MANAGER_URL`). A telemetria do
+Arcane fica desligada por padrão (`ARCANE_ANALYTICS_DISABLED=true`). Reversão em `docker/arcane-agent-revert.sh`.
+
 ## HAProxy (`docker/haproxy-setup.sh`)
 
 Utilitário independente: balanceador (container `suap-haproxy`, `network_mode: host`) para os nós
@@ -125,7 +132,7 @@ volume `suap-postgres-data`. Reversão em `docker/postgres-revert.sh`.
 ## Reversões
 
 Cada setup Docker tem um `*-revert.sh` correspondente (acionado por `R` no `setup.sh`):
-`install-docker-revert.sh`, `dockhand-revert.sh`, `arcane-revert.sh`, `haproxy-revert.sh`, `minio-revert.sh`, `redis-revert.sh`,
+`install-docker-revert.sh`, `dockhand-revert.sh`, `arcane-revert.sh`, `arcane-agent-revert.sh`, `haproxy-revert.sh`, `minio-revert.sh`, `redis-revert.sh`,
 `postgres-revert.sh`, `dev/docker-setup-revert.sh` e `prod/docker-setup-revert.sh`.
 Todos usam `confirm_destructive` para volumes, imagens e diretórios, e aceitam
 `REVERT_DRY_RUN=1` e `REVERT_ASSUME_YES=1`.

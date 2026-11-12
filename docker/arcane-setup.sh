@@ -12,6 +12,8 @@ set -u
 #   ARCANE_APP_URL         URL pública (padrão: http://localhost:<porta>)
 #   ARCANE_ENCRYPTION_KEY  Chave de 32 bytes (hex). Se vazia, é gerada e guardada
 #                          no .env do stack (chmod 600)
+#   ARCANE_ANALYTICS_DISABLED  true (padrão) desliga o heartbeat de telemetria do Arcane (checkin.getarcane.app);
+#                          false o mantém ligado
 #   DOCKER_STACKS_DIR      Base dos stacks (padrão: /opt/docker)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -29,7 +31,9 @@ PROJECT="suap-arcane"
 CONTAINER_NAME="arcane"
 
 stack_init "arcane"
-stack_env_load ARCANE_PORT ARCANE_IMAGE ARCANE_PROJECTS_DIR ARCANE_APP_URL ARCANE_ENCRYPTION_KEY ARCANE_PUID ARCANE_PGID
+stack_env_load ARCANE_PORT ARCANE_IMAGE ARCANE_PROJECTS_DIR ARCANE_APP_URL ARCANE_ENCRYPTION_KEY ARCANE_PUID ARCANE_PGID ARCANE_ANALYTICS_DISABLED
+ARCANE_ANALYTICS_DISABLED="${ARCANE_ANALYTICS_DISABLED:-true}"
+case "${ARCANE_ANALYTICS_DISABLED}" in true|false) ;; *) msg_error "ARCANE_ANALYTICS_DISABLED aceita apenas true ou false."; exit 1 ;; esac
 ARCANE_PORT="${ARCANE_PORT:-3552}"
 ARCANE_IMAGE="${ARCANE_IMAGE:-ghcr.io/getarcaneapp/manager:latest}"
 ARCANE_PROJECTS_DIR="${ARCANE_PROJECTS_DIR:-${DOCKER_STACKS_DIR:-/opt/docker}}"
@@ -75,7 +79,7 @@ fi
 
 stack_adopt_legacy "${CONTAINER_NAME}" "${PROJECT}" || exit 1
 
-stack_env_write ARCANE_PORT ARCANE_IMAGE ARCANE_PROJECTS_DIR ARCANE_APP_URL ARCANE_ENCRYPTION_KEY ARCANE_PUID ARCANE_PGID || exit 1
+stack_env_write ARCANE_PORT ARCANE_IMAGE ARCANE_PROJECTS_DIR ARCANE_APP_URL ARCANE_ENCRYPTION_KEY ARCANE_PUID ARCANE_PGID ARCANE_ANALYTICS_DISABLED || exit 1
 
 {
   cat <<'EOF'
@@ -104,6 +108,7 @@ EOF
       PGID: ${ARCANE_PGID}
       ENCRYPTION_KEY: ${ARCANE_ENCRYPTION_KEY}
       PROJECTS_DIRECTORY: ${ARCANE_PROJECTS_DIR}
+      ANALYTICS_DISABLED: ${ARCANE_ANALYTICS_DISABLED}
     restart: unless-stopped
 volumes:
   arcane-data:

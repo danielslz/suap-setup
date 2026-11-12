@@ -76,6 +76,7 @@ bash docker/prod/configure-node.sh        # papel do nó (multi-servidor)
 bash docker/dockhand-setup.sh
 bash docker/arcane-setup.sh
 bash docker/haproxy-setup.sh              # balanceador para os nós do suap_deploy
+bash docker/arcane-agent-setup.sh         # agent do Arcane em um host remoto
 bash docker/install-docker.sh
 bash docker/minio-setup.sh
 bash docker/redis-setup.sh
@@ -112,6 +113,7 @@ Via Docker
   12) Redis (porta 6379 exposta)
   13) PostgreSQL (porta 5432 exposta)
   14) HAProxy (balanceador do suap_deploy)
+  15) Arcane Agent (host remoto, modo Direct)
 
    R) Reverter uma funcionalidade
    0) Sair
@@ -206,6 +208,8 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `docker/arcane-setup.sh` | Todas | Arcane: interface web para gerenciamento Docker (alternativa livre ao Dockhand) |
 | `docker/arcane-revert.sh` | Todas | Reverte o Arcane (container; volume, imagem e chave com confirmação) |
 | `docker/haproxy-setup.sh` | Linux | HAProxy em container: termina o TLS e balanceia os nós do suap_deploy (health check em `/ht/`, pesos, estatísticas) |
+| `docker/arcane-agent-setup.sh` | Linux | Arcane Agent (modo Direct) em um host remoto, para o Manager gerenciar vários servidores |
+| `docker/arcane-agent-revert.sh` | Linux | Reverte o Arcane Agent (container; volume, imagem e token com confirmação) |
 | `docker/haproxy-revert.sh` | Linux | Reverte o HAProxy (container; imagem e diretório do stack com confirmação; certificado preservado) |
 | `docker/minio-setup.sh` | Todas | Setup do MinIO (object storage S3-compatível) via Docker |
 | `docker/minio-revert.sh` | Todas | Reverte o MinIO (containers; volumes, imagens e diretório com confirmação) |
@@ -451,7 +455,7 @@ O [Arcane](https://getarcane.app/) é uma interface web livre (BSD-3-Clause) par
 | Projetos Compose | `DOCKER_STACKS_DIR` (padrão `/opt/docker`; configurável via `ARCANE_PROJECTS_DIR`) |
 | Socket Docker | `/var/run/docker.sock` |
 | Login inicial | `arcane` / `arcane-admin` (troca de senha exigida no primeiro acesso) |
-| Variáveis opcionais | `ARCANE_PORT`, `ARCANE_IMAGE`, `ARCANE_PROJECTS_DIR`, `ARCANE_APP_URL`, `ARCANE_ENCRYPTION_KEY` |
+| Variáveis opcionais | `ARCANE_PORT`, `ARCANE_IMAGE`, `ARCANE_PROJECTS_DIR`, `ARCANE_APP_URL`, `ARCANE_ENCRYPTION_KEY`, `ARCANE_ANALYTICS_DISABLED` |
 
 O script:
 
@@ -464,6 +468,32 @@ O script:
 Para acessar de outra máquina, defina `ARCANE_APP_URL` (ex.: `http://servidor:3552`) e libere a porta no firewall. Para mudar a porta, defina `ARCANE_PORT` e rode o script de novo.
 
 Para desfazer, use `R) Reverter > Reverter Arcane` (ou `bash docker/arcane-revert.sh`). Executa `docker compose down`; o volume, a imagem e o diretório do stack (que guarda a chave) só são apagados com confirmação, e o diretório é mantido enquanto o volume existir. A pasta de projetos nunca é apagada.
+
+#### Vários servidores: Manager + Arcane Agent
+
+O Arcane Manager mostra apenas o Docker da máquina em que roda. Para ver outros servidores (por exemplo, os nós do suap_deploy), cada host remoto roda um **Arcane Agent** e aparece na interface como um *environment*. O `docker/arcane-agent-setup.sh` sobe o agent no **modo Direct** (o Manager conecta no agent pela porta 3553), via Docker Compose (stack em `/opt/docker/arcane-agent/`).
+
+1. **Manager** (uma máquina): `ARCANE_APP_URL=http://<ip-do-manager>:3552 bash docker/arcane-setup.sh`. A URL precisa ser alcançável pelos agents. Troque a senha padrão (`arcane` / `arcane-admin`) no primeiro acesso.
+2. **No Manager**, crie o environment antes de subir o agent: *Environments → Add Environment → Direct*, com a *Agent API URL* `http://<ip-do-host-remoto>:3553`. A interface gera o token do agent (`arc_...`).
+3. **No host remoto**, com o token:
+
+   ```bash
+   ARCANE_MANAGER_URL=http://<ip-do-manager>:3552 ARCANE_AGENT_TOKEN='arc_...' \
+     bash docker/arcane-agent-setup.sh
+   ```
+
+   Sem as variáveis, o script pergunta a URL do Manager e o token (digitado de forma oculta). Depois, use *Test Connection* no environment: ele deve ficar `online`.
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `ARCANE_MANAGER_URL` | — | URL do Manager visível a partir do host remoto |
+| `ARCANE_AGENT_TOKEN` | — | Token do environment (guardado no `.env` do stack, modo 600) |
+| `ARCANE_AGENT_PORT` | `3553` | Porta do agent neste host |
+| `ARCANE_AGENT_IMAGE` | `ghcr.io/getarcaneapp/agent:latest` | Imagem |
+| `ARCANE_AGENT_PROJECTS_DIR` | vazio | Opcional: pasta de projetos Compose que o Manager poderá gerenciar neste host (montada no mesmo caminho). Sem ela o agent só inspeciona (containers, logs, estatísticas) |
+| `ARCANE_ANALYTICS_DISABLED` | `true` | O Arcane envia por padrão um heartbeat de telemetria (versão e identificador da instância) para `checkin.getarcane.app`; o suap-setup o **desliga** no Manager e no agent. Use `false` para mantê-lo |
+
+**Segurança.** O agent monta o socket do Docker e aceita comandos pela rede: equivale a acesso root ao host. Libere a porta 3553 do host remoto **somente para o IP do Manager**, e a porta 3552 do Manager para os agents e para a rede administrativa. Para desfazer: `R) Reverter > Reverter Arcane Agent` (ou `bash docker/arcane-agent-revert.sh`), e remova o environment no Manager.
 
 ### HAProxy (balanceador do suap_deploy)
 
@@ -522,7 +552,7 @@ Para desfazer, use `R) Reverter > Reverter MinIO` (ou `bash docker/minio-revert.
 
 ### Stacks Docker Compose
 
-Redis, PostgreSQL, Dockhand, Arcane e HAProxy são gerenciados por Docker Compose. Cada um vive em `${DOCKER_STACKS_DIR:-/opt/docker}/<nome>/`:
+Redis, PostgreSQL, Dockhand, Arcane (Manager e Agent) e HAProxy são gerenciados por Docker Compose. Cada um vive em `${DOCKER_STACKS_DIR:-/opt/docker}/<nome>/`:
 
 | Arquivo | Conteúdo |
 |---------|----------|
@@ -665,6 +695,8 @@ suap-setup/
 │   ├── dockhand-revert.sh            # Reversão do Dockhand
 │   ├── arcane-setup.sh               # Arcane (gerenciador Docker web)
 │   ├── arcane-revert.sh              # Reversão do Arcane
+│   ├── arcane-agent-setup.sh         # Arcane Agent (host remoto, modo Direct)
+│   ├── arcane-agent-revert.sh        # Reversão do Arcane Agent
 │   ├── haproxy-setup.sh              # HAProxy (balanceador do suap_deploy)
 │   ├── haproxy-revert.sh             # Reversão do HAProxy
 │   ├── minio-setup.sh               # Setup do MinIO (suap-minio)

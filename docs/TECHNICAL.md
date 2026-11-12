@@ -177,7 +177,7 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 2. Source lib/common.sh (carrega todas as funções utilitárias)
 3. Detecta distribuição/OS via detect_distro()
 4. Exibe menu adaptativo conforme plataforma:
-   - Linux: 14 opções agrupadas em seções (Ambiente SUAP, Serviços no host, Via Docker)
+   - Linux: 15 opções agrupadas em seções (Ambiente SUAP, Serviços no host, Via Docker)
    - macOS: 8 opções (dev e as opções Via Docker, incluindo arcane, redis e postgres docker)
 5. Valida entrada do usuário
 6. Traduz a opção exibida (sequencial) para o id interno via lista `MENU_IDS`
@@ -205,6 +205,7 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 | 9 | `{distro}/install-postgres.sh` | POSTGRES_VERSION |
 | 10 | `docker/minio-setup.sh` | SUAP_MINIO_DIR, SUAP_MINIO_GIT_URL |
 | 11 | `docker/redis-setup.sh` | nenhuma (opcionais: REDIS_DOCKER_PORT, REDIS_DOCKER_PASSWORD, REDIS_DOCKER_IMAGE) |
+| 15 | `docker/arcane-agent-setup.sh` | nenhuma (opcionais: ARCANE_MANAGER_URL, ARCANE_AGENT_TOKEN, ARCANE_AGENT_PORT, ARCANE_AGENT_IMAGE, ARCANE_AGENT_PROJECTS_DIR, ARCANE_ANALYTICS_DISABLED) |
 | 14 | `docker/haproxy-setup.sh` | nenhuma (opcionais: HAPROXY_BACKENDS, HAPROXY_SERVER_NAME, HAPROXY_TLS, HAPROXY_CERT_DIR, HAPROXY_*_PORT, HAPROXY_STATS_AUTH, HAPROXY_IMAGE) |
 | 13 | `docker/arcane-setup.sh` | nenhuma (opcionais: ARCANE_PORT, ARCANE_IMAGE, ARCANE_PROJECTS_DIR, ARCANE_APP_URL, ARCANE_ENCRYPTION_KEY) |
 | 12 | `docker/postgres-setup.sh` | nenhuma (opcionais: POSTGRES_VERSION, POSTGRES_DOCKER_PORT, POSTGRES_DOCKER_DB, POSTGRES_DOCKER_USER, POSTGRES_DOCKER_PASSWORD, POSTGRES_DOCKER_IMAGE) |
@@ -1531,6 +1532,37 @@ O [Arcane](https://getarcane.app/) (BSD-3-Clause) é uma interface web para gere
 O diretório do stack guarda a chave: é preservado enquanto o volume `arcane-data`
 existir. A pasta de projetos nunca é apagada. Suporta `REVERT_DRY_RUN=1` e
 `REVERT_ASSUME_YES=1`. Idempotente.
+
+### Telemetria (`ARCANE_ANALYTICS_DISABLED`)
+
+O Arcane envia por padrão um heartbeat (versão e identificador da instância) para
+`https://checkin.getarcane.app/heartbeat`. O suap-setup define `ANALYTICS_DISABLED=true` no Manager e no
+agent (`ARCANE_ANALYTICS_DISABLED=true` por padrão; `false` mantém a telemetria).
+
+### Arcane Agent (vários servidores)
+
+**Arquivos:** `docker/arcane-agent-setup.sh`, `docker/arcane-agent-revert.sh` (usa `stack_revert`).
+Stack em `${DOCKER_STACKS_DIR:-/opt/docker}/arcane-agent/` (`compose.yaml` + `.env`, chmod 600). Modo **Direct**:
+o Manager conecta no agent pela porta 3553 ([documentação](https://getarcane.app/docs/remote/environments)).
+
+```
+1. Carrega .env do suap-setup; check_docker_available; stack_init "arcane-agent"; stack_env_load
+2. Exige ARCANE_MANAGER_URL e ARCANE_AGENT_TOKEN (pergunta em TTY, token oculto; senão falha)
+3. Valida URL (http/https), porta, token (letras, números, _ . -; aviso se não começa com arc_),
+   ARCANE_ANALYTICS_DISABLED e, se informada, ARCANE_AGENT_PROJECTS_DIR (caminho existente)
+4. Testa a alcançabilidade do Manager com curl (apenas avisa)
+5. stack_adopt_legacy; escreve .env e compose.yaml:
+   imagem ghcr.io/getarcaneapp/agent, porta ${ARCANE_AGENT_PORT}:3553, AGENT_MODE=true, AGENT_TOKEN,
+   MANAGER_API_URL, ANALYTICS_DISABLED, socket do Docker, volume arcane-agent-data;
+   SELinux Enforcing: security_opt label=disable; projetos opcionais montados no mesmo caminho
+6. docker compose pull + up -d; verifica o container; imprime a Agent API URL para o environment
+```
+
+O environment precisa existir no Manager **antes** do agent (o token é gerado na criação). Validação feita
+com Manager e agent reais na mesma máquina: `POST /api/environments` (campos `name`, `apiUrl`, `useApiKey`)
+devolve o token `apiKey`; com o agent no ar, `POST /api/environments/{id}/test` retorna `online` e a listagem
+de containers do environment passa pelo agent. Reversão: `compose down`; volume, imagem e diretório (token)
+com confirmação; lembrar de remover o environment no Manager.
 
 ---
 
