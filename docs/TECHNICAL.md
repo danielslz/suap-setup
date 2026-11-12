@@ -1077,10 +1077,13 @@ O script apresenta um menu de gerenciamento:
    - Se ausente: instalar via apt-get (deb), dnf (rpm) ou pacman (arch)
    - Se plataforma desconhecida ou falha na instalação: exit 1
 8. Configurar .env do suap_deploy via `make setup` (se não existir)
-9. Garantir que diretórios de logs/volumes existam com permissões corretas:
-   - Cria (se ausentes): deploy/logs/nginx, deploy/logs/suap, deploy/media, deploy/backup
-   - Corrige ownership para ${USER}:${USER} se não graváveis
-   - Aplica chmod 777 em deploy/logs/nginx (Nginx roda como www-data/UID 33 no container)
+9. ensure_suap_deploy_dirs (lib/common.sh): diretórios de runtime com o dono do container:
+   - Cria (se ausentes): deploy/logs/nginx, deploy/logs/suap, deploy/backup, deploy/sessions,
+     deploy/media/tmp, deploy/pdf/tmp e deploy/status.txt (healthy)
+   - chown -R 33:33 em deploy/ (root ou sudo); sem sudo, fallback chmod -R o+rwX.
+     NUNCA troca o dono para o usuário atual: web, celery e pdfprinter rodam como www-data (UID 33)
+     e, com outro dono, o Celery falha com PermissionError em deploy/media/tmp/pymp-*
+   - Aplica chmod 777 em deploy/logs/nginx (o Nginx do container grava logs com outro usuário)
 10. Exibir menu interativo de gerenciamento (14 opções + sair)
 11. Executar target do Makefile conforme opção escolhida
 ```
@@ -1179,8 +1182,12 @@ Não duplica a lógica do suap_deploy.
 | `node [opções]` | `configure-node.sh` |
 | `profiles` | mostra `COMPOSE_PROFILES`, papel inferido, modo de imagem e `SSL_ENABLED` |
 | `check` | validação (ver abaixo) |
+| `fix-perms` | `ensure_suap_deploy_dirs`: recria os diretórios de `deploy/` e aplica `chown -R 33:33` |
 | `drain`, `healthy` | `contrib/multi-node/drain.sh` / `healthy.sh` |
 | `compose <args>`, `dir` | `docker compose <args>` / imprime o diretório |
+
+**Pré-voo:** `up`, `restart` e `update` recusam rodar se `deploy/media/tmp`, `deploy/logs/suap` ou
+`deploy/sessions` não forem graváveis pelo UID 33 (evita o crash loop do Celery) e indicam `fix-perms`.
 
 **`update`:** detecta o modo pela `SUAP_IMAGE` do `.env` (vazia ou `suap:latest` = local).
 Local: opcionalmente `git pull --ff-only` em `src/suap` e `src/suap-pdf` (`--git-pull`) e `make build`.
@@ -1191,7 +1198,7 @@ senão `make up`. Encerra com erro se algum passo falhar.
 valores de exemplo em `SITE_URL`/`ALLOWED_HOSTS`; `DEBUG`; profiles desconhecidos/legados; beat/flower ativos e
 senha padrão do Flower; coerência entre `SSL_ENABLED`, o symlink do nginx e o certificado em
 `/etc/ssl/suap/nginx/`; nó `web` com SSL ligado; conectividade TCP com PostgreSQL e Redis
-(`host.docker.internal` é testado como `127.0.0.1`); permissões de `deploy/` (dono UID 33 ou `o+rw`) e `status.txt`;
+(`host.docker.internal` é testado como `127.0.0.1`); gravação do UID 33 em `deploy/`, `media`, `media/tmp`, `logs`, `logs/suap`, `logs/nginx`, `sessions`, `pdf` e `pdf/tmp` (dono 33 com `w`, ou `w` para "outros"; reprova se não) e `status.txt`;
 `DRAIN_SECONDS` numérico. Sai com código 1 se houver falhas (avisos não reprovam).
 
 ### Papel do nó: `configure-node.sh`

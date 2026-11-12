@@ -1553,6 +1553,39 @@ resolve_suap_deploy_dir() {
   eval echo "${dir}"
 }
 
+# ensure_suap_deploy_dirs(dir_do_suap_deploy)
+# Garante os diretórios de runtime do suap_deploy e as permissões que os containers
+# exigem. Web, Celery e pdfprinter rodam como www-data (UID/GID 33): se deploy/ (ou
+# deploy/media/tmp) pertencer a outro usuário, o Celery falha com
+# "PermissionError ... /opt/suap/deploy/media/tmp/pymp-*". NUNCA troque o dono para
+# o usuário atual. Mesma regra do scripts/setup.sh do suap_deploy: chown 33:33 (root
+# ou sudo), com fallback para chmod o+rwX.
+# Em deploy/media grande (ou em NFS) o chown -R pode demorar.
+ensure_suap_deploy_dirs() {
+  local root="${1}" d="${1}/deploy" sub
+  for sub in logs/nginx logs/suap backup sessions media/tmp pdf/tmp; do
+    mkdir -p "${d}/${sub}" 2>/dev/null || sudo mkdir -p "${d}/${sub}" || {
+      msg_error "Não foi possível criar ${d}/${sub}."
+      return 1
+    }
+  done
+  if [ ! -f "${d}/status.txt" ]; then
+    echo 'healthy' > "${d}/status.txt" 2>/dev/null || echo 'healthy' | sudo tee "${d}/status.txt" >/dev/null
+  fi
+  if [ "${EUID:-$(id -u)}" -eq 0 ]; then
+    chown -R 33:33 "${d}" && msg_action "deploy/ com dono 33:33 (www-data)"
+  elif sudo chown -R 33:33 "${d}"; then
+    msg_action "deploy/ com dono 33:33 (www-data) via sudo"
+  else
+    chmod -R o+rwX "${d}" 2>/dev/null \
+      && msg_skip "Sem root/sudo: deploy/ liberado com o+rwX (o www-data grava via 'other')." \
+      || { msg_error "Não foi possível ajustar as permissões de ${d}. Rode: sudo chown -R 33:33 ${d}"; return 1; }
+  fi
+  # O Nginx do container grava logs com outro usuário
+  chmod -R 777 "${d}/logs/nginx" 2>/dev/null || sudo chmod -R 777 "${d}/logs/nginx" 2>/dev/null || true
+  return 0
+}
+
 # =============================================================================
 # Stacks Docker Compose (Redis, PostgreSQL, Dockhand, Arcane)
 # =============================================================================

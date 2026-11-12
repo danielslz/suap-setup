@@ -37,6 +37,7 @@ Ciclo de vida
   update [--git-pull]   Atualiza: build (local) ou pull (registry) e depois
                         restart se o stack estiver no ar, ou up se estiver parado.
                         --git-pull atualiza src/suap e src/suap-pdf antes (modo local)
+  fix-perms             Recria os diretórios de deploy/ e ajusta o dono (33:33, www-data)
   status                Estado dos containers
   logs [serviço...]     Logs em tempo real (ex.: logs web nginx)
   scale <n>             Número de workers celery (ex.: scale 3)
@@ -135,6 +136,18 @@ _stack_running() {
   [ -n "$(cd "${DEPLOY_DIR}" && docker compose ps -q --status running 2>/dev/null)" ]
 }
 
+# Antes de subir/reiniciar: evita o crash loop do Celery por falta de escrita em deploy/media/tmp
+_preflight_perms() {
+  local d="${DEPLOY_DIR}/deploy" sub
+  for sub in media/tmp logs/suap sessions; do
+    if [ -d "${d}/${sub}" ] && ! _writable_by_www "${d}/${sub}"; then
+      msg_error "deploy/${sub} não é gravável pelo www-data (UID 33): o Celery/web falhariam com PermissionError."
+      msg_error "Corrija com: bash docker/prod/suap-deploy.sh fix-perms"
+      exit 1
+    fi
+  done
+}
+
 # Papel inferido a partir de COMPOSE_PROFILES
 _infer_role() {
   local p=",$(_env_get COMPOSE_PROFILES),"
@@ -170,6 +183,7 @@ cmd_update() {
     esac
   done
   _require_deploy_dir; _require_make; _require_docker; _require_env
+  _preflight_perms
 
   local mode
   mode="$(_image_mode)"
@@ -241,6 +255,19 @@ _CHECK_WARN=0
 _ok()   { echo "  ${GREEN}[ok]${NO_COLOR}    $1"; }
 _warn() { echo "  ${YELLOW}[aviso]${NO_COLOR} $1"; _CHECK_WARN=$((_CHECK_WARN + 1)); }
 _fail() { echo "  ${RED}[falha]${NO_COLOR} $1"; _CHECK_FAIL=$((_CHECK_FAIL + 1)); }
+
+# _writable_by_www <diretório>: o UID 33 consegue criar arquivos aqui?
+# Verdadeiro se o dono é 33 com permissão de escrita, ou se "outros" têm escrita.
+_writable_by_www() {
+  local path="${1}" owner mode
+  owner="$(stat -c '%u' "${path}" 2>/dev/null)" || return 1
+  mode="$(stat -c '%a' "${path}" 2>/dev/null)" || return 1
+  mode="${mode: -3}"
+  if [ "${owner}" = "33" ]; then
+    [ $(( 8#${mode:0:1} & 2 )) -ne 0 ] && return 0
+  fi
+  [ $(( 8#${mode:2:1} & 2 )) -ne 0 ]
+}
 
 # _tcp <host> <porta>: testa conexão TCP com timeout de 3s
 _tcp() {
@@ -381,19 +408,23 @@ cmd_check() {
 
   echo ""
   echo "Runtime (deploy/)"
-  local d="${DEPLOY_DIR}/deploy"
+  local d="${DEPLOY_DIR}/deploy" sub bad=0
   if [ -d "${d}" ]; then
-    local owner other
-    owner="$(stat -c '%u' "${d}" 2>/dev/null || echo "?")"
-    other="$(stat -c '%a' "${d}" 2>/dev/null | tail -c 2)"
-    if [ "${owner}" = "33" ] || [[ "${other}" =~ ^[67]$ ]]; then
-      _ok "deploy/ gravável pelo www-data (UID 33)"
-    else
-      _warn "deploy/ pertence ao UID ${owner}: o www-data (33) pode não conseguir escrever (sudo chown -R 33:33 deploy/)"
-    fi
-    [ -f "${d}/status.txt" ] && _ok "deploy/status.txt = $(cat "${d}/status.txt")" || _warn "deploy/status.txt ausente (rode setup)"
+    # O www-data (UID 33) precisa gravar nestes diretórios (web, celery e pdfprinter)
+    for sub in "" media media/tmp logs logs/suap logs/nginx sessions pdf pdf/tmp; do
+      if [ ! -d "${d}/${sub}" ]; then
+        _warn "deploy/${sub} ausente (rode: fix-perms)"
+        continue
+      fi
+      if ! _writable_by_www "${d}/${sub}"; then
+        _fail "deploy/${sub} não é gravável pelo www-data (UID 33): dono $(stat -c '%U(%u)' "${d}/${sub}"), modo $(stat -c '%a' "${d}/${sub}"). O Celery falha com PermissionError. Rode: fix-perms"
+        bad=1
+      fi
+    done
+    [ "${bad}" = "0" ] && _ok "deploy/ gravável pelo www-data (UID 33)"
+    [ -f "${d}/status.txt" ] && _ok "deploy/status.txt = $(cat "${d}/status.txt")" || _warn "deploy/status.txt ausente (rode: fix-perms)"
   else
-    _warn "diretório deploy/ ausente (rode setup)"
+    _warn "diretório deploy/ ausente (rode: fix-perms)"
   fi
   local ds
   ds="$(_env_get DRAIN_SECONDS)"
@@ -419,12 +450,13 @@ case "${cmd}" in
   setup)    _require_deploy_dir; _require_make; _mk setup ;;
   build)    _require_deploy_dir; _require_make; _require_docker; _mk build ;;
   pull)     _require_deploy_dir; _require_docker; _require_env; _dc pull ;;
-  up)       _require_deploy_dir; _require_make; _require_docker; _require_env; _mk up ;;
+  up)       _require_deploy_dir; _require_make; _require_docker; _require_env; _preflight_perms; _mk up ;;
   down)     _require_deploy_dir; _require_make; _require_docker; _mk down ;;
-  restart)  _require_deploy_dir; _require_make; _require_docker; _require_env; _mk restart ;;
+  restart)  _require_deploy_dir; _require_make; _require_docker; _require_env; _preflight_perms; _mk restart ;;
   status)   _require_deploy_dir; _require_make; _require_docker; _mk status ;;
   logs)     _require_deploy_dir; _require_make; _require_docker; _mk logs SERVICES="$*" ;;
   update)   cmd_update "$@" ;;
+  fix-perms) _require_deploy_dir; ensure_suap_deploy_dirs "${DEPLOY_DIR}" ;;
   scale)    cmd_scale "$@" ;;
   bash)     _require_deploy_dir; _require_make; _require_docker; _mk bash ;;
   shell)    _require_deploy_dir; _require_make; _require_docker; _mk shell ;;

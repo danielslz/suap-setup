@@ -42,8 +42,9 @@
   - [12.5. Volumes e dados](#125-volumes-e-dados)
   - [12.6. Referências do suap_deploy](#126-referências-do-suap_deploy)
 - [13. Preparando o host Docker](#13-preparando-o-host-docker)
-  - [13.1. Rede do Docker](#131-rede-do-docker)
-  - [13.2. Portas](#132-portas)
+  - [13.1. Permissões de `deploy/`](#131-permissões-de-deploy)
+  - [13.2. Rede do Docker](#132-rede-do-docker)
+  - [13.3. Portas](#133-portas)
 - [14. Docker — Homologação (nó único)](#14-docker--homologação-nó-único)
   - [14.1. Passo a passo](#141-passo-a-passo)
   - [14.2. Configuração do `.env` e primeira subida](#142-configuração-do-env-e-primeira-subida)
@@ -570,7 +571,11 @@ timedatectl set-timezone America/Recife
 useradd www-data; usermod -u 33 www-data   # UID/GID 33
 ```
 
-### 13.1. Rede do Docker
+### 13.1. Permissões de `deploy/`
+
+Web, Celery e pdfprinter rodam como `www-data` (UID 33). Se `deploy/` (ou `deploy/media/tmp`) pertencer a outro usuário, o Celery entra em crash loop com `PermissionError: ... /opt/suap/deploy/media/tmp/pymp-...`. Correção: `bash docker/prod/suap-deploy.sh fix-perms` (ou `sudo chown -R 33:33 <SUAP_DEPLOY_DIR>/deploy`). O `check` reprova esse estado e `up`/`restart`/`update` do `suap-deploy.sh` se recusam a subir com ele. Em `deploy/media` grande ou em NFS, o `chown -R` pode demorar.
+
+### 13.2. Rede do Docker
 
 O Docker usa por padrão `172.16.0.0–172.31.x`. Se a rede da instituição usa esse bloco, os containers deixam de enxergar serviços externos (DB, Redis, LDAP). Mude a sub-rede em `/etc/docker/daemon.json`:
 
@@ -585,7 +590,7 @@ O Docker usa por padrão `172.16.0.0–172.31.x`. Se a rede da instituição usa
 
 `198.18.0.0/15` é reservado a benchmarking (RFC 2544) e raramente roteado. Depois: `systemctl restart docker` e recrie os containers.
 
-### 13.2. Portas
+### 13.3. Portas
 
 O Nginx do `suap_deploy` publica as portas **80**, **443** e **8080**. Os padrões dos utilitários do `suap-setup` não colidem com elas (Dockhand em 9093, Arcane em 3552, Redis em 6379, PostgreSQL em 5432), mas, ao alterar `DOCKHAND_PORT` ou `ARCANE_PORT`, evite 80, 443 e 8080 **no mesmo host**. Libere no firewall apenas o necessário: 80/443 no balanceador; no nó de aplicação, apenas o balanceador deve alcançar a 80; DB e Redis só na rede interna.
 
@@ -622,7 +627,7 @@ O script então:
 
 1. Verifica se o Docker está disponível (oferece instalar);
 2. Clona o `suap_deploy` em `SUAP_DEPLOY_DIR`;
-3. Executa o `make setup` interativo: escolhe o modo de imagem, gera o `.env` (com `SECRET_KEY` e `SUAP_PDF_ACCESS_TOKEN`), ativa o template do Nginx conforme `SSL_ENABLED`, gera um certificado autoassinado se necessário e ajusta as permissões de `deploy/` para o UID 33;
+3. Executa o `make setup` interativo: escolhe o modo de imagem, gera o `.env` (com `SECRET_KEY` e `SUAP_PDF_ACCESS_TOKEN`), ativa o template do Nginx conforme `SSL_ENABLED`, gera um certificado autoassinado se necessário e ajusta as permissões de `deploy/` para o UID 33 (o `suap-setup` repete esse ajuste com `chown -R 33:33`, nunca para o seu usuário);
 4. Cria os diretórios de runtime (`deploy/logs/nginx`, `deploy/logs/suap`, `deploy/media`, `deploy/backup`);
 5. Apresenta o menu de gerenciamento:
 
@@ -829,7 +834,7 @@ Instituições que guardam segredos no HashiCorp Vault podem gerar o `.env` com 
 bash docker/prod/suap-deploy.sh check
 ```
 
-O comando valida: Docker Compose >= 2.30; `make`; presença do `.env`; `SECRET_KEY`, `DATABASE_PASSWORD` e `SUAP_PDF_ACCESS_TOKEN`; valores de exemplo em `SITE_URL`/`ALLOWED_HOSTS`; `DEBUG`; profiles desconhecidos ou legados; beat/flower ativos (lembrete de nó único) e senha padrão do Flower; coerência entre `SSL_ENABLED`, o template do Nginx e o certificado; conectividade TCP com PostgreSQL e Redis; permissões de `deploy/` e `status.txt`. Termina com código de saída 1 se houver falhas.
+O comando valida: Docker Compose >= 2.30; `make`; presença do `.env`; `SECRET_KEY`, `DATABASE_PASSWORD` e `SUAP_PDF_ACCESS_TOKEN`; valores de exemplo em `SITE_URL`/`ALLOWED_HOSTS`; `DEBUG`; profiles desconhecidos ou legados; beat/flower ativos (lembrete de nó único) e senha padrão do Flower; coerência entre `SSL_ENABLED`, o template do Nginx e o certificado; conectividade TCP com PostgreSQL e Redis; gravação do UID 33 nos diretórios de `deploy/` (`media/tmp`, `logs`, `sessions`, `pdf/tmp`…) e `status.txt`. Termina com código de saída 1 se houver falhas.
 
 ---
 
@@ -862,6 +867,7 @@ bash docker/prod/suap-deploy.sh help
 | `node [opções]` | `configure-node.sh` | Papel do nó |
 | `profiles` | — | Mostra profiles, papel inferido, modo de imagem e SSL |
 | `check` | — | Valida a configuração (seção 15.8) |
+| `fix-perms` | `chown -R 33:33 deploy/` + diretórios de runtime | Corrige `PermissionError` do Celery em `deploy/media/tmp` |
 | `drain` / `healthy` | `contrib/multi-node/*.sh` | Tira/devolve o nó do pool sem derrubar containers |
 | `compose <args...>` | `docker compose <args>` | Escape hatch no diretório do `suap_deploy` |
 | `dir` | — | Imprime o diretório do `suap_deploy` |

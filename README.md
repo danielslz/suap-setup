@@ -375,7 +375,7 @@ bash docker/prod/suap-deploy.sh backup
 bash docker/prod/suap-deploy.sh check                 # valida .env, TLS, DB/Redis, profiles, drain
 ```
 
-Comandos: `setup`, `build`, `pull`, `up`, `down`, `restart`, `update`, `status`, `logs`, `scale`, `bash`, `shell`, `exec`, `begin`, `psql`, `backup`, `restore`, `node`, `profiles`, `check`, `drain`, `healthy`, `compose`, `dir`. O `update` detecta o modo de imagem (local ou registry) e usa `restart`, nunca `up`, em um stack em execução.
+Comandos: `setup`, `build`, `pull`, `up`, `down`, `restart`, `update`, `status`, `logs`, `scale`, `bash`, `shell`, `exec`, `begin`, `psql`, `backup`, `restore`, `node`, `profiles`, `check`, `fix-perms`, `drain`, `healthy`, `compose`, `dir`. O `fix-perms` corrige o dono de `deploy/` (33:33, `www-data`), cuja troca para outro usuário faz o Celery falhar com `PermissionError` em `deploy/media/tmp`; `up`, `restart` e `update` recusam rodar nesse estado. O `update` detecta o modo de imagem (local ou registry) e usa `restart`, nunca `up`, em um stack em execução.
 
 #### Multi-servidor e multi-nó: `configure-node.sh`
 
