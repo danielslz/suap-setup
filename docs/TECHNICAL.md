@@ -1454,8 +1454,13 @@ Stack em `${DOCKER_STACKS_DIR:-/opt/docker}/haproxy/` (`compose.yaml`, `haproxy.
 8. Autoteste: estado do container (running e RestartCount 0 após 4 s), HTTP em 127.0.0.1:<porta 80> (301 esperado
    com TLS), handshake TLS em <porta 443> (curl -k) e estado de cada nó pela página de estatísticas (até 20 s para o
    primeiro health check); em falha mostra as últimas linhas do log e a dica correspondente (Permission denied,
-   Address already in use) e sai com erro
+   Address already in use) e sai com erro; com nós DOWN, faz GET /ht/ em cada nó com o mesmo Host e traduz o
+   código (200, 400 = Host fora do ALLOWED_HOSTS, 301/302/308 = nó com SSL_ENABLED=true, 503 = drain, sem
+   conexão = nó desligado/firewall)
 ```
+
+`HAPROXY_SERVER_NAME` vira o `Host` do health check (`http-check send ... hdr Host`); o script avisa quando é um IP,
+porque o Django dos nós rejeita hosts fora do `ALLOWED_HOSTS` e os nós ficam DOWN.
 
 **Por que `user: "0:0"`:** a imagem oficial do HAProxy roda como o usuário `haproxy` (uid 99), e em
 `network_mode: host` valem as regras de rede do host, onde só o root abre portas abaixo de 1024

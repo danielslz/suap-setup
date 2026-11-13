@@ -76,6 +76,9 @@ for _p in "${HAPROXY_HTTP_PORT}" "${HAPROXY_HTTPS_PORT}" "${HAPROXY_STATS_PORT}"
 done
 case "${HAPROXY_TLS}" in true|false) ;; *) msg_error "HAPROXY_TLS aceita apenas true ou false."; exit 1 ;; esac
 [[ "${HAPROXY_SERVER_NAME}" =~ ^[A-Za-z0-9.-]+$ ]] || { msg_error "HAPROXY_SERVER_NAME inválido: ${HAPROXY_SERVER_NAME}"; exit 1; }
+if [[ "${HAPROXY_SERVER_NAME}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  msg_skip "HAPROXY_SERVER_NAME é um IP (${HAPROXY_SERVER_NAME}). Ele vira o cabeçalho Host do health check, e o Django dos nós só aceita hosts listados em ALLOWED_HOSTS (o domínio do site, localhost, web e nginx): com um IP os nós respondem 400 e ficam DOWN. Use o DOMÍNIO do SUAP (o mesmo de --site-url); para acessar sem DNS, aponte o domínio para o IP deste servidor no arquivo hosts."
+fi
 
 # --- Servidores do backend ---
 SERVER_LINES=""
@@ -327,6 +330,22 @@ if [ -z "${_csv}" ]; then
 else
   awk -F, '$1=="be_suap" && $2 ~ /^web[0-9]+$/ {printf "  nó %-6s %s\n", $2, $18}' <<< "${_csv}"
   if [ -n "${_down}" ]; then
+    echo "  Diagnóstico de cada nó (GET /ht/ com Host: ${HAPROXY_SERVER_NAME}, a partir deste servidor):"
+    IFS=',' read -ra _diag <<< "${HAPROXY_BACKENDS// /}"
+    for _d in "${_diag[@]}"; do
+      IFS=':' read -r _dh _dp _dw <<< "${_d}"
+      _dp="${_dp:-80}"
+      _dc="$(curl -s -o /dev/null -m 5 -w '%{http_code}' -H "Host: ${HAPROXY_SERVER_NAME}" "http://${_dh}:${_dp}/ht/" 2>/dev/null || true)"
+      case "${_dc}" in
+        200) _dm="200: responde normalmente (se aparece DOWN acima, aguarde o próximo health check, até ~14 s)" ;;
+        400) _dm="400: o Host '${HAPROXY_SERVER_NAME}' não está em ALLOWED_HOSTS do nó (Django). Use o domínio do SUAP em HAPROXY_SERVER_NAME, ou confira ALLOWED_HOSTS no .env do nó" ;;
+        301|302|308) _dm="${_dc}: redireciona; o nó está com SSL_ENABLED=true. No nó: configure-node.sh --ssl false e restart" ;;
+        503) _dm="503: nó em drain (suap-deploy.sh healthy) ou com o web ainda não saudável" ;;
+        000|"") _dm="sem conexão com ${_dh}:${_dp}: nó desligado, porta errada ou firewall bloqueando este servidor" ;;
+        *) _dm="resposta inesperada (HTTP ${_dc})" ;;
+      esac
+      echo "    ${_dh}:${_dp}  ->  ${_dm}"
+    done
     msg_skip "Nó(s) fora do pool: ${_down%% }. O nó responde 200 em /ht/? Teste a partir daqui: curl -i -H 'Host: ${HAPROXY_SERVER_NAME}' http://<ip-do-nó>:<porta>/ht/ (503 = drain; 301 = nó com SSL_ENABLED=true; 400 = Host fora do ALLOWED_HOSTS)."
   fi
 fi
