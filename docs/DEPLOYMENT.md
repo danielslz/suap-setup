@@ -682,7 +682,7 @@ bash docker/prod/suap-deploy.sh begin          # create_db + carga_inicial
 bash docker/prod/suap-deploy.sh exec python manage.py createsuperuser
 ```
 
-> O `SUAP_PDF_ACCESS_TOKEN` é gerado pelo `make setup`. Configure o **mesmo valor** no SUAP (Configurações do módulo comum → "Token da API do SuapPDF"); caso contrário a geração de PDF responde `401`. Para ver o valor: `grep ^SUAP_PDF_ACCESS_TOKEN= <SUAP_DEPLOY_DIR>/.env`.
+> O `SUAP_PDF_ACCESS_TOKEN` é gerado pelo `make setup`. Configure o **mesmo valor** no SUAP (Configurações do módulo comum → "Token da API do SuapPDF"); caso contrário a geração de PDF responde `401`. Em cluster, vale o token do `.env` do nó que **roda o pdfprinter**: o código do SUAP não lê essa variável (usa o campo gravado no banco), então o `SUAP_PDF_ACCESS_TOKEN` dos nós que não rodam o pdfprinter não é usado e pode ser diferente; se o pdfprinter rodar em mais de um nó, todos precisam do mesmo token. Para ver o valor: `grep ^SUAP_PDF_ACCESS_TOKEN= <SUAP_DEPLOY_DIR>/.env`.
 
 Acesse o endereço de `SITE_URL`. Em homologação, o certificado autoassinado faz o navegador avisar — é esperado. Para os demais ajustes de homologação (domínio, e-mail, dados anonimizados), ver a seção 9.2.
 
@@ -970,7 +970,20 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
      bash docker/haproxy-setup.sh
    ```
 
-6. **URL do pdfprinter.** O pdfprinter roda só na .50. Em *Configurações do módulo comum*, o campo **"Caminho para o executável do LibreOffice/API do SuapPDF"** deve receber `http://192.0.2.50:9000` (porta publicada pelo compose; o nome `pdfprinter` só resolve dentro da rede Docker da .50) e o campo **"Token da API do SuapPDF"** o valor de `SUAP_PDF_ACCESS_TOKEN`. A configuração fica no banco, então vale para os dois nós. Libere a porta 9000 no firewall apenas para a .50 e a .51.
+6. **URL do pdfprinter.** O pdfprinter roda só na .50. Em *Configurações do módulo comum*, o campo **"Caminho para o executável do LibreOffice/API do SuapPDF"** deve receber `http://192.0.2.50:9000` (porta publicada pelo compose; o nome `pdfprinter` só resolve dentro da rede Docker da .50) e o campo **"Token da API do SuapPDF"** o valor de `SUAP_PDF_ACCESS_TOKEN` **do `.env` da .50** (o nó que roda o pdfprinter e valida o token). O `.env` da .51 também tem um `SUAP_PDF_ACCESS_TOKEN` gerado pelo `make setup`, mas ele não é usado (a .51 não roda o pdfprinter) e pode ficar diferente. A configuração fica no banco, então vale para os dois nós e para o Celery, sem reiniciar. Libere a porta 9000 no firewall apenas para a .50 e a .51.
+
+   **Testes.** Na .50 e na .51 (na .51, use o token da .50; `read -s` evita mostrá-lo na tela):
+
+   ```bash
+   TOKEN=$(grep ^SUAP_PDF_ACCESS_TOKEN= <SUAP_DEPLOY_DIR>/.env | cut -d= -f2-)      # na .50
+   read -rsp 'Token do pdfprinter (o da .50): ' TOKEN; echo                           # na .51
+   curl -s -m 30 -o /tmp/teste.pdf -w '%{http_code}\n' -X POST http://192.0.2.50:9000/api/v1/wkhtml_to_pdf \
+     -H "Authorization: Token $TOKEN" -H 'Content-Type: application/json' \
+     -d '{"template":"<h1>Teste</h1>","header_template":"","footer_template":"","options":{}}'
+   file /tmp/teste.pdf
+   ```
+
+   Esperado: `200` e `PDF document`. `401` é token errado (por exemplo, o `.env` da .51 em vez do da .50); `000` ou recusa é firewall na porta 9000. Depois de salvar a configuração, teste o caminho real da aplicação em `bash docker/prod/suap-deploy.sh shell`, lendo a URL e o token do banco com `Configuracao.get_valor_por_chave('comum', 'caminho_libreoffice')` e `'token_libreoffice'` e fazendo o mesmo `POST` com `requests`: deve responder `200` e `b'%PDF-'`.
 7. **Firewall.** .50/.51: porta 80 só para a .52 (HAProxy); 5555 (Flower) só rede interna. .52: 80/443 para os clientes, 8404 (estatísticas) e as portas do banco e do Redis só para a rede interna. Se usar o Arcane (seção 15.10): 3553 na .50/.51 só para a .52, e 3552 na .52 só para a rede administrativa e os agents.
 8. **Validar:** `check` em cada nó; estatísticas do HAProxy com os nós UP; `bash docker/prod/suap-deploy.sh drain` em um nó deve deixá-lo DOWN em ~14 s (e `healthy` o devolve).
 
@@ -1602,7 +1615,7 @@ Procedimentos por rota: seção 11 (nativa) e seção 17 (Docker).
 - [ ] Nós `app` com `SSL_ENABLED=false` (TLS no balanceador) e `TRUSTED_PROXIES` com o IP do balanceador.
 - [ ] `DRAIN_SECONDS` maior que o tempo do balanceador para retirar o nó; teste de `drain`/`healthy` feito.
 - [ ] Atualização feita com `update`/`restart` (nunca `up`) e validada em homologação.
-- [ ] `SUAP_PDF_ACCESS_TOKEN` igual no `.env` e na configuração do SUAP.
+- [ ] `SUAP_PDF_ACCESS_TOKEN` do nó que roda o pdfprinter igual ao "Token da API do SuapPDF" da configuração do SUAP (e igual entre os nós, se o pdfprinter rodar em mais de um).
 - [ ] Limites de memória (`DOCKER_*_MAX_MEMORY_SIZE`) e `GUNICORN_WORKERS` ajustados à RAM de cada nó.
 - [ ] Logrotate e limpeza de temporários (`tmpwatch`) configurados no host.
 
