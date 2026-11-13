@@ -1179,7 +1179,8 @@ Não duplica a lógica do suap_deploy.
 | `logs [serviço...]` | `make logs SERVICES="..."` |
 | `bash`, `shell`, `exec <cmd>` | `make bash` / `make shell` / `make exec COMMAND="..."` |
 | `begin`, `psql`, `backup`, `restore <arquivo>` | `make begin` / `psql` / `backup` / `restore DUMP=<caminho absoluto>` |
-| `update [--git-pull]` | ver abaixo |
+| `update [--git-pull\|--no-build]` | ver abaixo |
+| `image-copy <[usuario@]host> [--with-pdf] [--with-ai] [--dry-run]` | `docker save \| gzip \| ssh <destino> 'gunzip \| docker load'`, com verificação do ID |
 | `scale <n>` | `docker compose up -d --scale celery=<n> --no-recreate` |
 | `node [opções]` | `configure-node.sh` |
 | `profiles` | mostra `COMPOSE_PROFILES`, papel inferido, modo de imagem e `SSL_ENABLED` |
@@ -1190,6 +1191,18 @@ Não duplica a lógica do suap_deploy.
 
 **Pré-voo:** `up`, `restart` e `update` recusam rodar se `deploy/media/tmp`, `deploy/logs/suap` ou
 `deploy/sessions` não forem graváveis pelo UID 33 (evita o crash loop do Celery) e indicam `fix-perms`.
+
+**`image-copy`:** valida o destino (`[usuario@]host`, sem caracteres especiais) e os nomes de imagem
+(`SUAP_IMAGE`; `--with-pdf` e `--with-ai` acrescentam `SUAP_PDF_IMAGE` e `SUAP_AI_IMAGE`); exige que as imagens
+existam localmente; mostra tamanho, ID e o commit de `src/suap` (avisa se há alterações não commitadas);
+testa `docker version` no destino por SSH com `BatchMode` (sem senha); transfere com `pipefail`
+(`docker save | gzip | ssh ... 'gunzip | docker load'`) e compara o ID local com o remoto. `SUAP_SSH_OPTS`
+passa opções ao `ssh` (porta, chave). `--dry-run` só imprime o plano. Ao final imprime o `git checkout`
+do commit e o `update --no-build` a rodar no destino.
+
+**`update --no-build`:** não faz build nem pull; exige que `SUAP_IMAGE` exista localmente e então executa
+`make restart` (ou `make up` se parado). Incompatível com `--git-pull`. Se o build do modo local falha, o
+`update` mostra uma mensagem que aponta o `image-copy`.
 
 **`update`:** detecta o modo pela `SUAP_IMAGE` do `.env` (vazia ou `suap:latest` = local).
 Local: opcionalmente `git pull --ff-only` em `src/suap` e `src/suap-pdf` (`--git-pull`) e `make build`.

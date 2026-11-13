@@ -375,6 +375,8 @@ make down
 ```bash
 bash docker/prod/suap-deploy.sh help                  # todos os comandos
 bash docker/prod/suap-deploy.sh update --git-pull     # build/pull + restart com drain (ou up, se parado)
+bash docker/prod/suap-deploy.sh image-copy op@outro-no   # copia a imagem para outro nó (modo local: compile uma vez)
+bash docker/prod/suap-deploy.sh update --no-build        # sobe com a imagem já presente, sem compilar
 bash docker/prod/suap-deploy.sh status
 bash docker/prod/suap-deploy.sh logs web nginx
 bash docker/prod/suap-deploy.sh exec python manage.py migrate
@@ -383,7 +385,7 @@ bash docker/prod/suap-deploy.sh backup
 bash docker/prod/suap-deploy.sh check                 # valida .env, TLS, DB/Redis, profiles, drain
 ```
 
-Comandos: `setup`, `build`, `pull`, `up`, `down`, `restart`, `update`, `status`, `logs`, `scale`, `bash`, `shell`, `exec`, `begin`, `psql`, `backup`, `restore`, `node`, `profiles`, `check`, `fix-perms`, `drain`, `healthy`, `compose`, `dir`. O `fix-perms` corrige o dono de `deploy/` (33:33, `www-data`), cuja troca para outro usuário faz o Celery falhar com `PermissionError` em `deploy/media/tmp`; `up`, `restart` e `update` recusam rodar nesse estado. O `update` detecta o modo de imagem (local ou registry) e usa `restart`, nunca `up`, em um stack em execução.
+Comandos: `setup`, `build`, `pull`, `up`, `down`, `restart`, `update`, `image-copy`, `status`, `logs`, `scale`, `bash`, `shell`, `exec`, `begin`, `psql`, `backup`, `restore`, `node`, `profiles`, `check`, `fix-perms`, `drain`, `healthy`, `compose`, `dir`. O `fix-perms` corrige o dono de `deploy/` (33:33, `www-data`), cuja troca para outro usuário faz o Celery falhar com `PermissionError` em `deploy/media/tmp`; `up`, `restart` e `update` recusam rodar nesse estado. O `update` detecta o modo de imagem (local ou registry) e usa `restart`, nunca `up`, em um stack em execução.
 
 #### Multi-servidor e multi-nó: `configure-node.sh`
 

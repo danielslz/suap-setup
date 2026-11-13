@@ -64,6 +64,7 @@
   - [16.2. Escalando workers](#162-escalando-workers)
 - [17. Docker — Atualização sem downtime](#17-docker--atualização-sem-downtime)
   - [17.1. Rolling update em vários nós](#171-rolling-update-em-vários-nós)
+  - [17.2. Modo local em vários nós: compile uma vez e distribua](#172-modo-local-em-vários-nós-compile-uma-vez-e-distribua)
 - [18. Serviços de apoio em containers](#18-serviços-de-apoio-em-containers)
 - [Parte C — Comum às duas rotas](#parte-c--comum-às-duas-rotas)
 - [19. Configuração de banco de dados](#19-configuração-de-banco-de-dados)
@@ -918,7 +919,7 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
    bash setup.sh      # escolha "SUAP prod (suap_deploy)", no grupo "Via Docker"
    ```
 
-   O wizard pergunta `SUAP_DEPLOY_DIR` (use o mesmo caminho da .50, por exemplo `/opt/suap_deploy`) e `SUAP_DEPLOY_GIT_URL`; depois o script clona o `suap_deploy` e roda o `make setup` dele, que pergunta o **modo de imagem**. Use **o mesmo modo da .50** (veja com `bash docker/prod/suap-deploy.sh profiles` na .50, linha "Modo de imagem"): `local` exige clonar o código e fazer o build (10 a 20 min na primeira vez), `registry` só baixa as imagens. Terminado o `make setup`, o script abre o menu de gerenciamento: escolha **0 (Sair)**; a configuração do nó vem a seguir.
+   O wizard pergunta `SUAP_DEPLOY_DIR` (use o mesmo caminho da .50, por exemplo `/opt/suap_deploy`) e `SUAP_DEPLOY_GIT_URL`; depois o script clona o `suap_deploy` e roda o `make setup` dele, que pergunta o **modo de imagem**. Use **o mesmo modo da .50** (veja com `bash docker/prod/suap-deploy.sh profiles` na .50, linha "Modo de imagem"): `local` exige clonar o código e a imagem do SUAP (compilar em cada nó é o que a seção 17.2 recomenda evitar: compile em **um** nó e copie a imagem), `registry` só baixa as imagens. Terminado o `make setup`, o script abre o menu de gerenciamento: escolha **0 (Sair)**; a configuração do nó vem a seguir.
 
    **4.2. Aplicar o papel.** O `make setup` gera um `SECRET_KEY` novo em cada servidor, mas em um cluster **todos os nós devem usar o mesmo** (tokens assinados, como links de redefinição de senha, falham entre nós com chaves diferentes). Copie o da .50 (`grep ^SECRET_KEY= <SUAP_DEPLOY_DIR>/.env`) e informe-o aqui:
 
@@ -929,7 +930,17 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
      --site-url https://suap.instituicao.edu.br --trusted-proxies 192.0.2.52 \
      --flower-auth operador:SenhaForte --yes
    bash docker/prod/suap-deploy.sh check
-   bash docker/prod/suap-deploy.sh update
+   ```
+
+   **Subir a .51.** Em modo `registry`: `bash docker/prod/suap-deploy.sh update`. Em modo `local`, **não compile na .51**: copie a imagem da .50 e suba sem build (seção 17.2):
+
+   ```bash
+   # na .50 (origem da imagem): copia a imagem e mostra o commit de src/suap
+   bash docker/prod/suap-deploy.sh image-copy <usuario>@<ip .51>
+
+   # na .51: mesmo commit do código (o modo local monta src/suap por cima da imagem) e subir sem compilar
+   git -C <SUAP_DEPLOY_DIR>/src/suap fetch && git -C <SUAP_DEPLOY_DIR>/src/suap checkout <commit mostrado pelo image-copy>
+   bash docker/prod/suap-deploy.sh update --no-build
    ```
 
    Use `--db-name` e `--db-user` iguais aos da .50 se não forem `suap`/`postgres`. Rode `begin` e `createsuperuser` **só** em banco novo e em um único nó (aqui o banco já foi restaurado de backup). Com 16 GB, web (4G) + celery (4G) + beat (1G) + flower (1G) cabem, mas os 4 cores ficam disputados.
@@ -1047,9 +1058,10 @@ bash docker/prod/suap-deploy.sh help
 | `up` | `make up` | Sobe respeitando `COMPOSE_PROFILES` |
 | `down` | `make down` | Dispara o drain automático |
 | `restart` | `make restart` | `down` + `up` |
-| `update [--git-pull]` | build/pull + `make restart` (ou `make up` se parado) | Detecta o modo pela `SUAP_IMAGE`; `--git-pull` atualiza `src/suap` e `src/suap-pdf` |
+| `update [--git-pull\|--no-build]` | build/pull + `make restart` (ou `make up` se parado) | Detecta o modo pela `SUAP_IMAGE`; `--git-pull` atualiza `src/suap` e `src/suap-pdf` |
 | `status` | `make status` | |
 | `logs [serviço...]` | `make logs SERVICES="..."` | Ex.: `logs web nginx` |
+| `image-copy <[usuario@]host>` | `docker save \| gzip \| ssh \| docker load` | Copia a imagem do SUAP para outro nó (modo local em vários nós; seção 17.2) |
 | `scale <n>` | `docker compose up -d --scale celery=<n>` | Só workers celery |
 | `bash` / `shell` | `make bash` / `make shell` | Shell no web / Django shell |
 | `exec <cmd...>` | `make exec COMMAND="..."` | Ex.: `exec python manage.py migrate` |
@@ -1124,6 +1136,29 @@ docker compose pull && make restart
 3. Atualize **um nó de cada vez**: `bash docker/prod/suap-deploy.sh update`. O drain retira o nó do pool, termina as requisições em voo e o devolve ao subir.
 4. Comece pelo nó `async-primary` e pelos `async` (ou pelos `app`, conforme a política da instituição) e confirme com `status` e `logs` antes de passar ao próximo.
 5. Para voltar de modo (`local` ↔ `registry`), reexecute o `make setup`; ele ajusta `SUAP_IMAGE` e o `docker-compose.override.yml`.
+
+### 17.2. Modo local em vários nós: compile uma vez e distribua
+
+No modo `local`, cada nó que roda `build` compila a imagem sozinho. Em vários nós isso é ruim por três motivos: o build leva de 10 a 20 minutos em cada um; as imagens podem sair com versões de dependências diferentes; e um problema de dependência (por exemplo, um pacote Python que não compila na versão do Python da imagem) quebra o build em **todos** os nós novos, mesmo que um nó antigo ainda tenha uma imagem funcionando. A alternativa é compilar em **um nó** e copiar a imagem para os demais.
+
+```bash
+# no nó de origem (o que tem a imagem pronta)
+bash docker/prod/suap-deploy.sh image-copy <usuario>@<ip-do-destino>             # só a imagem do SUAP
+bash docker/prod/suap-deploy.sh image-copy <usuario>@<ip-do-destino> --with-pdf   # + suap-pdf (se o destino roda o pdfprinter)
+bash docker/prod/suap-deploy.sh image-copy <usuario>@<ip-do-destino> --dry-run    # só mostra o plano
+```
+
+O comando confere que a imagem existe no nó de origem, testa SSH e Docker no destino (sem senha), transfere com `docker save | gzip | ssh | docker load` e confirma que o **ID** da imagem no destino é igual ao da origem. Opções do SSH (porta, chave): `SUAP_SSH_OPTS="-p 2222 -i ~/.ssh/id_deploy"`. Sem SSH entre os nós, copie por arquivo: `docker save suap:latest | gzip > suap.tar.gz` e, no destino, `gunzip -c suap.tar.gz | docker load`.
+
+No destino:
+
+1. **Mesmo código.** No modo `local`, o compose monta `src/suap` por cima do código da imagem; o `image-copy` mostra o commit de origem. Se `src/suap` tiver alterações não commitadas, o aviso diz que o destino não consegue reproduzi-las. No destino: `git -C <SUAP_DEPLOY_DIR>/src/suap fetch && git -C <SUAP_DEPLOY_DIR>/src/suap checkout <commit>`.
+2. **Subir sem compilar:** `bash docker/prod/suap-deploy.sh update --no-build`. O `--no-build` não faz build nem pull; exige que a imagem exista no nó e usa `restart` (com drain) se o stack estiver no ar. Ele é incompatível com `--git-pull`, que deixaria o `src/` diferente da imagem.
+3. **Não rode `update` sem `--no-build` nem `build` no destino:** os dois recompilam. Se o `update` falhar no build, a mensagem de erro já aponta para o `image-copy`.
+
+Um `docker compose up` não tenta compilar quando a imagem já existe localmente (confirmado em um teste com um compose de exemplo); só compila se ela estiver ausente.
+
+**Exemplo real.** O `uv.lock` do SUAP fixava o `pykcs11` 1.5.18, que não tem pacote pronto para o Python 3.14 e falha ao compilar (`PyInt_FromLong was not declared`). Um nó novo em modo `local` não conseguia fazer `make build`; copiar a imagem do nó que já a tinha resolveu sem mexer no SUAP.
 
 Para a política de janelas de atualização, ver a seção 22.
 

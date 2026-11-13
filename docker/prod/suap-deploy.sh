@@ -34,9 +34,15 @@ Ciclo de vida
   up                    Sobe os serviços (respeita COMPOSE_PROFILES)
   down                  Para os serviços (dispara o drain automático)
   restart               down + up (caminho de deploy sem downtime)
-  update [--git-pull]   Atualiza: build (local) ou pull (registry) e depois
+  update [--git-pull|--no-build]
+                        Atualiza: build (local) ou pull (registry) e depois
                         restart se o stack estiver no ar, ou up se estiver parado.
                         --git-pull atualiza src/suap e src/suap-pdf antes (modo local)
+                        --no-build  não compila nem baixa: usa a imagem que já está neste nó
+                        (ex.: copiada de outro nó com image-copy) e só reinicia
+  image-copy <[usuario@]host> [--with-pdf] [--with-ai] [--dry-run]
+                        Copia a imagem do SUAP deste nó para outro (docker save | ssh | docker load).
+                        Para modo local em vários nós: compile em UM nó e distribua
   fix-perms             Recria os diretórios de deploy/ e ajusta o dono (33:33, www-data)
   status                Estado dos containers
   logs [serviço...]     Logs em tempo real (ex.: logs web nginx)
@@ -184,20 +190,33 @@ _infer_role() {
 
 # --- Comandos ---
 cmd_update() {
-  local git_pull=0 arg
+  local git_pull=0 no_build=0 arg
   for arg in "$@"; do
     case "${arg}" in
       --git-pull) git_pull=1 ;;
+      --no-build) no_build=1 ;;
       *) msg_error "Opção desconhecida para update: ${arg}"; exit 1 ;;
     esac
   done
+  if [ "${git_pull}" = "1" ] && [ "${no_build}" = "1" ]; then
+    msg_error "--git-pull e --no-build são incompatíveis: atualizar o código sem recompilar deixaria o src/ diferente da imagem."
+    exit 1
+  fi
   _require_deploy_dir; _require_make; _require_docker; _require_env
   _preflight_perms
 
   local mode
   mode="$(_image_mode)"
   msg_action "Modo de imagem: ${mode}"
-  if [ "${mode}" = "local" ]; then
+  if [ "${no_build}" = "1" ]; then
+    local _img
+    _img="$(_env_get SUAP_IMAGE)"; _img="${_img:-suap:latest}"
+    if ! docker image inspect "${_img}" &>/dev/null; then
+      msg_error "--no-build: a imagem ${_img} não existe neste nó. Copie-a de outro nó (image-copy) ou rode sem --no-build."
+      exit 1
+    fi
+    msg_skip "--no-build: usando a imagem ${_img} já presente (sem build nem pull)."
+  elif [ "${mode}" = "local" ]; then
     if [ "${git_pull}" = "1" ]; then
       local repo
       for repo in src/suap src/suap-pdf; do
@@ -208,7 +227,10 @@ cmd_update() {
       done
     fi
     msg_action "Buildando imagens..."
-    _mk build || exit 1
+    if ! _mk build; then
+      msg_error "O build falhou. Se o erro é de dependência do SUAP (ex.: compilação de um pacote Python), compile em OUTRO nó que já tenha a imagem e copie para este: bash docker/prod/suap-deploy.sh image-copy <usuario@este-host> (no nó de origem), depois use: update --no-build"
+      exit 1
+    fi
   else
     [ "${git_pull}" = "1" ] && msg_skip "--git-pull é ignorado no modo registry."
     msg_action "Baixando imagens..."
@@ -223,6 +245,107 @@ cmd_update() {
     _mk up || exit 1
   fi
   _mk status
+}
+
+cmd_image_copy() {
+  local target="" with_pdf=0 with_ai=0 dry=0 arg
+  for arg in "$@"; do
+    case "${arg}" in
+      --with-pdf) with_pdf=1 ;;
+      --with-ai) with_ai=1 ;;
+      --dry-run) dry=1 ;;
+      -*) msg_error "Opção desconhecida para image-copy: ${arg}"; exit 1 ;;
+      *)
+        if [ -n "${target}" ]; then msg_error "Informe apenas um destino."; exit 1; fi
+        target="${arg}"
+        ;;
+    esac
+  done
+  if [ -z "${target}" ]; then
+    msg_error "Uso: image-copy <[usuario@]host> [--with-pdf] [--with-ai] [--dry-run]"
+    exit 1
+  fi
+  if ! [[ "${target}" =~ ^([A-Za-z0-9._-]+@)?[A-Za-z0-9][A-Za-z0-9._:-]*$ ]]; then
+    msg_error "Destino inválido: ${target} (use usuario@host ou host)."
+    exit 1
+  fi
+  _require_deploy_dir; _require_docker
+
+  # Imagens a copiar (nomes do .env do suap_deploy)
+  local -a images=()
+  local img
+  img="$(_env_get SUAP_IMAGE)"; images+=("${img:-suap:latest}")
+  if [ "${with_pdf}" = "1" ]; then img="$(_env_get SUAP_PDF_IMAGE)"; images+=("${img:-suap-pdf:latest}"); fi
+  if [ "${with_ai}" = "1" ]; then img="$(_env_get SUAP_AI_IMAGE)"; images+=("${img:-suap-ai:latest}"); fi
+  for img in "${images[@]}"; do
+    if ! [[ "${img}" =~ ^[A-Za-z0-9._/:@-]+$ ]]; then msg_error "Nome de imagem inválido no .env: ${img}"; exit 1; fi
+    if ! docker image inspect "${img}" &>/dev/null; then
+      msg_error "A imagem ${img} não existe neste nó. Este deve ser o nó que compilou (ou baixou) a imagem."
+      exit 1
+    fi
+  done
+
+  [ "$(_image_mode)" = "registry" ] && msg_skip "Modo registry: normalmente cada nó baixa a imagem com 'pull'. Copiando mesmo assim."
+
+  # Opções do ssh (ex.: SUAP_SSH_OPTS="-p 2222 -i ~/.ssh/id_deploy")
+  local -a ssh_opts=()
+  [ -n "${SUAP_SSH_OPTS:-}" ] && read -ra ssh_opts <<< "${SUAP_SSH_OPTS}"
+
+  # Commit do código local (modo local monta src/suap por cima do código da imagem)
+  local src="${DEPLOY_DIR}/src/suap" commit="" dirty=""
+  if [ -d "${src}/.git" ]; then
+    commit="$(git -C "${src}" rev-parse HEAD 2>/dev/null || true)"
+    dirty="$(git -C "${src}" status --short 2>/dev/null || true)"
+  fi
+
+  echo ""
+  echo "${GREEN}=== Cópia de imagem para ${target} ===${NO_COLOR}"
+  for img in "${images[@]}"; do
+    echo "  Imagem:  ${img}  ($(docker image inspect -f '{{.Size}}' "${img}" | awk '{ if ($1 >= 1073741824) printf "%.1f GB", $1/1073741824; else printf "%.0f MB", $1/1048576 }'), ID $(docker image inspect -f '{{.Id}}' "${img}" | cut -c8-19))"
+  done
+  [ -n "${commit}" ] && echo "  Código:  src/suap no commit ${commit}"
+  if [ -n "${dirty}" ]; then
+    msg_skip "src/suap tem alterações não commitadas: o destino não terá como reproduzi-las. Commite ou descarte antes de copiar."
+  fi
+  if [ "${dry}" = "1" ]; then
+    echo ""
+    msg_skip "Dry-run: nada foi copiado. Seria executado, para cada imagem: docker save | gzip | ssh ${target} 'gunzip | docker load'"
+    return 0
+  fi
+
+  msg_action "Testando SSH e Docker em ${target}..."
+  if ! ssh "${ssh_opts[@]+"${ssh_opts[@]}"}" -o BatchMode=yes -o ConnectTimeout=10 -- "${target}" 'docker version --format "{{.Server.Version}}"' >/dev/null 2>&1; then
+    msg_error "Não foi possível executar 'docker' em ${target} por SSH (sem senha). Verifique: chave SSH autorizada, usuário no grupo docker e Docker rodando no destino."
+    msg_error "Sem SSH entre os nós, copie por arquivo: docker save <imagem> | gzip > suap.tar.gz  ->  gunzip -c suap.tar.gz | docker load"
+    exit 1
+  fi
+
+  for img in "${images[@]}"; do
+    msg_action "Copiando ${img} (pode levar alguns minutos)..."
+    if ! ( set -o pipefail; docker save "${img}" | gzip | ssh "${ssh_opts[@]+"${ssh_opts[@]}"}" -o BatchMode=yes -- "${target}" 'gunzip | docker load' ); then
+      msg_error "Falha ao copiar ${img} para ${target}."
+      exit 1
+    fi
+    local lid rid
+    lid="$(docker image inspect -f '{{.Id}}' "${img}")"
+    rid="$(ssh "${ssh_opts[@]+"${ssh_opts[@]}"}" -o BatchMode=yes -- "${target}" "docker image inspect -f '{{.Id}}' '${img}'" 2>/dev/null || true)"
+    if [ "${lid}" = "${rid}" ]; then
+      _ok "${img} presente em ${target} com o mesmo ID (${lid:7:12})"
+    else
+      msg_error "O ID de ${img} no destino (${rid:-ausente}) difere do local (${lid})."
+      exit 1
+    fi
+  done
+
+  echo ""
+  msg_action "Próximos passos no destino (${target}):"
+  if [ -n "${commit}" ]; then
+    echo "  1. Deixar o código no MESMO commit da imagem (o modo local monta src/suap por cima dela):"
+    echo "       git -C <SUAP_DEPLOY_DIR>/src/suap fetch && git -C <SUAP_DEPLOY_DIR>/src/suap checkout ${commit}"
+  fi
+  echo "  2. Subir sem compilar:  bash docker/prod/suap-deploy.sh update --no-build"
+  echo "     (ou 'up'/'restart'). Não use 'update' sem --no-build nem 'build' no destino: eles recompilam."
+  echo ""
 }
 
 cmd_scale() {
@@ -549,6 +672,7 @@ case "${cmd}" in
   status)   _require_deploy_dir; _require_make; _require_docker; _mk status ;;
   logs)     _require_deploy_dir; _require_make; _require_docker; _mk logs SERVICES="$*" ;;
   update)   cmd_update "$@" ;;
+  image-copy) cmd_image_copy "$@" ;;
   fix-perms) _require_deploy_dir; ensure_suap_deploy_dirs "${DEPLOY_DIR}" ;;
   scale)    cmd_scale "$@" ;;
   bash)     _require_deploy_dir; _require_make; _require_docker; _mk bash ;;
