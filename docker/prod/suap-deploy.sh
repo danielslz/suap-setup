@@ -684,6 +684,9 @@ cmd_check() {
   fi
   [ -n "$(_env_get SUAP_PDF_ACCESS_TOKEN)" ] && _ok "SUAP_PDF_ACCESS_TOKEN definido" \
     || _warn "SUAP_PDF_ACCESS_TOKEN vazio: o pdfprinter recusa todas as chamadas"
+  local sk_hash
+  sk_hash="$(printf '%s' "$(_env_get SECRET_KEY)" | sha256sum | cut -c1-8)"
+  _ok "SECRET_KEY (hash ${sk_hash}): deve ser idêntico em todos os nós do cluster"
   case "$(_env_get SITE_URL)" in
     ""|*minhainstituicao*) _warn "SITE_URL ainda com o valor de exemplo" ;;
     *) _ok "SITE_URL = $(_env_get SITE_URL)" ;;
