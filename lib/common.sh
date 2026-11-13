@@ -1656,6 +1656,20 @@ stack_env_write() {
   mv "${tmp}" "${STACK_ENV}"
 }
 
+# host_timezone
+# Imprime o fuso horário do host (ex.: America/Fortaleza); UTC se não detectar.
+host_timezone() {
+  local tz=""
+  if command -v timedatectl &>/dev/null; then
+    tz="$(timedatectl show -p Timezone --value 2>/dev/null || true)"
+  fi
+  if [ -z "${tz}" ] && [ -L /etc/localtime ]; then
+    tz="$(readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||')"
+  fi
+  [[ "${tz}" =~ ^[A-Za-z0-9_+/-]+$ ]] || tz="UTC"
+  printf '%s' "${tz}"
+}
+
 # stack_compose(nome-do-projeto, args...)
 # Executa 'docker compose' no stack atual (STACK_FILE/STACK_ENV).
 stack_compose() {

@@ -18,6 +18,7 @@ set -u
 #   ARCANE_AGENT_IMAGE         Imagem (padrão: ghcr.io/getarcaneapp/agent:latest)
 #   ARCANE_AGENT_PROJECTS_DIR  Opcional: pasta de projetos Compose que o Manager poderá gerenciar neste host
 #                              (montada no mesmo caminho). Sem ela o agent só inspeciona (containers, logs, estatísticas)
+#   ARCANE_TZ                  Fuso horário do container (padrão: o do host; UTC se não detectar)
 #   ARCANE_ANALYTICS_DISABLED  true (padrão) desliga o heartbeat de telemetria do Arcane (checkin.getarcane.app);
 #                              false o mantém ligado
 #   DOCKER_STACKS_DIR          Base dos stacks (padrão: /opt/docker)
@@ -37,7 +38,9 @@ PROJECT="suap-arcane-agent"
 CONTAINER_NAME="arcane-agent"
 
 stack_init "arcane-agent"
-stack_env_load ARCANE_AGENT_TOKEN ARCANE_MANAGER_URL ARCANE_AGENT_PORT ARCANE_AGENT_IMAGE ARCANE_AGENT_PROJECTS_DIR ARCANE_ANALYTICS_DISABLED
+stack_env_load ARCANE_AGENT_TOKEN ARCANE_MANAGER_URL ARCANE_AGENT_PORT ARCANE_AGENT_IMAGE ARCANE_AGENT_PROJECTS_DIR ARCANE_ANALYTICS_DISABLED ARCANE_TZ
+ARCANE_TZ="${ARCANE_TZ:-$(host_timezone)}"
+[[ "${ARCANE_TZ}" =~ ^[A-Za-z0-9_+/-]+$ ]] || { msg_error "ARCANE_TZ inválido: ${ARCANE_TZ}"; exit 1; }
 ARCANE_ANALYTICS_DISABLED="${ARCANE_ANALYTICS_DISABLED:-true}"
 ARCANE_AGENT_PORT="${ARCANE_AGENT_PORT:-3553}"
 ARCANE_AGENT_IMAGE="${ARCANE_AGENT_IMAGE:-ghcr.io/getarcaneapp/agent:latest}"
@@ -95,7 +98,7 @@ fi
 
 stack_adopt_legacy "${CONTAINER_NAME}" "${PROJECT}" || exit 1
 
-stack_env_write ARCANE_AGENT_TOKEN ARCANE_MANAGER_URL ARCANE_AGENT_PORT ARCANE_AGENT_IMAGE ARCANE_AGENT_PROJECTS_DIR ARCANE_ANALYTICS_DISABLED || exit 1
+stack_env_write ARCANE_AGENT_TOKEN ARCANE_MANAGER_URL ARCANE_AGENT_PORT ARCANE_AGENT_IMAGE ARCANE_AGENT_PROJECTS_DIR ARCANE_ANALYTICS_DISABLED ARCANE_TZ || exit 1
 
 # --- SELinux: o agent precisa acessar o socket do Docker ---
 _selinux_opt=""
@@ -124,6 +127,7 @@ EOF
       AGENT_TOKEN: ${ARCANE_AGENT_TOKEN}
       MANAGER_API_URL: ${ARCANE_MANAGER_URL}
       ANALYTICS_DISABLED: ${ARCANE_ANALYTICS_DISABLED}
+      TZ: ${ARCANE_TZ}
 EOF
   [ -n "${ARCANE_AGENT_PROJECTS_DIR}" ] && printf '      PROJECTS_DIRECTORY: ${ARCANE_AGENT_PROJECTS_DIR}\n'
   cat <<'EOF'

@@ -14,6 +14,7 @@ set -u
 #                          no .env do stack (chmod 600)
 #   ARCANE_ANALYTICS_DISABLED  true (padrão) desliga o heartbeat de telemetria do Arcane (checkin.getarcane.app);
 #                          false o mantém ligado
+#   ARCANE_TZ              Fuso horário do container (padrão: o do host, ex.: America/Fortaleza; UTC se não detectar)
 #   DOCKER_STACKS_DIR      Base dos stacks (padrão: /opt/docker)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -31,7 +32,9 @@ PROJECT="suap-arcane"
 CONTAINER_NAME="arcane"
 
 stack_init "arcane"
-stack_env_load ARCANE_PORT ARCANE_IMAGE ARCANE_PROJECTS_DIR ARCANE_APP_URL ARCANE_ENCRYPTION_KEY ARCANE_PUID ARCANE_PGID ARCANE_ANALYTICS_DISABLED
+stack_env_load ARCANE_PORT ARCANE_IMAGE ARCANE_PROJECTS_DIR ARCANE_APP_URL ARCANE_ENCRYPTION_KEY ARCANE_PUID ARCANE_PGID ARCANE_ANALYTICS_DISABLED ARCANE_TZ
+ARCANE_TZ="${ARCANE_TZ:-$(host_timezone)}"
+[[ "${ARCANE_TZ}" =~ ^[A-Za-z0-9_+/-]+$ ]] || { msg_error "ARCANE_TZ inválido: ${ARCANE_TZ}"; exit 1; }
 ARCANE_ANALYTICS_DISABLED="${ARCANE_ANALYTICS_DISABLED:-true}"
 case "${ARCANE_ANALYTICS_DISABLED}" in true|false) ;; *) msg_error "ARCANE_ANALYTICS_DISABLED aceita apenas true ou false."; exit 1 ;; esac
 ARCANE_PORT="${ARCANE_PORT:-3552}"
@@ -79,7 +82,7 @@ fi
 
 stack_adopt_legacy "${CONTAINER_NAME}" "${PROJECT}" || exit 1
 
-stack_env_write ARCANE_PORT ARCANE_IMAGE ARCANE_PROJECTS_DIR ARCANE_APP_URL ARCANE_ENCRYPTION_KEY ARCANE_PUID ARCANE_PGID ARCANE_ANALYTICS_DISABLED || exit 1
+stack_env_write ARCANE_PORT ARCANE_IMAGE ARCANE_PROJECTS_DIR ARCANE_APP_URL ARCANE_ENCRYPTION_KEY ARCANE_PUID ARCANE_PGID ARCANE_ANALYTICS_DISABLED ARCANE_TZ || exit 1
 
 {
   cat <<'EOF'
@@ -109,6 +112,7 @@ EOF
       ENCRYPTION_KEY: ${ARCANE_ENCRYPTION_KEY}
       PROJECTS_DIRECTORY: ${ARCANE_PROJECTS_DIR}
       ANALYTICS_DISABLED: ${ARCANE_ANALYTICS_DISABLED}
+      TZ: ${ARCANE_TZ}
     restart: unless-stopped
 volumes:
   arcane-data:

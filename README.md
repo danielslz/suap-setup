@@ -458,7 +458,7 @@ O [Arcane](https://getarcane.app/) é uma interface web livre (BSD-3-Clause) par
 | Projetos Compose | `DOCKER_STACKS_DIR` (padrão `/opt/docker`; configurável via `ARCANE_PROJECTS_DIR`) |
 | Socket Docker | `/var/run/docker.sock` |
 | Login inicial | `arcane` / `arcane-admin` (troca de senha exigida no primeiro acesso) |
-| Variáveis opcionais | `ARCANE_PORT`, `ARCANE_IMAGE`, `ARCANE_PROJECTS_DIR`, `ARCANE_APP_URL`, `ARCANE_ENCRYPTION_KEY`, `ARCANE_ANALYTICS_DISABLED` |
+| Variáveis opcionais | `ARCANE_PORT`, `ARCANE_IMAGE`, `ARCANE_PROJECTS_DIR`, `ARCANE_APP_URL`, `ARCANE_ENCRYPTION_KEY`, `ARCANE_TZ`, `ARCANE_ANALYTICS_DISABLED` |
 
 O script:
 
@@ -494,6 +494,7 @@ O Arcane Manager mostra apenas o Docker da máquina em que roda. Para ver outros
 | `ARCANE_AGENT_PORT` | `3553` | Porta do agent neste host |
 | `ARCANE_AGENT_IMAGE` | `ghcr.io/getarcaneapp/agent:latest` | Imagem |
 | `ARCANE_AGENT_PROJECTS_DIR` | vazio | Opcional: pasta de projetos Compose que o Manager poderá gerenciar neste host (montada no mesmo caminho). Sem ela o agent só inspeciona (containers, logs, estatísticas) |
+| `ARCANE_TZ` | fuso do host | Fuso horário do container (Manager e agent). Sem isso a imagem usa UTC e o painel mostra horários e cumprimentos adiantados (ex.: "Boa noite" à tarde em UTC-3). Ex.: `America/Fortaleza` |
 | `ARCANE_ANALYTICS_DISABLED` | `true` | O Arcane envia por padrão um heartbeat de telemetria (versão e identificador da instância) para `checkin.getarcane.app`; o suap-setup o **desliga** no Manager e no agent. Use `false` para mantê-lo |
 
 **Segurança.** O agent monta o socket do Docker e aceita comandos pela rede: equivale a acesso root ao host. Libere a porta 3553 do host remoto **somente para o IP do Manager**, e a porta 3552 do Manager para os agents e para a rede administrativa. Para desfazer: `R) Reverter > Reverter Arcane Agent` (ou `bash docker/arcane-agent-revert.sh`), e remova o environment no Manager.

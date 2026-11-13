@@ -1076,6 +1076,8 @@ No exemplo das 3 VMs:
 - .52: porta **3552** para os agents (.50 e .51) e para a rede administrativa; nunca para fora da instituição.
 - Troque a senha padrão do Manager antes de qualquer outro passo.
 
+**Fuso horário.** A imagem do Arcane roda em UTC. Os scripts do Manager e do agent definem `TZ` com o fuso do host (`ARCANE_TZ` permite escolher outro, por exemplo `ARCANE_TZ=America/Fortaleza bash docker/arcane-setup.sh`); sem isso, os horários e o cumprimento do painel ("Bom dia"/"Boa noite") ficam adiantados em relação ao seu fuso. Para conferir: `docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' arcane | grep ^TZ=` (a imagem não tem `date` nem `printenv`). Para aplicar em um Arcane já instalado, rode o script de novo: só o container é recriado e o volume `arcane-data` é mantido.
+
 **Telemetria.** O Arcane envia por padrão um heartbeat (versão e identificador da instância) para `checkin.getarcane.app`. O suap-setup o desliga no Manager e nos agents (`ARCANE_ANALYTICS_DISABLED=true`); use `false` para mantê-lo.
 
 **Gerenciar o suap_deploy pelo Arcane.** Por padrão o agent só inspeciona (containers, logs, estatísticas). Para o Manager também gerenciar os projetos Compose daquele host, defina `ARCANE_AGENT_PROJECTS_DIR` com a pasta (por exemplo, a do `suap_deploy`) ao subir o agent. Mexer no stack do `suap_deploy` por fora do `suap-deploy.sh` ignora o pré-voo de permissões e o drain protocol: para atualizar, continue usando `update`.
