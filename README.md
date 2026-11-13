@@ -383,6 +383,7 @@ bash docker/prod/suap-deploy.sh exec python manage.py migrate
 bash docker/prod/suap-deploy.sh scale 3               # workers celery
 bash docker/prod/suap-deploy.sh backup
 bash docker/prod/suap-deploy.sh check                 # valida .env, TLS, DB/Redis, profiles, drain
+bash docker/prod/suap-deploy.sh check --db            # + login no banco com o Django do container
 ```
 
 Comandos: `setup`, `build`, `pull`, `up`, `down`, `restart`, `update`, `image-copy`, `status`, `logs`, `scale`, `bash`, `shell`, `exec`, `begin`, `psql`, `backup`, `restore`, `node`, `profiles`, `check`, `fix-perms`, `drain`, `healthy`, `compose`, `dir`. O `fix-perms` corrige o dono de `deploy/` (33:33, `www-data`), cuja troca para outro usuário faz o Celery falhar com `PermissionError` em `deploy/media/tmp`; `up`, `restart` e `update` recusam rodar nesse estado. O `update` detecta o modo de imagem (local ou registry) e usa `restart`, nunca `up`, em um stack em execução.

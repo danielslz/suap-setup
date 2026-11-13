@@ -1184,7 +1184,7 @@ Não duplica a lógica do suap_deploy.
 | `scale <n>` | `docker compose up -d --scale celery=<n> --no-recreate` |
 | `node [opções]` | `configure-node.sh` |
 | `profiles` | mostra `COMPOSE_PROFILES`, papel inferido, modo de imagem e `SSL_ENABLED` |
-| `check` | validação (ver abaixo) |
+| `check [--db]` | validação (ver abaixo) |
 | `fix-perms` | `ensure_suap_deploy_dirs`: recria os diretórios de `deploy/` e aplica `chown -R 33:33` |
 | `drain`, `healthy` | `contrib/multi-node/drain.sh` / `healthy.sh` |
 | `compose <args>`, `dir` | `docker compose <args>` / imprime o diretório |
@@ -1223,7 +1223,17 @@ senha padrão do Flower; coerência entre `SSL_ENABLED`, o symlink do nginx e o 
 (`host.docker.internal` é testado como `127.0.0.1`); formato do broker (`redis://:SENHA@host`; sem o `:` o Redis
 lê a senha como usuário), coerência entre `REDIS_PASSWORD` e `CELERY_BROKER_URL` e autenticação real no Redis
 (AUTH + PING via `/dev/tcp` com a senha de `REDIS_PASSWORD` e com a credencial do broker decodificada); gravação do UID 33 em `deploy/`, `media`, `media/tmp`, `logs`, `logs/suap`, `logs/nginx`, `sessions`, `pdf` e `pdf/tmp` (dono 33 com `w`, ou `w` para "outros"; reprova se não) e `status.txt`;
-`DRAIN_SECONDS` numérico; com SSL desligado nos nós `web`/`default`, aviso se `SECURE_PROXY_SSL_HEADER` está vazio. Sai com código 1 se houver falhas (avisos não reprovam).
+`DRAIN_SECONDS` numérico; com SSL desligado nos nós `web`/`default`, aviso se `SECURE_PROXY_SSL_HEADER` está vazio. Aviso quando `DATABASE_USER=postgres` (exceto com `local-db`). Sai com código 1 se houver falhas (avisos não reprovam).
+
+**`check --db`:** `_check_db_login` executa `python manage.py shell -c <código>` dentro de um container, via
+`docker compose exec -T <serviço>` no primeiro serviço em execução entre `web`, `celery`, `celery-beat` e
+`celery-flower` (todos usam a mesma imagem e o mesmo `.env`); sem nenhum em execução, usa
+`docker compose run --rm -T --no-deps celery` (verificado em teste: o `run` não dispara o `post_start` do web nem
+mexe no `status.txt`, e ativa o profile do serviço pelo nome). O código lê `connection.settings_dict` (usuário, banco,
+host, porta; **nunca a senha**), chama `ensure_connection()` e executa `select current_user, current_database(),
+version()`, imprimindo linhas `DBPROBE conf|ok|fail`. Compara o usuário em uso com `DATABASE_USER` do `.env` (container
+desatualizado → falha com orientação de `restart`) e traduz erros comuns do PostgreSQL em dicas. Timeout de 120 s
+(`exec`) ou 180 s (`run`).
 
 ### Papel do nó: `configure-node.sh`
 

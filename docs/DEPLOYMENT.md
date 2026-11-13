@@ -883,7 +883,15 @@ Instituições que guardam segredos no HashiCorp Vault podem gerar o `.env` com 
 bash docker/prod/suap-deploy.sh check
 ```
 
-O comando valida: Docker Compose >= 2.30; `make`; presença do `.env`; `SECRET_KEY`, `DATABASE_PASSWORD` e `SUAP_PDF_ACCESS_TOKEN`; valores de exemplo em `SITE_URL`/`ALLOWED_HOSTS` e a presença de `web` (reprova) e `nginx` (avisa) em `ALLOWED_HOSTS`; `DEBUG`; profiles desconhecidos ou legados; beat/flower ativos (lembrete de nó único) e senha padrão do Flower; coerência entre `SSL_ENABLED`, o template do Nginx e o certificado; conectividade TCP com PostgreSQL e Redis; autenticação no Redis (a senha de `REDIS_PASSWORD` e a credencial de `CELERY_BROKER_URL` são testadas com AUTH/PING) e o formato `redis://:SENHA@host` do broker; gravação do UID 33 nos diretórios de `deploy/` (`media/tmp`, `logs`, `sessions`, `pdf/tmp`…) e `status.txt`. Termina com código de saída 1 se houver falhas.
+O comando valida: Docker Compose >= 2.30; `make`; presença do `.env`; `SECRET_KEY`, `DATABASE_PASSWORD` e `SUAP_PDF_ACCESS_TOKEN`; valores de exemplo em `SITE_URL`/`ALLOWED_HOSTS` e a presença de `web` (reprova) e `nginx` (avisa) em `ALLOWED_HOSTS`; `DEBUG`; profiles desconhecidos ou legados; beat/flower ativos (lembrete de nó único) e senha padrão do Flower; coerência entre `SSL_ENABLED`, o template do Nginx e o certificado; conectividade TCP com PostgreSQL e Redis; autenticação no Redis (a senha de `REDIS_PASSWORD` e a credencial de `CELERY_BROKER_URL` são testadas com AUTH/PING) e o formato `redis://:SENHA@host` do broker; gravação do UID 33 nos diretórios de `deploy/` (`media/tmp`, `logs`, `sessions`, `pdf/tmp`…) e `status.txt`. Também avisa quando `DATABASE_USER=postgres` (conta de superusuário; a aplicação deve usar um usuário próprio, seção 19.4), exceto no profile `local-db`. Termina com código de saída 1 se houver falhas.
+
+**Teste de login no banco (`check --db`).** O `check` comum só confere se a porta do PostgreSQL responde. Com `--db` ele abre uma conexão **com o Django de um container**, ou seja, com exatamente o usuário, a senha e o host que a aplicação usa:
+
+```bash
+bash docker/prod/suap-deploy.sh check --db
+```
+
+Saída típica: `em uso pelo app: usuário=suap banco=suap host=<ip>:5432` e `Login no banco OK`. O teste usa um container em execução (`docker compose exec`, que não cria nada); se não houver nenhum, usa um container temporário do `celery` (o `run` não dispara os hooks de drain, então não altera o `deploy/status.txt`). Nunca imprime a senha. Se falhar, mostra o erro do Postgres e uma dica: usuário ou senha incorretos, `pg_hba.conf` sem liberar o host, banco ou usuário inexistente, ou sem conexão (`listen_addresses`, firewall). Se o usuário que o container usa é diferente do `DATABASE_USER` do `.env`, ele aponta que o container foi criado antes da mudança do `.env` e manda rodar `restart`. O teste leva alguns segundos porque inicia o Django do SUAP.
 
 ### 15.9. Exemplo: 3 VMs (prova de conceito / homologação distribuída)
 
@@ -1078,7 +1086,7 @@ bash docker/prod/suap-deploy.sh help
 | `restore <arquivo>` | `make restore DUMP=...` | |
 | `node [opções]` | `configure-node.sh` | Papel do nó |
 | `profiles` | — | Mostra profiles, papel inferido, modo de imagem e SSL |
-| `check` | — | Valida a configuração (seção 15.8) |
+| `check [--db]` | — | Valida a configuração; `--db` testa também o login no banco (seção 15.8) |
 | `fix-perms` | `chown -R 33:33 deploy/` + diretórios de runtime | Corrige `PermissionError` do Celery em `deploy/media/tmp` |
 | `drain` / `healthy` | `contrib/multi-node/*.sh` | Tira/devolve o nó do pool sem derrubar containers |
 | `compose <args...>` | `docker compose <args>` | Escape hatch no diretório do `suap_deploy` |

@@ -62,7 +62,9 @@ Banco
 Multi-nó
   node [opções]         Configura o papel deste nó (ver configure-node.sh --help)
   profiles              Mostra os profiles ativos e o papel inferido deste nó
-  check                 Valida a configuração (.env, TLS, DB/Redis, drain, profiles)
+  check [--db]          Valida a configuração (.env, TLS, DB/Redis, drain, profiles).
+                        --db testa também o login no banco com o Django de um container
+                        (mostra usuário, banco e host em uso, sem a senha)
   drain                 Tira este nó do pool do balanceador (sem derrubar containers)
   healthy               Devolve este nó ao pool
 
@@ -557,7 +559,91 @@ _check_reach() {
   fi
 }
 
+# Teste de login no banco usando o Django DENTRO de um container: vale exatamente o que a aplicação usa
+# (variáveis do .env entregues ao container + settings do SUAP). Prefere um container em execução
+# ('exec', sem criar nada); se não houver, usa um container temporário do celery (o 'run' não dispara os
+# hooks de drain). Nunca imprime a senha.
+_DBPROBE_CODE='import sys
+from django.db import connection
+d = connection.settings_dict
+print("DBPROBE conf user=%s name=%s host=%s port=%s" % (d.get("USER"), d.get("NAME"), d.get("HOST"), d.get("PORT")))
+try:
+    connection.ensure_connection()
+    with connection.cursor() as c:
+        c.execute("select current_user, current_database(), version()")
+        u, n, v = c.fetchone()
+    print("DBPROBE ok user=%s db=%s pg=%s" % (u, n, v.split()[1]))
+except Exception as e:
+    print("DBPROBE fail %s: %s" % (type(e).__name__, " ".join(str(e).split())[:300]))
+    sys.exit(2)
+'
+_check_db_login() {
+  local svc="" how="" out running
+  running="$(_dc ps --services --status running 2>/dev/null || true)"
+  for svc in web celery celery-beat celery-flower; do
+    grep -qx "${svc}" <<< "${running}" && { how="exec"; break; }
+    svc=""
+  done
+  echo "Banco de dados (login com o Django do container)"
+  if [ -n "${svc}" ]; then
+    echo "         usando o container em execução: ${svc}"
+    out="$(timeout 120 bash -c 'cd "$1" && docker compose exec -T "$2" python manage.py shell -c "$3"' _ "${DEPLOY_DIR}" "${svc}" "${_DBPROBE_CODE}" 2>&1)"
+  else
+    svc="celery"
+    echo "         nenhum container do SUAP em execução: usando um container temporário (${svc})"
+    out="$(timeout 180 bash -c 'cd "$1" && docker compose run --rm -T --no-deps "$2" python manage.py shell -c "$3"' _ "${DEPLOY_DIR}" "${svc}" "${_DBPROBE_CODE}" 2>&1)"
+  fi
+  local conf ok fail
+  conf="$(grep -E '^DBPROBE conf ' <<< "${out}" | tail -n1)"
+  ok="$(grep -E '^DBPROBE ok ' <<< "${out}" | tail -n1)"
+  fail="$(grep -E '^DBPROBE fail ' <<< "${out}" | tail -n1)"
+  if [ -z "${conf}" ]; then
+    _fail "Não consegui executar o teste no container (o Django não iniciou?). Últimas linhas:"
+    echo "${out}" | tail -5 | sed 's/^/             /'
+    return 0
+  fi
+  local c_user c_name c_host c_port env_user
+  c_user="$(sed -E 's/.* user=([^ ]*) .*/\1/' <<< "${conf}")"
+  c_name="$(sed -E 's/.* name=([^ ]*) .*/\1/' <<< "${conf}")"
+  c_host="$(sed -E 's/.* host=([^ ]*) .*/\1/' <<< "${conf}")"
+  c_port="$(sed -E 's/.* port=([^ ]*)$/\1/' <<< "${conf}")"
+  echo "         em uso pelo app: usuário=${c_user} banco=${c_name} host=${c_host}:${c_port}"
+  env_user="$(_env_get DATABASE_USER)"
+  local stale=0
+  if [ -n "${env_user}" ] && [ "${c_user}" != "${env_user}" ]; then
+    stale=1
+    _fail "O container usa o usuário '${c_user}', mas o .env tem DATABASE_USER='${env_user}': o container foi criado antes da mudança do .env. Rode: restart"
+  fi
+  if [ -n "${ok}" ]; then
+    _ok "Login no banco OK (${ok#DBPROBE ok })"
+  elif [ -n "${fail}" ]; then
+    _fail "Login no banco falhou: ${fail#DBPROBE fail }"
+    # Com o container desatualizado (stale) a causa já foi apontada acima; as dicas valeriam para outro usuário.
+    [ "${stale}" = "1" ] && return 0
+    case "${fail}" in
+      *"password authentication failed"*|*"autenticação do tipo senha falhou"*|*"authentication failed"*)
+        echo "         dica: usuário ou senha incorretos para '${c_user}'. Ajuste com: NODE_DB_PASSWORD=... node --db-user ${c_user} --yes e depois restart; confirme com: psql -h ${c_host} -U ${c_user} -d ${c_name}" ;;
+      *"no pg_hba.conf entry"*)
+        echo "         dica: o PostgreSQL não libera este host/usuário/banco. No servidor de banco, acrescente uma linha ao pg_hba.conf (seção 19.5 do guia) e recarregue." ;;
+      *"does not exist"*|*"não existe"*)
+        echo "         dica: o banco ou o usuário não existe no servidor. Confira --db-name e --db-user (seção 19.4 do guia)." ;;
+      *"Connection refused"*|*"timeout"*|*"timed out"*|*"could not connect"*|*"connection failed"*)
+        echo "         dica: sem conexão com ${c_host}:${c_port}. Confira listen_addresses, o pg_hba.conf e o firewall do servidor de banco." ;;
+    esac
+  else
+    _fail "Teste sem resultado. Últimas linhas:"
+    echo "${out}" | tail -5 | sed 's/^/             /'
+  fi
+}
+
 cmd_check() {
+  local with_db=0 arg
+  for arg in "$@"; do
+    case "${arg}" in
+      --db) with_db=1 ;;
+      *) msg_error "Opção desconhecida para check: ${arg}"; exit 1 ;;
+    esac
+  done
   _require_deploy_dir
   echo ""
   echo "${GREEN}=== Verificação do suap_deploy (${DEPLOY_DIR}) ===${NO_COLOR}"
@@ -591,6 +677,11 @@ cmd_check() {
   for v in SECRET_KEY DATABASE_PASSWORD; do
     [ -n "$(_env_get "${v}")" ] && _ok "${v} definido" || _fail "${v} está vazio"
   done
+  # A conta "postgres" é a de superusuário: em produção a aplicação deve usar um usuário próprio, sem
+  # SUPERUSER (seção 19.4 do guia). Com o profile local-db (homologação) o container é criado com esse usuário.
+  if [ "$(_env_get DATABASE_USER)" = "postgres" ] && [[ ",$(_env_get COMPOSE_PROFILES)," != *,local-db,* ]]; then
+    _warn "DATABASE_USER=postgres: conta de superusuário do PostgreSQL. Use um usuário de aplicação sem SUPERUSER (rode: NODE_DB_PASSWORD=... node --db-user <usuario> --yes)"
+  fi
   [ -n "$(_env_get SUAP_PDF_ACCESS_TOKEN)" ] && _ok "SUAP_PDF_ACCESS_TOKEN definido" \
     || _warn "SUAP_PDF_ACCESS_TOKEN vazio: o pdfprinter recusa todas as chamadas"
   case "$(_env_get SITE_URL)" in
@@ -740,6 +831,11 @@ cmd_check() {
     _fail "DRAIN_SECONDS inválido: ${ds}"
   fi
 
+  if [ "${with_db}" = "1" ]; then
+    echo ""
+    _check_db_login
+  fi
+
   echo ""
   if [ "${_CHECK_FAIL}" -gt 0 ]; then
     echo "${RED}Resultado: ${_CHECK_FAIL} falha(s), ${_CHECK_WARN} aviso(s).${NO_COLOR}"
@@ -783,7 +879,7 @@ case "${cmd}" in
     ;;
   node)     cmd_node "$@" ;;
   profiles) cmd_profiles ;;
-  check)    cmd_check ;;
+  check)    cmd_check "$@" ;;
   drain)    cmd_drain ;;
   healthy)  cmd_healthy ;;
   compose)  _require_deploy_dir; _require_docker; _dc "$@" ;;
