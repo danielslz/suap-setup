@@ -44,7 +44,7 @@ SUAP_DEPLOY_DIR=$(eval echo "${SUAP_DEPLOY_DIR}")
 SUAP_DEPLOY_GIT_URL="${SUAP_DEPLOY_GIT_URL:-}"
 if [ -z "${SUAP_DEPLOY_GIT_URL}" ]; then
   msg_error "SUAP_DEPLOY_GIT_URL não está definido no .env"
-  msg_error "Execute setup.sh e escolha a opção 6 para configurar."
+  msg_error "Execute setup.sh e escolha 'SUAP prod (suap_deploy)' (grupo Via Docker) para configurar."
   exit 1
 fi
 

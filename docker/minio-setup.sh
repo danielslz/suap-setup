@@ -37,7 +37,7 @@ SUAP_MINIO_DIR=$(eval echo "${SUAP_MINIO_DIR}")
 SUAP_MINIO_GIT_URL="${SUAP_MINIO_GIT_URL:-}"
 if [ -z "${SUAP_MINIO_GIT_URL}" ]; then
   msg_error "SUAP_MINIO_GIT_URL não está definido no .env"
-  msg_error "Execute setup.sh e escolha a opção 10 para configurar."
+  msg_error "Execute setup.sh e escolha 'MinIO (object storage S3)' (grupo Via Docker) para configurar."
   exit 1
 fi
 

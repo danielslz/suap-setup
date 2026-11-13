@@ -1588,6 +1588,14 @@ ensure_suap_deploy_dirs() {
   return 0
 }
 
+# msg_suap_deploy_missing(dir)
+# Mensagem padrão quando o suap_deploy não existe no caminho resolvido, com os dois remédios.
+msg_suap_deploy_missing() {
+  msg_error "suap_deploy não encontrado em ${1}."
+  msg_error "Neste servidor ainda não instalado: rode 'bash setup.sh' e escolha 'SUAP prod (suap_deploy)' (grupo Via Docker): ele pergunta o diretório e a URL do repositório, clona o suap_deploy e executa o 'make setup'. Ao final, saia do menu dele (0)."
+  msg_error "Já instalado em outro caminho: defina-o no .env do suap-setup, ex.: echo 'SUAP_DEPLOY_DIR=/opt/suap_deploy' >> .env"
+}
+
 # =============================================================================
 # Stacks Docker Compose (Redis, PostgreSQL, Dockhand, Arcane)
 # =============================================================================

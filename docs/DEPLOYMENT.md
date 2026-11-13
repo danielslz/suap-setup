@@ -744,7 +744,9 @@ bash docker/prod/suap-deploy.sh update         # pull/build e sobe (ou reinicia 
 
 O script edita o `.env` do `suap_deploy` com segurança: faz **backup** (`.env.bak-<data>`), mostra o que muda (segredos mascarados), grava com permissão `600` e ajusta o symlink do Nginx. Sem argumentos e em terminal interativo ele pergunta cada item mostrando o valor atual; com opções, é totalmente não interativo (`--yes`). `--dry-run` mostra as alterações sem gravar.
 
-Senhas **não** são aceitas por argumento (ficariam no histórico do shell): use o prompt silencioso ou as variáveis `NODE_DB_PASSWORD`, `NODE_REDIS_PASSWORD` e `NODE_S3_SECRET_KEY`. Elas não podem conter espaço, `$`, `#`, aspas, crase ou barra invertida (o `make` e o Compose as interpretariam).
+`SECRET_KEY` do Django: o `make setup` gera uma chave nova em cada servidor, mas todos os nós do cluster devem ter a **mesma**; informe a do primeiro nó nos demais com `NODE_SECRET_KEY='...'` (mínimo 32 caracteres, sem os caracteres proibidos abaixo; se a sua tiver, edite o `.env` à mão).
+
+Senhas **não** são aceitas por argumento (ficariam no histórico do shell): use o prompt silencioso ou as variáveis `NODE_SECRET_KEY`, `NODE_DB_PASSWORD`, `NODE_REDIS_PASSWORD` e `NODE_S3_SECRET_KEY`. Elas não podem conter espaço, `$`, `#`, aspas, crase ou barra invertida (o `make` e o Compose as interpretariam).
 
 **Nó de aplicação (atrás do balanceador que termina o TLS):**
 
@@ -907,10 +909,21 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
 
    Só reduzir o `COMPOSE_PROFILES` e rodar `restart`/`up` **não** remove esses containers (o Compose só enxerga os profiles ativos): o `rm -sf` é necessário, e o `configure-node.sh` avisa quando um container de beat/flower segue rodando depois de sair dos profiles. Use `--db-name`/`--db-user` se o banco restaurado não usa `suap`/`postgres`. Se o `suap_deploy` foi subido sem o `suap-setup`, defina `SUAP_DEPLOY_DIR` no `.env` do `suap-setup` (`bash docker/prod/suap-deploy.sh dir` mostra o caminho resolvido).
 3. **Mídia compartilhada (obrigatória com dois nós web).** O servidor de mídia é uma VM à parte, **fora** dos nós de aplicação: se a mídia fosse exportada de um dos nós web, a queda dele travaria o outro (o NFS `hard` bloqueia os processos que acessam arquivos). Monte o NFS em `<SUAP_DEPLOY_DIR>/deploy/media` na .50 e na .51, com dono 33:33 (seção 21.1). Enquanto a mídia compartilhada não estiver mapeada, **mantenha só a .50 recebendo tráfego** (não suba o web da .51 nem a inclua nos nós do HAProxy): um upload feito na .51 ficaria só no disco local dela.
-4. **.51 — papel `web-celery-beat`** (web, workers, beat e flower):
+4. **.51 — instalar o suap_deploy e aplicar o papel `web-celery-beat`** (web, workers, beat e flower).
+
+   **4.1. Instalar o suap_deploy na .51** (se o servidor ainda não o tem; sem isso os comandos abaixo respondem `suap_deploy não encontrado`):
 
    ```bash
-   NODE_DB_PASSWORD='...' NODE_REDIS_PASSWORD='...' \
+   git clone https://github.com/danielslz/suap-setup.git && cd suap-setup
+   bash setup.sh      # escolha "SUAP prod (suap_deploy)", no grupo "Via Docker"
+   ```
+
+   O wizard pergunta `SUAP_DEPLOY_DIR` (use o mesmo caminho da .50, por exemplo `/opt/suap_deploy`) e `SUAP_DEPLOY_GIT_URL`; depois o script clona o `suap_deploy` e roda o `make setup` dele, que pergunta o **modo de imagem**. Use **o mesmo modo da .50** (veja com `bash docker/prod/suap-deploy.sh profiles` na .50, linha "Modo de imagem"): `local` exige clonar o código e fazer o build (10 a 20 min na primeira vez), `registry` só baixa as imagens. Terminado o `make setup`, o script abre o menu de gerenciamento: escolha **0 (Sair)**; a configuração do nó vem a seguir.
+
+   **4.2. Aplicar o papel.** O `make setup` gera um `SECRET_KEY` novo em cada servidor, mas em um cluster **todos os nós devem usar o mesmo** (tokens assinados, como links de redefinição de senha, falham entre nós com chaves diferentes). Copie o da .50 (`grep ^SECRET_KEY= <SUAP_DEPLOY_DIR>/.env`) e informe-o aqui:
+
+   ```bash
+   NODE_DB_PASSWORD='...' NODE_REDIS_PASSWORD='...' NODE_SECRET_KEY='<SECRET_KEY da .50>' \
    bash docker/prod/configure-node.sh --role web-celery-beat \
      --db-host 192.0.2.52 --redis-host 192.0.2.52 --ssl false \
      --site-url https://suap.instituicao.edu.br --trusted-proxies 192.0.2.52 \
@@ -919,7 +932,7 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
    bash docker/prod/suap-deploy.sh update
    ```
 
-   Rode `begin` e `createsuperuser` **só** em banco novo e em um único nó (aqui o banco já foi restaurado de backup). Com 16 GB, web (4G) + celery (4G) + beat (1G) + flower (1G) cabem, mas os 4 cores ficam disputados.
+   Use `--db-name` e `--db-user` iguais aos da .50 se não forem `suap`/`postgres`. Rode `begin` e `createsuperuser` **só** em banco novo e em um único nó (aqui o banco já foi restaurado de backup). Com 16 GB, web (4G) + celery (4G) + beat (1G) + flower (1G) cabem, mas os 4 cores ficam disputados.
 5. **.52 — HAProxy.** Antes dele, confirme cada nó com o `curl` da seção 15.4 (`/ht/` deve dar 200). Enquanto a mídia não estiver compartilhada, aponte o HAProxy **só para a .50** (`HAPROXY_BACKENDS='192.0.2.50:80:1'`) e acrescente a .51 depois, repetindo o comando:
 
    ```bash

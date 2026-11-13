@@ -72,7 +72,12 @@ Opções:
 
 Senhas NÃO são aceitas por argumento (ficariam no histórico do shell). Informe pelo
 prompt silencioso ou pelas variáveis de ambiente:
-  NODE_DB_PASSWORD, NODE_REDIS_PASSWORD, NODE_S3_SECRET_KEY
+  NODE_DB_PASSWORD, NODE_REDIS_PASSWORD, NODE_S3_SECRET_KEY, NODE_SECRET_KEY
+
+NODE_SECRET_KEY define o SECRET_KEY do Django. Em um cluster, TODOS os nós web/async devem usar o
+MESMO valor (tokens assinados, como links de redefinição de senha, falham entre nós com chaves
+diferentes). O make setup gera uma chave nova em cada servidor: copie a do primeiro nó
+(grep ^SECRET_KEY= <suap_deploy>/.env) e informe-a nos demais.
 
 Sem opções e em terminal interativo, o script pergunta cada item mostrando o valor atual.
 EOF
@@ -120,8 +125,7 @@ done
 
 # --- Pré-requisitos ---
 if [ ! -f "${DEPLOY_DIR}/Makefile" ]; then
-  msg_error "suap_deploy não encontrado em ${DEPLOY_DIR}."
-  msg_error "Rode 'bash docker/prod/docker-setup.sh' primeiro ou defina SUAP_DEPLOY_DIR no .env."
+  msg_suap_deploy_missing "${DEPLOY_DIR}"
   exit 1
 fi
 if [ ! -f "${ENV_FILE}" ]; then
@@ -277,6 +281,7 @@ if [ "${INTERACTIVE}" = "1" ]; then
     REDIS_HOST="$(_ask "Servidor Redis" "$(_redis_host_now)")"
     REDIS_PORT="$(_ask "Porta do Redis" "6379")"
     NODE_REDIS_PASSWORD="${NODE_REDIS_PASSWORD:-$(_ask_secret "Senha do Redis")}"
+    NODE_SECRET_KEY="${NODE_SECRET_KEY:-$(_ask_secret "SECRET_KEY (cole a do primeiro nó do cluster)")}"
   fi
   echo ""
   SSL="$(_ask "SSL_ENABLED (true no nó único; false atrás de balanceador que termina o TLS)" "$(_get SSL_ENABLED)")"
@@ -349,6 +354,13 @@ if [ -n "${_rhost}" ]; then
   fi
   _set CELERY_BROKER_URL "${_cbase}/1"
   _set CELERY_RESULT_BACKEND "${_cbase}/1"
+fi
+if [ -n "${NODE_SECRET_KEY:-}" ]; then
+  if [ "${#NODE_SECRET_KEY}" -lt 32 ]; then
+    msg_error "NODE_SECRET_KEY muito curta (mínimo 32 caracteres)."
+    exit 1
+  fi
+  _set SECRET_KEY "${NODE_SECRET_KEY}"
 fi
 if [ -n "${NODE_REDIS_PASSWORD:-}" ]; then
   _set REDIS_PASSWORD "${NODE_REDIS_PASSWORD}"

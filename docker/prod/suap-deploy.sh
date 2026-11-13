@@ -74,8 +74,7 @@ EOF
 # --- Pré-requisitos ---
 _require_deploy_dir() {
   if [ ! -f "${DEPLOY_DIR}/Makefile" ]; then
-    msg_error "suap_deploy não encontrado em ${DEPLOY_DIR}."
-    msg_error "Rode 'bash docker/prod/docker-setup.sh' primeiro (clona e configura) ou defina SUAP_DEPLOY_DIR no .env."
+    msg_suap_deploy_missing "${DEPLOY_DIR}"
     exit 1
   fi
 }

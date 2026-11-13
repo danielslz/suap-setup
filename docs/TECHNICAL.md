@@ -1246,6 +1246,8 @@ db 3 para sessão, db 1 para Celery; a senha é codificada e embutida em `CELERY
 só a senha, sem `--redis-host`, reaproveita host e porta de `REDIS_URL`), `--ssl`, `--site-url` (também `NGINX_SERVER_NAME`; `ALLOWED_HOSTS` é mesclado: mantém as entradas atuais, descarta só o valor de exemplo do `env.sample` e garante `localhost`, `127.0.0.1`, `web` e `nginx`, os hosts dos health checks do compose; `*` é preservado),
 `--trusted-proxies`, `--drain-seconds`, `--s3-endpoint/--s3-access-key`, `--flower-auth`, `--yes`, `--dry-run`.
 Senhas somente por prompt silencioso ou `NODE_DB_PASSWORD`, `NODE_REDIS_PASSWORD`, `NODE_S3_SECRET_KEY`.
+`NODE_SECRET_KEY` grava o `SECRET_KEY` do Django (mínimo 32 caracteres; mesmos caracteres proibidos dos demais segredos): o `make setup` gera uma chave por servidor, e em cluster todos os nós devem usar a mesma.
+Sem o suap_deploy no caminho resolvido, `suap-deploy.sh` e `configure-node.sh` mostram `msg_suap_deploy_missing` (instalar via `setup.sh` > "SUAP prod (suap_deploy)" ou definir `SUAP_DEPLOY_DIR` no `.env`).
 
 ### Reversão (Docker prod)
 
