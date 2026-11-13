@@ -786,7 +786,7 @@ Opções completas: `bash docker/prod/configure-node.sh --help`. O que o script 
 | `--role` / `--profiles` | `COMPOSE_PROFILES` |
 | `--db-*` | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD` |
 | `--redis-host` / `--redis-port` | `REDIS_URL`, `REDIS_LOCATION` (db 2), `SESSION_LOCATION` (db 3), `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` (db 1). A senha vai em `REDIS_PASSWORD` e `SESSION_PASSWORD` (Django) **e** dentro das URLs do Celery, no formato `redis://:SENHA@host:6379/1`, codificada (ver a nota abaixo) |
-| `--ssl` | `SSL_ENABLED` e o symlink `nginx/active/server.conf.template` |
+| `--ssl` | `SSL_ENABLED`, o symlink `nginx/active/server.conf.template` e `SECURE_PROXY_SSL_HEADER` (`false` → `HTTP_X_FORWARDED_PROTO,https`; `true` → vazio) |
 | `--site-url` | `SITE_URL`, `NGINX_SERVER_NAME` e `ALLOWED_HOSTS` (**mesclado**: mantém as entradas atuais e garante `localhost`, `127.0.0.1`, `web` e `nginx`) |
 | `--trusted-proxies` / `--drain-seconds` | `TRUSTED_PROXIES`, `DRAIN_SECONDS` |
 | `--s3-*` | `DEFAULT_FILE_STORAGE`, `AWS_S3_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
@@ -804,8 +804,28 @@ Para DB e Redis externos, o `host.docker.internal` (já configurado no compose v
 
 - **Atrás de balanceador que termina o TLS:** use `SSL_ENABLED=false` (`--ssl false`). O Nginx passa a escutar só na porta 80 e o health check do balanceador fica correto. Com `SSL_ENABLED=true` a porta 80 responde `301` para tudo, e o HAProxy conta `3xx` como saudável e nunca enxerga o `drain`.
 - **Nó único sem balanceador:** `SSL_ENABLED=true` com certificado em `/etc/ssl/suap/nginx/fullchain.crt` e `privkey.key` (`chmod 644` no `.crt` e `600` no `.key`). Em produção use certificado real (Let's Encrypt ou CA institucional); o autoassinado do `scripts/gen-cert.sh` serve apenas para homologação. A renovação (por exemplo, `certbot`) fica a cargo do host. Depois de trocar o certificado: `bash docker/prod/suap-deploy.sh restart`.
+- **`SECURE_PROXY_SSL_HEADER` com o TLS no balanceador.** O `env.sample` traz essa variável vazia, e (conforme o `settings_base.py` do SUAP) vazia faz o Django ignorar o `X-Forwarded-Proto`: ele trataria toda requisição como HTTP, mesmo vinda do HTTPS do balanceador, gerando links e redirecionamentos com `http://`. Com `SSL_ENABLED=false`, o `configure-node.sh --ssl false` define `SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https` (e `--ssl true` o esvazia de volta); o `check` avisa quando o nó tem SSL desligado e o valor vazio. O HAProxy gerado pelo `haproxy-setup.sh` envia `X-Forwarded-Proto: https`.
 - `TRUSTED_PROXIES` deve conter o IP/CIDR do balanceador para que os logs e o Django vejam o IP real do cliente. Para mais de um proxy, o `suap_deploy` exige repetir a diretiva `set_real_ip_from` dentro do valor (ver o comentário no `env.sample`).
 - O `nginx/active/server.conf.template` é um **symlink gerado em runtime**; sem ele o Nginx não sobe. O `make setup` e o `configure-node.sh --ssl` o criam. O alvo precisa ser **relativo** (`../templates/...`).
+
+**Portas de um nó e acesso direto antes do balanceador.** O que um nó `app` expõe:
+
+| Porta no host | O que é | Observação |
+|---|---|---|
+| 80 | Nginx (HTTP puro com `SSL_ENABLED=false`) | É a entrada do nó; o balanceador aponta para ela |
+| 443 | Publicada pelo compose, mas o Nginx só escuta nela com `SSL_ENABLED=true` | Com SSL desligado a conexão é aceita e fechada: o Firefox mostra `PR_END_OF_FILE_ERROR` ao abrir `https://<ip-do-nó>` |
+| 8080 | Nginx, para terminais Java legados | Não use para outros serviços no mesmo host |
+| 8000 | Gunicorn dentro do container `web` | **Não é publicada no host**: de fora ela nunca responde |
+| 3553 / 5555 / 9000 | Arcane Agent, Flower e pdfprinter (quando existem no nó) | Rede interna |
+
+Abrir o nó pelo navegador **antes** do balanceador não funciona por três motivos: o Django recebe `Host: <ip>` (que não está em `ALLOWED_HOSTS`) e responde 400; os cookies de sessão e CSRF são `Secure` por padrão e o navegador não os guarda em HTTP, então o login falha; e o navegador pode converter `http://` em `https://` (modo HTTPS-first). O acesso de usuários vem do HTTPS do balanceador. Para **confirmar que o nó está servindo** sem navegador, use o `Host` do site em um `curl`:
+
+```bash
+# no próprio nó (use o domínio do SUAP)
+curl -i -H 'Host: suap.instituicao.edu.br' http://127.0.0.1/ht/     # esperado: 200 (healthy); 503 = drain
+curl -sI -m 3 http://127.0.0.1:8000/ || echo "8000 não publicada (esperado)"
+docker ps --format '{{.Names}}\t{{.Ports}}' | grep -E 'nginx|web'
+```
 
 ### 15.5. Balanceador e drain protocol
 
@@ -900,7 +920,7 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
    ```
 
    Rode `begin` e `createsuperuser` **só** em banco novo e em um único nó (aqui o banco já foi restaurado de backup). Com 16 GB, web (4G) + celery (4G) + beat (1G) + flower (1G) cabem, mas os 4 cores ficam disputados.
-5. **.52 — HAProxy:**
+5. **.52 — HAProxy.** Antes dele, confirme cada nó com o `curl` da seção 15.4 (`/ht/` deve dar 200). Enquanto a mídia não estiver compartilhada, aponte o HAProxy **só para a .50** (`HAPROXY_BACKENDS='192.0.2.50:80:1'`) e acrescente a .51 depois, repetindo o comando:
 
    ```bash
    HAPROXY_BACKENDS='192.0.2.50:80:3,192.0.2.51:80:1' HAPROXY_SERVER_NAME=suap.instituicao.edu.br \

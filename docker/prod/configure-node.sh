@@ -7,7 +7,8 @@ set -u
 # O que faz:
 #   - define COMPOSE_PROFILES conforme o papel do nó;
 #   - aponta DATABASE_* e REDIS/CELERY/SESSION para o DB e o Redis externos;
-#   - liga/desliga SSL_ENABLED e atualiza o symlink do nginx;
+#   - liga/desliga SSL_ENABLED, atualiza o symlink do nginx e o SECURE_PROXY_SSL_HEADER
+#     (sem ele, atrás de um balanceador HTTPS o Django acha que toda requisição é HTTP);
 #   - ajusta SITE_URL/NGINX_SERVER_NAME/ALLOWED_HOSTS, TRUSTED_PROXIES e DRAIN_SECONDS;
 #   - configura storage S3/MinIO e a senha do Flower.
 # Sempre faz backup do .env (.env.bak-<data>) antes de alterar e mostra o que mudou.
@@ -54,7 +55,9 @@ Opções:
                             Com senha, o Celery recebe redis://:SENHA@host:porta/1 (a senha
                             vai na URL, codificada); o Django usa REDIS_PASSWORD/SESSION_PASSWORD
   --redis-port <porta>      Porta do Redis (padrão 6379)
-  --ssl <true|false>        SSL_ENABLED + template do nginx (use false atrás de balanceador)
+  --ssl <true|false>        SSL_ENABLED + template do nginx (use false atrás de balanceador que termina o TLS).
+                            Ajusta também SECURE_PROXY_SSL_HEADER: false -> HTTP_X_FORWARDED_PROTO,https
+                            (o Django passa a confiar no X-Forwarded-Proto do balanceador); true -> vazio
   --site-url <url>          SITE_URL (ajusta NGINX_SERVER_NAME e MESCLA o host em ALLOWED_HOSTS: mantém
                             as entradas atuais e garante localhost, 127.0.0.1, web e nginx — os dois
                             últimos são os hosts dos health checks dos containers)
@@ -355,7 +358,8 @@ fi
 SSL_CHANGE=""
 if [ -n "${SSL}" ]; then
   case "${SSL}" in
-    true|false) _set SSL_ENABLED "${SSL}"; SSL_CHANGE="${SSL}" ;;
+    true)  _set SSL_ENABLED "true"; _set SECURE_PROXY_SSL_HEADER ""; SSL_CHANGE="true" ;;
+    false) _set SSL_ENABLED "false"; _set SECURE_PROXY_SSL_HEADER "HTTP_X_FORWARDED_PROTO,https"; SSL_CHANGE="false" ;;
     *) msg_error "--ssl aceita apenas true ou false."; exit 1 ;;
   esac
 fi

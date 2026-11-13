@@ -1203,7 +1203,7 @@ senha padrão do Flower; coerência entre `SSL_ENABLED`, o symlink do nginx e o 
 (`host.docker.internal` é testado como `127.0.0.1`); formato do broker (`redis://:SENHA@host`; sem o `:` o Redis
 lê a senha como usuário), coerência entre `REDIS_PASSWORD` e `CELERY_BROKER_URL` e autenticação real no Redis
 (AUTH + PING via `/dev/tcp` com a senha de `REDIS_PASSWORD` e com a credencial do broker decodificada); gravação do UID 33 em `deploy/`, `media`, `media/tmp`, `logs`, `logs/suap`, `logs/nginx`, `sessions`, `pdf` e `pdf/tmp` (dono 33 com `w`, ou `w` para "outros"; reprova se não) e `status.txt`;
-`DRAIN_SECONDS` numérico. Sai com código 1 se houver falhas (avisos não reprovam).
+`DRAIN_SECONDS` numérico; com SSL desligado nos nós `web`/`default`, aviso se `SECURE_PROXY_SSL_HEADER` está vazio. Sai com código 1 se houver falhas (avisos não reprovam).
 
 ### Papel do nó: `configure-node.sh`
 
@@ -1223,7 +1223,9 @@ Edita o `.env` do suap_deploy para configurar o papel do nó em ambientes multi-
 6. --dry-run encerra aqui; no modo interativo pede confirmação
 7. Backup do .env (.env.bak-<data>), grava as chaves (mesma semântica do set_env_var do setup.sh
    do suap_deploy: troca/descomenta ou acrescenta) e chmod 600
-8. --ssl: recria nginx/active/server.conf.template (30-https ou 20-http) e avisa se falta certificado
+8. --ssl: recria nginx/active/server.conf.template (30-https ou 20-http) e avisa se falta certificado;
+   também define SECURE_PROXY_SSL_HEADER (false -> HTTP_X_FORWARDED_PROTO,https; true -> vazio), porque
+   vazio faz o Django ignorar o X-Forwarded-Proto do balanceador (settings_base.py do SUAP)
 ```
 
 | Papel (`--role`) | `COMPOSE_PROFILES` |

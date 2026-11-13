@@ -448,6 +448,13 @@ cmd_check() {
   elif [[ ",${profiles}," == *,web,* ]]; then
     _ok "SSL desligado neste nó (TLS deve terminar no balanceador)"
   fi
+  if [ "${ssl}" != "true" ] && [[ ",${profiles}," == *,web,* || ",${profiles}," == *,default,* ]]; then
+    if [ -z "$(_env_get SECURE_PROXY_SSL_HEADER)" ]; then
+      _warn "SSL_ENABLED=false (TLS no balanceador) mas SECURE_PROXY_SSL_HEADER está vazio: o Django ignora o X-Forwarded-Proto e trata tudo como HTTP (links e redirecionamentos com http://). Rode: node --ssl false --yes"
+    else
+      _ok "SECURE_PROXY_SSL_HEADER = $(_env_get SECURE_PROXY_SSL_HEADER)"
+    fi
+  fi
   if [[ ",${profiles}," == *,web,* && "${ssl}" = "true" ]]; then
     _warn "Nó 'web' com SSL_ENABLED=true: o health check do balanceador na porta 80 recebe 301 e nunca vê o drain"
   fi
