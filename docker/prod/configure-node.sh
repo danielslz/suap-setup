@@ -55,7 +55,9 @@ Opções:
                             vai na URL, codificada); o Django usa REDIS_PASSWORD/SESSION_PASSWORD
   --redis-port <porta>      Porta do Redis (padrão 6379)
   --ssl <true|false>        SSL_ENABLED + template do nginx (use false atrás de balanceador)
-  --site-url <url>          SITE_URL (ajusta também NGINX_SERVER_NAME e ALLOWED_HOSTS)
+  --site-url <url>          SITE_URL (ajusta NGINX_SERVER_NAME e MESCLA o host em ALLOWED_HOSTS: mantém
+                            as entradas atuais e garante localhost, 127.0.0.1, web e nginx — os dois
+                            últimos são os hosts dos health checks dos containers)
   --trusted-proxies <ips>   TRUSTED_PROXIES (IP/CIDR do balanceador)
   --drain-seconds <n>       DRAIN_SECONDS (>= tempo que o balanceador leva para tirar o nó)
   --s3-endpoint <url>       Usa MinIO/S3 como storage de mídia (AWS_S3_ENDPOINT_URL)
@@ -225,6 +227,29 @@ _redis_host_now() {
   printf '%s' "${u%%:*}"
 }
 
+# _merge_allowed_hosts <host-do-site> <ALLOWED_HOSTS atual>
+# Mantém as entradas existentes (exceto o valor de exemplo do env.sample), acrescenta o host do
+# site e garante os hosts que os health checks do compose usam (web:8000 e nginx:80). Sem eles o
+# Django responde 400 (DisallowedHost) ao health check, o web fica unhealthy e o nginx não sobe.
+# Se a lista já tem "*", ela é mantida como está.
+_merge_allowed_hosts() {
+  local host="${1}" cur="${2// /}" out="" h
+  if [[ ",${cur}," == *,'*',* ]]; then printf '%s' "${cur}"; return; fi
+  local -a items=()
+  IFS=',' read -ra _cur_items <<< "${cur}"
+  [[ ",${cur}," == *",${host},"* ]] || items+=("${host}")
+  for h in "${_cur_items[@]}"; do
+    [ -z "${h}" ] && continue
+    [ "${h}" = "suap.minhainstituicao.edu.br" ] && continue
+    items+=("${h}")
+  done
+  items+=(localhost 127.0.0.1 web nginx)
+  for h in "${items[@]}"; do
+    [[ ",${out}," == *",${h},"* ]] || out+="${out:+,}${h}"
+  done
+  printf '%s' "${out}"
+}
+
 _valid_port() { [[ "${1}" =~ ^[0-9]+$ ]] && [ "${1}" -ge 1 ] && [ "${1}" -le 65535 ]; }
 
 # --- Coleta interativa ---
@@ -340,7 +365,7 @@ if [ -n "${SITE_URL_ARG}" ]; then
   if [ -z "${_host}" ]; then msg_error "SITE_URL inválida: ${SITE_URL_ARG}"; exit 1; fi
   _set SITE_URL "${SITE_URL_ARG}"
   _set NGINX_SERVER_NAME "${_host}"
-  _set ALLOWED_HOSTS "${_host},localhost,127.0.0.1"
+  _set ALLOWED_HOSTS "$(_merge_allowed_hosts "${_host}" "$(_get ALLOWED_HOSTS)")"
 fi
 
 [ -n "${TRUSTED}" ] && _set TRUSTED_PROXIES "${TRUSTED}"

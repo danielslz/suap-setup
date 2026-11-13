@@ -383,9 +383,22 @@ cmd_check() {
     ""|*minhainstituicao*) _warn "SITE_URL ainda com o valor de exemplo" ;;
     *) _ok "SITE_URL = $(_env_get SITE_URL)" ;;
   esac
-  case "$(_env_get ALLOWED_HOSTS)" in
+  local ah ah_profiles
+  ah="$(_env_get ALLOWED_HOSTS)"; ah="${ah// /}"
+  ah_profiles=",$(_env_get COMPOSE_PROFILES),"
+  case "${ah}" in
     *minhainstituicao*) _warn "ALLOWED_HOSTS ainda com o valor de exemplo" ;;
   esac
+  # Os health checks do compose acessam o web por "web:8000" e o nginx por "nginx:80": o Django
+  # precisa aceitar esses hosts, senão responde 400 (DisallowedHost) e o nó fica unhealthy.
+  if [ -n "${ah}" ] && [[ ",${ah}," != *,'*',* ]] && [[ "${ah_profiles}" == *,default,* || "${ah_profiles}" == *,web,* ]]; then
+    if [[ ",${ah}," != *,web,* ]]; then
+      _fail "ALLOWED_HOSTS sem 'web': o health check do container web (Host web:8000) recebe 400 DisallowedHost, o web fica unhealthy e o nginx não sobe. Rode: node --site-url <url> --yes (mescla web,nginx) ou acrescente web e nginx à lista"
+    fi
+    if [[ ",${ah}," != *,nginx,* ]]; then
+      _warn "ALLOWED_HOSTS sem 'nginx': o health check do container nginx (Host nginx) recebe 400 e ele aparece como unhealthy"
+    fi
+  fi
   [ "$(_env_get DEBUG)" = "True" ] && _warn "DEBUG=True (não use em produção)"
 
   echo ""
