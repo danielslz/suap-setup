@@ -1022,6 +1022,8 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
    - na .50: `bash docker/prod/configure-node.sh --role full --yes` e `bash docker/prod/suap-deploy.sh compose rm -sf celery-beat celery-flower`;
    - na .51: `bash docker/prod/configure-node.sh --role web-celery-beat --yes` e `bash docker/prod/suap-deploy.sh up`.
 
+**Atualizações.** No modo `local`, compile a imagem na .50 e copie para a .51 (`image-copy` e `update --no-build`); o passo a passo está na seção 17.1 ("Modo `local` em dois ou mais nós") e na 17.2.
+
 **Limites e ajustes**
 
 - Os pesos (3:1) e os limites de memória são pontos de partida: ajuste olhando CPU e latência após um teste de carga. Cada nó deveria aguentar a carga inteira sozinho para tolerar a queda do outro, o que a .51 (4 cores) não faz com a mesma folga da .50.
@@ -1168,6 +1170,16 @@ docker compose pull && make restart
 3. Atualize **um nó de cada vez**: `bash docker/prod/suap-deploy.sh update`. O drain retira o nó do pool, termina as requisições em voo e o devolve ao subir.
 4. Comece pelo nó `async-primary` e pelos `async` (ou pelos `app`, conforme a política da instituição) e confirme com `status` e `logs` antes de passar ao próximo.
 5. Para voltar de modo (`local` ↔ `registry`), reexecute o `make setup`; ele ajusta `SUAP_IMAGE` e o `docker-compose.override.yml`.
+
+**Modo `local` em dois ou mais nós (exemplo: .50 compila, .51 recebe a imagem).** No modo `local`, `update` recompila a imagem; por isso, só **um** nó (a origem) roda `update`/`--git-pull`, e os demais recebem a imagem pronta (seção 17.2). Exemplo com a .50 como origem e a .51 como destino:
+
+1. **Origem (.50).** Confira que `src/suap` não tem alterações de código (`git -C <SUAP_DEPLOY_DIR>/src/suap status --short`; mudanças só em `uv.lock`/`pyproject.toml` não afetam a execução) e atualize: `bash docker/prod/suap-deploy.sh update --git-pull`. Anote o commit: `git -C <SUAP_DEPLOY_DIR>/src/suap rev-parse --short HEAD`.
+2. **Migrações (se houver).** Rode uma única vez, a partir da origem: `bash docker/prod/suap-deploy.sh exec python manage.py migrate`.
+3. **Copie a imagem.** Ainda na origem: `bash docker/prod/suap-deploy.sh image-copy <usuario>@192.0.2.51 --dry-run` e, se o plano estiver certo, repita sem `--dry-run` (acrescente `--with-pdf` se o destino roda o pdfprinter).
+4. **Destino (.51).** Alinhe o código e suba sem compilar: `git -C <SUAP_DEPLOY_DIR>/src/suap fetch && git -C <SUAP_DEPLOY_DIR>/src/suap checkout <commit>` e `bash docker/prod/suap-deploy.sh update --no-build`. Não use `update` sem `--no-build` nem `build` no destino.
+5. **Confirme em cada nó:** `bash docker/prod/suap-deploy.sh check` e `status`; o ID da imagem (`docker image ls`) e o commit de `src/suap` devem ser iguais nos dois nós.
+
+Atualize um nó de cada vez, como no passo 3 acima: com os dois nós no balanceador, o `drain` retira o nó do pool durante o `restart`. Os arquivos não versionados (como `suap/settings.py`) não vêm com a imagem nem com o `git`: se foram personalizados na origem, copie-os para o destino.
 
 ### 17.2. Modo local em vários nós: compile uma vez e distribua
 
