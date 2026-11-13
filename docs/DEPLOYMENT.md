@@ -749,6 +749,8 @@ O script edita o `.env` do `suap_deploy` com segurança: faz **backup** (`.env.b
 
 Senhas **não** são aceitas por argumento (ficariam no histórico do shell): use o prompt silencioso ou as variáveis `NODE_SECRET_KEY`, `NODE_DB_PASSWORD`, `NODE_REDIS_PASSWORD` e `NODE_S3_SECRET_KEY`. Elas não podem conter espaço, `$`, `#`, aspas, crase ou barra invertida (o `make` e o Compose as interpretariam).
 
+Informe **sempre** `--db-name` e `--db-user`: o `.env` do `suap_deploy` vem com `suap` e `postgres`, que provavelmente não são os do seu banco, e o `configure-node.sh` só altera o que você informa. Troque os valores dos exemplos pelos reais.
+
 **Nó de aplicação (atrás do balanceador que termina o TLS):**
 
 ```bash
@@ -765,14 +767,17 @@ bash docker/prod/configure-node.sh --role app \
 ```bash
 NODE_DB_PASSWORD='...' NODE_REDIS_PASSWORD='...' \
 bash docker/prod/configure-node.sh --role async-primary \
-  --db-host 10.0.1.5 --db-user suap_app --redis-host 10.0.1.5 \
+  --db-host 10.0.1.5 --db-name suap --db-user suap_app \
+  --redis-host 10.0.1.5 \
   --flower-auth operador:SenhaForte123 --yes
 ```
 
 **Nós async adicionais:**
 
 ```bash
-bash docker/prod/configure-node.sh --role async --db-host 10.0.1.5 --redis-host 10.0.1.5 --yes
+bash docker/prod/configure-node.sh --role async \
+  --db-host 10.0.1.5 --db-name suap --db-user suap_app \
+  --redis-host 10.0.1.5 --yes
 ```
 
 **Storage de mídia em MinIO/S3 (qualquer papel):**
@@ -901,14 +906,15 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
    ```bash
    NODE_DB_PASSWORD='...' NODE_REDIS_PASSWORD='...' \
    bash docker/prod/configure-node.sh --role full \
-     --db-host 192.0.2.52 --redis-host 192.0.2.52 --ssl false \
+     --db-host 192.0.2.52 --db-name suap --db-user suap_app \
+     --redis-host 192.0.2.52 --ssl false \
      --site-url https://suap.instituicao.edu.br --trusted-proxies 192.0.2.52 --yes
    bash docker/prod/suap-deploy.sh compose rm -sf celery-beat celery-flower
    bash docker/prod/suap-deploy.sh check
    bash docker/prod/suap-deploy.sh restart
    ```
 
-   Só reduzir o `COMPOSE_PROFILES` e rodar `restart`/`up` **não** remove esses containers (o Compose só enxerga os profiles ativos): o `rm -sf` é necessário, e o `configure-node.sh` avisa quando um container de beat/flower segue rodando depois de sair dos profiles. Use `--db-name`/`--db-user` se o banco restaurado não usa `suap`/`postgres`. Se o `suap_deploy` foi subido sem o `suap-setup`, defina `SUAP_DEPLOY_DIR` no `.env` do `suap-setup` (`bash docker/prod/suap-deploy.sh dir` mostra o caminho resolvido).
+   Só reduzir o `COMPOSE_PROFILES` e rodar `restart`/`up` **não** remove esses containers (o Compose só enxerga os profiles ativos): o `rm -sf` é necessário, e o `configure-node.sh` avisa quando um container de beat/flower segue rodando depois de sair dos profiles. Informe **sempre** `--db-name` e `--db-user` com os valores reais do banco restaurado (os exemplos usam `suap` e `suap_app`; o `env.sample` traz `suap` e `postgres`, que provavelmente não são os seus, e o script só altera o que você informa). Use os mesmos valores nos dois nós. Se o `suap_deploy` foi subido sem o `suap-setup`, defina `SUAP_DEPLOY_DIR` no `.env` do `suap-setup` (`bash docker/prod/suap-deploy.sh dir` mostra o caminho resolvido).
 3. **Mídia compartilhada (obrigatória com dois nós web).** O servidor de mídia é uma VM à parte, **fora** dos nós de aplicação: se a mídia fosse exportada de um dos nós web, a queda dele travaria o outro (o NFS `hard` bloqueia os processos que acessam arquivos). Monte o NFS em `<SUAP_DEPLOY_DIR>/deploy/media` na .50 e na .51, com dono 33:33 (seção 21.1). Enquanto a mídia compartilhada não estiver mapeada, **mantenha só a .50 recebendo tráfego** (não suba o web da .51 nem a inclua nos nós do HAProxy): um upload feito na .51 ficaria só no disco local dela.
 4. **.51 — instalar o suap_deploy e aplicar o papel `web-celery-beat`** (web, workers, beat e flower).
 
@@ -926,7 +932,8 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
    ```bash
    NODE_DB_PASSWORD='...' NODE_REDIS_PASSWORD='...' NODE_SECRET_KEY='<SECRET_KEY da .50>' \
    bash docker/prod/configure-node.sh --role web-celery-beat \
-     --db-host 192.0.2.52 --redis-host 192.0.2.52 --ssl false \
+     --db-host 192.0.2.52 --db-name suap --db-user suap_app \
+     --redis-host 192.0.2.52 --ssl false \
      --site-url https://suap.instituicao.edu.br --trusted-proxies 192.0.2.52 \
      --flower-auth operador:SenhaForte --yes
    bash docker/prod/suap-deploy.sh check
@@ -943,7 +950,7 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
    bash docker/prod/suap-deploy.sh update --no-build
    ```
 
-   Use `--db-name` e `--db-user` iguais aos da .50 se não forem `suap`/`postgres`. Rode `begin` e `createsuperuser` **só** em banco novo e em um único nó (aqui o banco já foi restaurado de backup). Com 16 GB, web (4G) + celery (4G) + beat (1G) + flower (1G) cabem, mas os 4 cores ficam disputados.
+   `--db-name` e `--db-user` devem ser **iguais aos da .50** (os mesmos valores do passo 2). Rode `begin` e `createsuperuser` **só** em banco novo e em um único nó (aqui o banco já foi restaurado de backup). Com 16 GB, web (4G) + celery (4G) + beat (1G) + flower (1G) cabem, mas os 4 cores ficam disputados.
 5. **.52 — HAProxy.** Antes dele, confirme cada nó com o `curl` da seção 15.4 (`/ht/` deve dar 200). Enquanto a mídia não estiver compartilhada, aponte o HAProxy **só para a .50** (`HAPROXY_BACKENDS='192.0.2.50:80:1'`) e acrescente a .51 depois, repetindo o comando:
 
    ```bash
