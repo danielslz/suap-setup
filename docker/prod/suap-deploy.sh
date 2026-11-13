@@ -698,10 +698,10 @@ cmd_check() {
   # precisa aceitar esses hosts, senão responde 400 (DisallowedHost) e o nó fica unhealthy.
   if [ -n "${ah}" ] && [[ ",${ah}," != *,'*',* ]] && [[ "${ah_profiles}" == *,default,* || "${ah_profiles}" == *,web,* ]]; then
     if [[ ",${ah}," != *,web,* ]]; then
-      _fail "ALLOWED_HOSTS sem 'web': o health check do container web (Host web:8000) recebe 400 DisallowedHost, o web fica unhealthy e o nginx não sobe. Rode: node --site-url <url> --yes (mescla web,nginx) ou acrescente web e nginx à lista"
+      _fail "ALLOWED_HOSTS sem 'web': o health check do container web (Host web:8000) recebe 400 DisallowedHost, o web fica unhealthy e o nginx não sobe. Rode: node --yes (completa web e nginx sem alterar o resto) e depois restart"
     fi
     if [[ ",${ah}," != *,nginx,* ]]; then
-      _warn "ALLOWED_HOSTS sem 'nginx': o health check do container nginx (Host nginx) recebe 400 e ele aparece como unhealthy"
+      _fail "ALLOWED_HOSTS sem 'nginx': o health check do container nginx (Host nginx) recebe 400 DisallowedHost (log do web: Invalid HTTP_HOST header: 'nginx') e o nginx aparece como unhealthy. Rode: node --yes (completa web e nginx sem alterar o resto) e depois restart"
     fi
   fi
   [ "$(_env_get DEBUG)" = "True" ] && _warn "DEBUG=True (não use em produção)"

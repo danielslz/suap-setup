@@ -1217,7 +1217,7 @@ Registry: `docker compose pull`. Depois, se há containers em execução, `make 
 senão `make up`. Encerra com erro se algum passo falhar.
 
 **`check`:** Docker Compose >= 2.30; `make`; `.env`; `SECRET_KEY`, `DATABASE_PASSWORD`, `SUAP_PDF_ACCESS_TOKEN`;
-valores de exemplo em `SITE_URL`/`ALLOWED_HOSTS`; `web` em `ALLOWED_HOSTS` (reprova: o health check `web:8000` recebe 400 DisallowedHost) e `nginx` (aviso), nos nós com profile `default` ou `web`; `DEBUG`; profiles desconhecidos/legados; beat/flower ativos e
+valores de exemplo em `SITE_URL`/`ALLOWED_HOSTS`; `web` em `ALLOWED_HOSTS` (reprova: o health check `web:8000` recebe 400 DisallowedHost) e `nginx` (ambos reprovam: o health check do nginx também recebe 400 `DisallowedHost`, confirmado em log), nos nós com profile `default` ou `web`; `DEBUG`; profiles desconhecidos/legados; beat/flower ativos e
 senha padrão do Flower; coerência entre `SSL_ENABLED`, o symlink do nginx e o certificado em
 `/etc/ssl/suap/nginx/`; nó `web` com SSL ligado; conectividade TCP com PostgreSQL e Redis
 (`host.docker.internal` é testado como `127.0.0.1`); formato do broker (`redis://:SENHA@host`; sem o `:` o Redis
@@ -1273,7 +1273,7 @@ Edita o `.env` do suap_deploy para configurar o papel do nó em ambientes multi-
 Opções: `--db-host/--db-port/--db-name/--db-user`, `--redis-host/--redis-port` (db 2 para cache,
 db 3 para sessão, db 1 para Celery; a senha é codificada e embutida em `CELERY_BROKER_URL` e
 `CELERY_RESULT_BACKEND` como `redis://:SENHA@host:porta/1`, pois o Celery não usa `REDIS_PASSWORD`;
-só a senha, sem `--redis-host`, reaproveita host e porta de `REDIS_URL`), `--ssl`, `--site-url` (também `NGINX_SERVER_NAME`; `ALLOWED_HOSTS` é mesclado: mantém as entradas atuais, descarta só o valor de exemplo do `env.sample` e garante `localhost`, `127.0.0.1`, `web` e `nginx`, os hosts dos health checks do compose; `*` é preservado),
+só a senha, sem `--redis-host`, reaproveita host e porta de `REDIS_URL`), `--ssl`, `--site-url` (também `NGINX_SERVER_NAME`; `ALLOWED_HOSTS` é mesclado: mantém as entradas atuais, descarta só o valor de exemplo do `env.sample` e garante `localhost`, `127.0.0.1`, `web` e `nginx`, os hosts dos health checks do compose; `*` é preservado. Em nós com profile `web` ou `default` a lista é completada com `web` e `nginx` mesmo sem `--site-url`, sem remover nada),
 `--trusted-proxies`, `--drain-seconds`, `--s3-endpoint/--s3-access-key`, `--flower-auth`, `--yes`, `--dry-run`.
 Senhas somente por prompt silencioso ou `NODE_DB_PASSWORD`, `NODE_REDIS_PASSWORD`, `NODE_S3_SECRET_KEY`.
 `NODE_SECRET_KEY` grava o `SECRET_KEY` do Django (mínimo 32 caracteres; mesmos caracteres proibidos dos demais segredos): o `make setup` gera uma chave por servidor, e em cluster todos os nós devem usar a mesma.

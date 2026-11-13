@@ -244,10 +244,10 @@ _merge_allowed_hosts() {
   if [[ ",${cur}," == *,'*',* ]]; then printf '%s' "${cur}"; return; fi
   local -a items=()
   IFS=',' read -ra _cur_items <<< "${cur}"
-  [[ ",${cur}," == *",${host},"* ]] || items+=("${host}")
+  [ -z "${host}" ] || [[ ",${cur}," == *",${host},"* ]] || items+=("${host}")
   for h in "${_cur_items[@]}"; do
     [ -z "${h}" ] && continue
-    [ "${h}" = "suap.minhainstituicao.edu.br" ] && continue
+    [ -n "${host}" ] && [ "${h}" = "suap.minhainstituicao.edu.br" ] && continue
     items+=("${h}")
   done
   items+=(localhost 127.0.0.1 web nginx)
@@ -400,6 +400,19 @@ fi
 if [ -n "${FLOWER}" ]; then
   [[ "${FLOWER}" == *:* ]] || { msg_error "--flower-auth deve ser no formato usuario:senha."; exit 1; }
   _set FLOWER_BASIC_AUTH "${FLOWER}"
+fi
+
+# --- ALLOWED_HOSTS sempre com os hosts dos health checks (web e nginx) nos nós web/default ---
+# Os health checks do compose acessam o web por "web:8000" e o nginx por "nginx:80"; se faltarem em
+# ALLOWED_HOSTS o Django responde 400 (DisallowedHost). Isto vale mesmo sem --site-url: só acrescenta
+# o que falta, sem remover nada.
+_prof_now="$(_pending COMPOSE_PROFILES)"; _prof_now="${_prof_now:-$(_get COMPOSE_PROFILES)}"
+if [[ ",${_prof_now}," == *,web,* || ",${_prof_now}," == *,default,* ]] && [ -z "$(_pending ALLOWED_HOSTS)" ]; then
+  _ah_cur="$(_get ALLOWED_HOSTS)"
+  if [ -n "${_ah_cur}" ]; then
+    _ah_new="$(_merge_allowed_hosts "" "${_ah_cur}")"
+    [ "${_ah_new}" != "${_ah_cur// /}" ] && _set ALLOWED_HOSTS "${_ah_new}"
+  fi
 fi
 
 # --- Filtrar o que realmente muda ---
