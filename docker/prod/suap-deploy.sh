@@ -247,6 +247,15 @@ cmd_update() {
   _mk status
 }
 
+# Encerra a conexão SSH compartilhada (ControlMaster) criada pelo image-copy
+_IMG_CTL=""; _IMG_TARGET=""; _IMG_SSH_OPTS=()
+_img_cleanup() {
+  if [ -n "${_IMG_CTL}" ]; then
+    ssh "${_IMG_SSH_OPTS[@]+"${_IMG_SSH_OPTS[@]}"}" -o "ControlPath=${_IMG_CTL}/%C" -O exit -- "${_IMG_TARGET}" >/dev/null 2>&1 || true
+    rm -rf "${_IMG_CTL}"
+  fi
+}
+
 cmd_image_copy() {
   local target="" with_pdf=0 with_ai=0 dry=0 arg
   for arg in "$@"; do
@@ -290,12 +299,27 @@ cmd_image_copy() {
   # Opções do ssh (ex.: SUAP_SSH_OPTS="-p 2222 -i ~/.ssh/id_deploy")
   local -a ssh_opts=()
   [ -n "${SUAP_SSH_OPTS:-}" ] && read -ra ssh_opts <<< "${SUAP_SSH_OPTS}"
+  # Com terminal, o SSH pode pedir senha: uma única conexão compartilhada (ControlMaster) é aberta
+  # no primeiro acesso e reaproveitada nas etapas seguintes, então a senha é pedida UMA vez.
+  # Sem terminal (cron/automação) só funciona com chave: BatchMode proíbe o prompt.
+  local -a ssh_base=("${ssh_opts[@]+"${ssh_opts[@]}"}")
+  local interactive=0
+  if [ -t 0 ]; then
+    interactive=1
+    _IMG_CTL="$(mktemp -d)"; chmod 700 "${_IMG_CTL}"
+    _IMG_TARGET="${target}"; _IMG_SSH_OPTS=("${ssh_opts[@]+"${ssh_opts[@]}"}")
+    ssh_base+=(-o ControlMaster=auto -o "ControlPath=${_IMG_CTL}/%C" -o ControlPersist=300)
+    trap _img_cleanup EXIT
+  else
+    ssh_base+=(-o BatchMode=yes)
+  fi
 
   # Commit do código local (modo local monta src/suap por cima do código da imagem)
-  local src="${DEPLOY_DIR}/src/suap" commit="" dirty=""
+  local src="${DEPLOY_DIR}/src/suap" commit="" tracked="" untracked=""
   if [ -d "${src}/.git" ]; then
     commit="$(git -C "${src}" rev-parse HEAD 2>/dev/null || true)"
-    dirty="$(git -C "${src}" status --short 2>/dev/null || true)"
+    tracked="$(git -C "${src}" status --short --untracked-files=no 2>/dev/null || true)"
+    untracked="$(git -C "${src}" status --short --untracked-files=all 2>/dev/null | grep '^??' || true)"
   fi
 
   echo ""
@@ -304,8 +328,25 @@ cmd_image_copy() {
     echo "  Imagem:  ${img}  ($(docker image inspect -f '{{.Size}}' "${img}" | awk '{ if ($1 >= 1073741824) printf "%.1f GB", $1/1073741824; else printf "%.0f MB", $1/1048576 }'), ID $(docker image inspect -f '{{.Id}}' "${img}" | cut -c8-19))"
   done
   [ -n "${commit}" ] && echo "  Código:  src/suap no commit ${commit}"
-  if [ -n "${dirty}" ]; then
-    msg_skip "src/suap tem alterações não commitadas: o destino não terá como reproduzi-las. Commite ou descarte antes de copiar."
+  if [ -n "${tracked}" ]; then
+    # uv.lock, pyproject.toml e Dockerfiles só valem na hora do build: dentro da imagem as dependências
+    # já estão instaladas, então não precisam existir no destino. O resto é código que roda.
+    local build_only code_changes
+    build_only="$(echo "${tracked}" | awk '{print $NF}' | grep -E '^(uv\.lock|pyproject\.toml|\.dockerignore|Dockerfile[^/]*|docker/)' || true)"
+    code_changes="$(echo "${tracked}" | awk '{print $NF}' | grep -vE '^(uv\.lock|pyproject\.toml|\.dockerignore|Dockerfile[^/]*|docker/)' || true)"
+    if [ -n "${build_only}" ]; then
+      echo "  Alterações só de build em src/suap (não afetam o código em execução; o destino não precisa delas):"
+      echo "${build_only}" | head -8 | sed 's/^/      /'
+    fi
+    if [ -n "${code_changes}" ]; then
+      msg_skip "src/suap tem arquivos de CÓDIGO alterados e não commitados: o destino não terá como reproduzi-los (o código montado lá ficaria diferente do da imagem). Commite ou descarte antes de copiar:"
+      echo "${code_changes}" | head -8 | sed 's/^/      /'
+    fi
+  fi
+  if [ -n "${untracked}" ]; then
+    echo "  Arquivos não versionados em src/suap (o destino só os terá se o make setup dele os gerar ou se você os copiar):"
+    echo "${untracked}" | head -8 | sed 's/^/      /'
+    echo "  (o suap/settings.py, por exemplo, é gerado pelo make setup a partir do settings_sample.py; se foi personalizado aqui, copie-o para o destino)"
   fi
   if [ "${dry}" = "1" ]; then
     echo ""
@@ -314,21 +355,42 @@ cmd_image_copy() {
   fi
 
   msg_action "Testando SSH e Docker em ${target}..."
-  if ! ssh "${ssh_opts[@]+"${ssh_opts[@]}"}" -o BatchMode=yes -o ConnectTimeout=10 -- "${target}" 'docker version --format "{{.Server.Version}}"' >/dev/null 2>&1; then
-    msg_error "Não foi possível executar 'docker' em ${target} por SSH (sem senha). Verifique: chave SSH autorizada, usuário no grupo docker e Docker rodando no destino."
+  [ "${interactive}" = "1" ] && echo "  Se o SSH pedir a senha de ${target}, digite-a: ela será pedida uma vez e reaproveitada nas próximas etapas."
+  local sshout
+  if ! sshout="$(ssh "${ssh_base[@]}" -o ConnectTimeout=10 -- "${target}" 'docker version --format "{{.Server.Version}}"' 2>&1)"; then
+    msg_error "Não foi possível executar 'docker' em ${target} por SSH sem senha. Saída do ssh:"
+    echo "${sshout}" | tail -6 | sed 's/^/      /'
+    case "${sshout}" in
+      *"Host key verification failed"*|*"REMOTE HOST IDENTIFICATION HAS CHANGED"*)
+        msg_error "Dica: a chave do host ainda não é conhecida. Conecte uma vez à mão para aceitá-la: ssh ${target}" ;;
+      *"Permission denied (publickey"*|*"Permission denied (password"*|*"Permission denied, please try again"*)
+        if [ "${interactive}" = "1" ]; then
+          msg_error "Dica: a senha foi recusada (ou o servidor só aceita chave). Confira usuário e senha; para não digitar senha: ssh-keygen -t ed25519 (se ainda não tem) e ssh-copy-id ${target}"
+        else
+          msg_error "Dica: sem terminal o SSH só funciona com chave (não há como digitar senha). Rode o comando em um terminal, ou: ssh-keygen -t ed25519 e ssh-copy-id ${target}"
+        fi ;;
+      *"permission denied while trying to connect to the"*|*"Got permission denied"*)
+        msg_error "Dica: o usuário não pode usar o Docker no destino. Lá: sudo usermod -aG docker <usuario>, depois saia e entre de novo na sessão." ;;
+      *"command not found"*|*"not found"*)
+        msg_error "Dica: o Docker não está instalado (ou fora do PATH) no destino." ;;
+      *"Cannot connect to the Docker daemon"*)
+        msg_error "Dica: o serviço Docker não está rodando no destino (sudo systemctl start docker)." ;;
+      *"timed out"*|*"No route to host"*|*"Connection refused"*|*"Could not resolve"*)
+        msg_error "Dica: o destino não responde no SSH. Confira o IP, a porta (SUAP_SSH_OPTS=\"-p <porta>\") e o firewall." ;;
+    esac
     msg_error "Sem SSH entre os nós, copie por arquivo: docker save <imagem> | gzip > suap.tar.gz  ->  gunzip -c suap.tar.gz | docker load"
     exit 1
   fi
 
   for img in "${images[@]}"; do
     msg_action "Copiando ${img} (pode levar alguns minutos)..."
-    if ! ( set -o pipefail; docker save "${img}" | gzip | ssh "${ssh_opts[@]+"${ssh_opts[@]}"}" -o BatchMode=yes -- "${target}" 'gunzip | docker load' ); then
+    if ! ( set -o pipefail; docker save "${img}" | gzip | ssh "${ssh_base[@]}" -- "${target}" 'gunzip | docker load' ); then
       msg_error "Falha ao copiar ${img} para ${target}."
       exit 1
     fi
     local lid rid
     lid="$(docker image inspect -f '{{.Id}}' "${img}")"
-    rid="$(ssh "${ssh_opts[@]+"${ssh_opts[@]}"}" -o BatchMode=yes -- "${target}" "docker image inspect -f '{{.Id}}' '${img}'" 2>/dev/null || true)"
+    rid="$(ssh "${ssh_base[@]}" -- "${target}" "docker image inspect -f '{{.Id}}' '${img}'" 2>/dev/null || true)"
     if [ "${lid}" = "${rid}" ]; then
       _ok "${img} presente em ${target} com o mesmo ID (${lid:7:12})"
     else

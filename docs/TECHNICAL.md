@@ -1194,8 +1194,12 @@ Não duplica a lógica do suap_deploy.
 
 **`image-copy`:** valida o destino (`[usuario@]host`, sem caracteres especiais) e os nomes de imagem
 (`SUAP_IMAGE`; `--with-pdf` e `--with-ai` acrescentam `SUAP_PDF_IMAGE` e `SUAP_AI_IMAGE`); exige que as imagens
-existam localmente; mostra tamanho, ID e o commit de `src/suap` (avisa se há alterações não commitadas);
-testa `docker version` no destino por SSH com `BatchMode` (sem senha); transfere com `pipefail`
+existam localmente; mostra tamanho, ID e o commit de `src/suap`, separando as alterações não commitadas em arquivos só de build
+(`uv.lock`, `pyproject.toml`, `.dockerignore`, `Dockerfile*`, `docker/`: informativo) e arquivos de código (aviso), e
+listando os não versionados; testa `docker version` no destino por SSH (com terminal: `ControlMaster=auto` +
+`ControlPersist=300` em um diretório temporário 700, para pedir a senha uma vez; sem terminal: `BatchMode=yes`,
+só chave; a conexão compartilhada é encerrada por `trap EXIT`); em falha mostra a saída do `ssh` com dica por
+tipo de erro; transfere com `pipefail`
 (`docker save | gzip | ssh ... 'gunzip | docker load'`) e compara o ID local com o remoto. `SUAP_SSH_OPTS`
 passa opções ao `ssh` (porta, chave). `--dry-run` só imprime o plano. Ao final imprime o `git checkout`
 do commit e o `update --no-build` a rodar no destino.
