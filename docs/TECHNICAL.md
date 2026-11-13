@@ -1199,7 +1199,10 @@ existam localmente; mostra tamanho, ID e o commit de `src/suap`, separando as al
 listando os não versionados; testa `docker version` no destino por SSH (com terminal: `ControlMaster=auto` +
 `ControlPersist=300` em um diretório temporário 700, para pedir a senha uma vez; sem terminal: `BatchMode=yes`,
 só chave; a conexão compartilhada é encerrada por `trap EXIT`); em falha mostra a saída do `ssh` com dica por
-tipo de erro; transfere com `pipefail`
+tipo de erro; mostra o andamento (só com terminal): `pv -p -t -e -r -b -s <tamanho da imagem>` se instalado, senão
+`dd bs=1M iflag=fullblock status=progress` (suporte detectado por execução de teste, não pelo texto do `--help`,
+que é traduzido), medindo o fluxo do `docker save` antes do `gzip`; `SUAP_PROGRESS=auto|pv|dd|none` força a escolha;
+informa o tempo da transferência; transfere com `pipefail`
 (`docker save | gzip | ssh ... 'gunzip | docker load'`) e compara o ID local com o remoto. `SUAP_SSH_OPTS`
 passa opções ao `ssh` (porta, chave). `--dry-run` só imprime o plano. Ao final imprime o `git checkout`
 do commit e o `update --no-build` a rodar no destino.

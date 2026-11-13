@@ -382,12 +382,42 @@ cmd_image_copy() {
     exit 1
   fi
 
+  # Indicador de andamento (só com terminal): pv (barra, %, velocidade e tempo restante) se instalado;
+  # senão dd (bytes copiados e velocidade; já vem com o Linux). Mede o fluxo do 'docker save', antes
+  # do gzip, comparado ao tamanho da imagem (estimativa: o tar pode diferir alguns %).
+  # SUAP_PROGRESS=auto (padrão) | pv | dd | none força o indicador.
+  local progress_tool="nenhum" want="${SUAP_PROGRESS:-auto}"
+  if [ -t 2 ] && [ "${want}" != "none" ]; then
+    if [ "${want}" != "dd" ] && command -v pv &>/dev/null; then progress_tool="pv"
+    elif [ "${want}" != "pv" ] && dd if=/dev/null of=/dev/null status=progress &>/dev/null; then progress_tool="dd"
+    fi
+  fi
+  local n=0 total="${#images[@]}" size t0
   for img in "${images[@]}"; do
-    msg_action "Copiando ${img} (pode levar alguns minutos)..."
-    if ! ( set -o pipefail; docker save "${img}" | gzip | ssh "${ssh_base[@]}" -- "${target}" 'gunzip | docker load' ); then
+    n=$((n + 1))
+    size="$(docker image inspect -f '{{.Size}}' "${img}")"
+    msg_action "[${n}/${total}] Copiando ${img} (~$(awk -v s="${size}" 'BEGIN{ if (s >= 1073741824) printf "%.1f GB", s/1073741824; else printf "%.0f MB", s/1048576 }'))..."
+    if [ "${progress_tool}" = "nenhum" ] && [ "${want}" != "none" ]; then
+      if [ ! -t 2 ]; then
+        echo "  (sem terminal: sem indicador de andamento)"
+      else
+        echo "  (sem 'pv' nem 'dd' com status=progress: sem indicador. Instale o pv: sudo apt install pv / sudo dnf install pv)"
+      fi
+    fi
+    t0="${SECONDS}"
+    if ! (
+      set -o pipefail
+      case "${progress_tool}" in
+        pv) docker save "${img}" | pv -p -t -e -r -b -s "${size}" | gzip | ssh "${ssh_base[@]}" -- "${target}" 'gunzip | docker load' ;;
+        dd) docker save "${img}" | dd bs=1M iflag=fullblock status=progress 2>&2 | gzip | ssh "${ssh_base[@]}" -- "${target}" 'gunzip | docker load' ;;
+        *)  docker save "${img}" | gzip | ssh "${ssh_base[@]}" -- "${target}" 'gunzip | docker load' ;;
+      esac
+    ); then
       msg_error "Falha ao copiar ${img} para ${target}."
       exit 1
     fi
+    [ "${progress_tool}" != "nenhum" ] && echo ""
+    echo "  Transferência concluída em $((SECONDS - t0))s"
     local lid rid
     lid="$(docker image inspect -f '{{.Id}}' "${img}")"
     rid="$(ssh "${ssh_base[@]}" -- "${target}" "docker image inspect -f '{{.Id}}' '${img}'" 2>/dev/null || true)"
