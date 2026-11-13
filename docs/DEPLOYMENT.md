@@ -1022,6 +1022,12 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
    - na .50: `bash docker/prod/configure-node.sh --role full --yes` e `bash docker/prod/suap-deploy.sh compose rm -sf celery-beat celery-flower`;
    - na .51: `bash docker/prod/configure-node.sh --role web-celery-beat --yes` e `bash docker/prod/suap-deploy.sh up`.
 
+9. **Acessar o Flower.** O Flower roda só no nó com o profile `celery-flower` (aqui a .51) e publica a porta **5555** direto no host; ele **não** passa pelo Nginx nem pelo HAProxy. Abra `http://<IP da .51>:5555` e entre com o `FLOWER_BASIC_AUTH` do `.env` desse nó (`usuario:senha`; o padrão do `env.sample` é `admin:senha`: troque com `bash docker/prod/configure-node.sh --role web-celery-beat --flower-auth operador:SenhaForte --yes` seguido de `restart`). Se o seu PC estiver fora da rede liberada no firewall, **não abra a 5555 para fora**; use um túnel SSH e acesse `http://localhost:5555`:
+   ```bash
+   ssh -N -L 5555:localhost:5555 <usuario>@<IP da .51>
+   ```
+   Se não abrir, confira se o container está no ar (`bash docker/prod/suap-deploy.sh status`) e teste na própria .51 com `curl -I http://localhost:5555/healthcheck` (200 = Flower de pé; o problema é rede ou firewall). Se o Flower mudar de nó (failover do beat, seção "Falhas"), o endereço muda junto.
+
 **Atualizações.** No modo `local`, compile a imagem na .50 e copie para a .51 (`image-copy` e `update --no-build`); o passo a passo está na seção 17.1 ("Modo `local` em dois ou mais nós") e na 17.2.
 
 **Limites e ajustes**
