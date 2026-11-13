@@ -113,7 +113,7 @@ Via Docker
   12) Redis (porta 6379 exposta)
   13) PostgreSQL (porta 5432 exposta)
   14) HAProxy (balanceador do suap_deploy)
-  15) Arcane Agent (host remoto, modo Direct)
+  15) Arcane Agent (host remoto)
 
    R) Reverter uma funcionalidade
    0) Sair
@@ -208,7 +208,7 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 | `docker/arcane-setup.sh` | Todas | Arcane: interface web para gerenciamento Docker (alternativa livre ao Dockhand) |
 | `docker/arcane-revert.sh` | Todas | Reverte o Arcane (container; volume, imagem e chave com confirmação) |
 | `docker/haproxy-setup.sh` | Linux | HAProxy em container: termina o TLS e balanceia os nós do suap_deploy (health check em `/ht/`, pesos, estatísticas) |
-| `docker/arcane-agent-setup.sh` | Linux | Arcane Agent (modo Direct) em um host remoto, para o Manager gerenciar vários servidores |
+| `docker/arcane-agent-setup.sh` | Linux | Arcane Agent (modo Edge; Direct opcional) em um host remoto, para o Manager gerenciar vários servidores |
 | `docker/arcane-agent-revert.sh` | Linux | Reverte o Arcane Agent (container; volume, imagem e token com confirmação) |
 | `docker/haproxy-revert.sh` | Linux | Reverte o HAProxy (container; imagem e diretório do stack com confirmação; certificado preservado) |
 | `docker/minio-setup.sh` | Todas | Setup do MinIO (object storage S3-compatível) via Docker |
@@ -474,10 +474,10 @@ Para desfazer, use `R) Reverter > Reverter Arcane` (ou `bash docker/arcane-rever
 
 #### Vários servidores: Manager + Arcane Agent
 
-O Arcane Manager mostra apenas o Docker da máquina em que roda. Para ver outros servidores (por exemplo, os nós do suap_deploy), cada host remoto roda um **Arcane Agent** e aparece na interface como um *environment*. O `docker/arcane-agent-setup.sh` sobe o agent no **modo Direct** (o Manager conecta no agent pela porta 3553), via Docker Compose (stack em `/opt/docker/arcane-agent/`).
+O Arcane Manager mostra apenas o Docker da máquina em que roda. Para ver outros servidores (por exemplo, os nós do suap_deploy), cada host remoto roda um **Arcane Agent** e aparece na interface como um *environment*. O `docker/arcane-agent-setup.sh` sobe o agent via Docker Compose (stack em `/opt/docker/arcane-agent/`) no **modo Edge** (padrão: o agent conecta de saída no Manager e não publica porta no host). O modo **Direct** (o Manager conecta no agent pela porta 3553) continua disponível com `ARCANE_AGENT_MODE=direct`, mas o Arcane o marcou como obsoleto e vai removê-lo na v3.
 
 1. **Manager** (uma máquina): `ARCANE_APP_URL=http://<ip-do-manager>:3552 bash docker/arcane-setup.sh`. A URL precisa ser alcançável pelos agents. Troque a senha padrão (`arcane` / `arcane-admin`) no primeiro acesso.
-2. **No Manager**, crie o environment antes de subir o agent: *Environments → Add Environment → Direct*, com a *Agent API URL* `http://<ip-do-host-remoto>:3553`. A interface gera o token do agent (`arc_...`).
+2. **No Manager**, crie o environment antes de subir o agent: *Environments → Add Environment →* aba **Edge**, informe o nome e clique em *Generate Agent Configuration*. A interface gera o token do agent (`arc_...`); use só o token, o script monta o compose.
 3. **No host remoto**, com o token:
 
    ```bash
@@ -485,19 +485,22 @@ O Arcane Manager mostra apenas o Docker da máquina em que roda. Para ver outros
      bash docker/arcane-agent-setup.sh
    ```
 
-   Sem as variáveis, o script pergunta a URL do Manager e o token (digitado de forma oculta). Depois, use *Test Connection* no environment: ele deve ficar `online`.
+   Sem as variáveis, o script pergunta a URL do Manager e o token (digitado de forma oculta). No Manager, o environment deve ficar **Online** ou **Standby** (Standby é o estado normal do transporte `poll`, que faz check-in periódico e abre o túnel sob demanda).
+4. **Migrar um agent Direct para Edge.** Uma instalação feita antes do modo Edge continua em Direct (o token de um environment Direct não serve para um Edge). Crie um environment Edge no Manager e rode `ARCANE_AGENT_MODE=edge ARCANE_AGENT_TOKEN='arc_...' bash docker/arcane-agent-setup.sh` no host; a porta 3553 deixa de ser publicada. Depois remova o environment Direct antigo.
 
 | Variável | Padrão | Descrição |
 |---|---|---|
 | `ARCANE_MANAGER_URL` | — | URL do Manager visível a partir do host remoto |
 | `ARCANE_AGENT_TOKEN` | — | Token do environment (guardado no `.env` do stack, modo 600) |
-| `ARCANE_AGENT_PORT` | `3553` | Porta do agent neste host |
+| `ARCANE_AGENT_MODE` | `edge` | `edge` ou `direct`. Uma instalação existente sem essa variável continua em `direct` até a troca explícita |
+| `ARCANE_EDGE_TRANSPORT` | `poll` | Só no modo Edge: `poll` (como o snippet do Manager), `auto`, `websocket` ou `grpc` |
+| `ARCANE_AGENT_PORT` | `3553` | Só no modo Direct: porta do agent neste host |
 | `ARCANE_AGENT_IMAGE` | `ghcr.io/getarcaneapp/agent:latest` | Imagem |
 | `ARCANE_AGENT_PROJECTS_DIR` | vazio | Opcional: pasta de projetos Compose que o Manager poderá gerenciar neste host (montada no mesmo caminho). Sem ela o agent só inspeciona (containers, logs, estatísticas) |
-| `ARCANE_TZ` | fuso do host | Fuso horário do container (Manager e agent). Sem isso a imagem usa UTC e o painel mostra horários e cumprimentos adiantados (ex.: "Boa noite" à tarde em UTC-3). Ex.: `America/Fortaleza` |
+| `ARCANE_TZ` | fuso do host | Fuso horário do container (Manager e agent). Sem isso a imagem usa UTC e os horários registrados (logs, agendamentos) ficam em UTC. Ex.: `America/Fortaleza` |
 | `ARCANE_ANALYTICS_DISABLED` | `true` | O Arcane envia por padrão um heartbeat de telemetria (versão e identificador da instância) para `checkin.getarcane.app`; o suap-setup o **desliga** no Manager e no agent. Use `false` para mantê-lo |
 
-**Segurança.** O agent monta o socket do Docker e aceita comandos pela rede: equivale a acesso root ao host. Libere a porta 3553 do host remoto **somente para o IP do Manager**, e a porta 3552 do Manager para os agents e para a rede administrativa. Para desfazer: `R) Reverter > Reverter Arcane Agent` (ou `bash docker/arcane-agent-revert.sh`), e remova o environment no Manager.
+**Segurança.** O agent monta o socket do Docker e executa os comandos do Manager: equivale a acesso root ao host. No modo Edge, o host remoto não abre porta; basta que ele alcance a porta 3552 do Manager. No modo Direct, libere a porta 3553 do host remoto **somente para o IP do Manager**. Em ambos, a porta 3552 do Manager fica restrita aos agents e à rede administrativa. Para desfazer: `R) Reverter > Reverter Arcane Agent` (ou `bash docker/arcane-agent-revert.sh`), e remova o environment no Manager.
 
 ### HAProxy (balanceador do suap_deploy)
 
@@ -699,7 +702,7 @@ suap-setup/
 │   ├── dockhand-revert.sh            # Reversão do Dockhand
 │   ├── arcane-setup.sh               # Arcane (gerenciador Docker web)
 │   ├── arcane-revert.sh              # Reversão do Arcane
-│   ├── arcane-agent-setup.sh         # Arcane Agent (host remoto, modo Direct)
+│   ├── arcane-agent-setup.sh         # Arcane Agent (host remoto, modo Edge)
 │   ├── arcane-agent-revert.sh        # Reversão do Arcane Agent
 │   ├── haproxy-setup.sh              # HAProxy (balanceador do suap_deploy)
 │   ├── haproxy-revert.sh             # Reversão do HAProxy

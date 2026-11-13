@@ -77,7 +77,8 @@ gerada e guardada no `.env` do stack; faça backup dela. Reversão em
 ## Arcane Agent (`docker/arcane-agent-setup.sh`)
 
 Utilitário independente para hosts **remotos**: sobe o `arcane-agent` (`ghcr.io/getarcaneapp/agent`) em
-modo Direct (porta `3553`), que o Arcane Manager usa para gerenciar o Docker daquele host. Exige o token
+modo Edge (padrão; o agent conecta de saída no Manager, sem porta publicada) ou Direct (`ARCANE_AGENT_MODE=direct`,
+porta `3553`, obsoleto no Arcane), para o Manager gerenciar o Docker daquele host. Exige o token
 gerado ao criar o environment no Manager (`ARCANE_AGENT_TOKEN`, `ARCANE_MANAGER_URL`). A telemetria do
 Arcane fica desligada por padrão (`ARCANE_ANALYTICS_DISABLED=true`). Reversão em `docker/arcane-agent-revert.sh`.
 

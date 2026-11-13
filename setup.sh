@@ -50,7 +50,7 @@ else
     "11|Redis (porta 6379 exposta)"
     "12|PostgreSQL (porta 5432 exposta)"
     "14|HAProxy (balanceador do suap_deploy)"
-    "15|Arcane Agent (host remoto, modo Direct)"
+    "15|Arcane Agent (host remoto)"
   )
 fi
 

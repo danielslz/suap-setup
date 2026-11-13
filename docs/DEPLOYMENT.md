@@ -824,7 +824,7 @@ Para DB e Redis externos, o `host.docker.internal` (já configurado no compose v
 | 443 | Publicada pelo compose, mas o Nginx só escuta nela com `SSL_ENABLED=true` | Com SSL desligado a conexão é aceita e fechada: o Firefox mostra `PR_END_OF_FILE_ERROR` ao abrir `https://<ip-do-nó>` |
 | 8080 | Nginx, para terminais Java legados | Não use para outros serviços no mesmo host |
 | 8000 | Gunicorn dentro do container `web` | **Não é publicada no host**: de fora ela nunca responde |
-| 3553 / 5555 / 9000 | Arcane Agent, Flower e pdfprinter (quando existem no nó) | Rede interna |
+| 3553 / 5555 / 9000 | Arcane Agent no modo Direct, Flower e pdfprinter (quando existem no nó) | Rede interna |
 
 Abrir o nó pelo navegador **antes** do balanceador não funciona por três motivos: o Django recebe `Host: <ip>` (que não está em `ALLOWED_HOSTS`) e responde 400; os cookies de sessão e CSRF são `Secure` por padrão e o navegador não os guarda em HTTP, então o login falha; e o navegador pode converter `http://` em `https://` (modo HTTPS-first). O acesso de usuários vem do HTTPS do balanceador. Para **confirmar que o nó está servindo** sem navegador, use o `Host` do site em um `curl`:
 
@@ -1046,8 +1046,8 @@ No exemplo das 3 VMs:
 | VM | Arcane | Porta |
 |---|---|---|
 | 192.0.2.52 | **Manager** (também gerencia o Redis e o HAProxy locais) | 3552 |
-| 192.0.2.50 | **Agent** (modo Direct) | 3553 |
-| 192.0.2.51 | **Agent** (modo Direct) | 3553 |
+| 192.0.2.50 | **Agent** (modo Edge) | nenhuma (conecta de saída na 3552 da .52) |
+| 192.0.2.51 | **Agent** (modo Edge) | nenhuma (conecta de saída na 3552 da .52) |
 
 **Por que o Manager na .52.** Se ele ficasse na .50 ou na .51 e esse nó caísse, você perderia a visão do ambiente justamente na hora de fazer o failover do beat (seção 15.9). A queda da .52 derruba tudo de qualquer forma, então perder a interface junto não muda o quadro; as quedas da .50 e da .51 continuam visíveis a partir dela.
 
@@ -1060,7 +1060,7 @@ No exemplo das 3 VMs:
    ```
 
    Acesse `http://192.0.2.52:3552`, entre com `arcane` / `arcane-admin` e troque a senha.
-2. **No Manager**, crie um environment para cada nó: *Environments → Add Environment → Direct*, com a *Agent API URL* `http://192.0.2.50:3553` (e outro para `http://192.0.2.51:3553`). A interface gera o token (`arc_...`) de cada um. O environment precisa existir **antes** do agent.
+2. **No Manager**, crie um environment para cada nó: *Environments → Add Environment →* aba **Edge**, um nome (por exemplo `suap-50`) e *Generate Agent Configuration*. A interface gera o token (`arc_...`) de cada um; use só o token, o script monta o compose. O environment precisa existir **antes** do agent. O modo **Direct** (o Manager conecta no agent pela porta 3553) ainda funciona com `ARCANE_AGENT_MODE=direct`, mas o Arcane o marcou como obsoleto e vai removê-lo na v3.
 3. **.50 e .51 — agent**, cada um com o seu token:
 
    ```bash
@@ -1069,14 +1069,16 @@ No exemplo das 3 VMs:
    ```
 
    Sem as variáveis, o script pergunta a URL e o token (oculto).
-4. **Validar:** em cada environment, *Test Connection* deve dar `online`, e os containers do `suap_deploy` (web, nginx, celery, pdfprinter…) aparecem na lista.
+4. **Validar:** cada environment deve ficar **Online** ou **Standby** (Standby é o estado normal do transporte `poll`: o agent faz check-in periódico e abre o túnel sob demanda, então a primeira ação pode levar alguns segundos), e os containers do `suap_deploy` (web, nginx, celery, pdfprinter…) aparecem na lista.
+5. **Migrar agents já instalados em Direct.** Se o Manager mostrar "As conexões diretas com agentes estão obsoletas e serão removidas na v3", crie um environment Edge para o nó (passo 2) e, no nó, rode `ARCANE_AGENT_MODE=edge ARCANE_AGENT_TOKEN='arc_...' ARCANE_MANAGER_URL=http://192.0.2.52:3552 bash docker/arcane-agent-setup.sh`. O script grava o modo no `.env` do stack e deixa de publicar a porta 3553. Confirme que o novo environment ficou Online/Standby e remova o Direct antigo. Uma instalação Direct existente não muda sozinha: sem `ARCANE_AGENT_MODE`, o script a mantém em Direct (o token de um environment Direct não serve para um Edge).
 
 **Firewall e segurança.** O agent monta o socket do Docker e aceita comandos pela rede, o que equivale a acesso root ao host; o token fica no `.env` do stack (modo 600).
-- .50 e .51: porta **3553** liberada **somente para a .52**.
+- Modo Edge (padrão): .50 e .51 não abrem porta para o Arcane; elas só precisam alcançar a **3552** da .52. Se havia regra para a 3553, remova-a.
+- Modo Direct: porta **3553** da .50 e da .51 liberada **somente para a .52**.
 - .52: porta **3552** para os agents (.50 e .51) e para a rede administrativa; nunca para fora da instituição.
 - Troque a senha padrão do Manager antes de qualquer outro passo.
 
-**Fuso horário.** A imagem do Arcane roda em UTC. Os scripts do Manager e do agent definem `TZ` com o fuso do host (`ARCANE_TZ` permite escolher outro, por exemplo `ARCANE_TZ=America/Fortaleza bash docker/arcane-setup.sh`); sem isso, os horários e o cumprimento do painel ("Bom dia"/"Boa noite") ficam adiantados em relação ao seu fuso. Para conferir: `docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' arcane | grep ^TZ=` (a imagem não tem `date` nem `printenv`). Para aplicar em um Arcane já instalado, rode o script de novo: só o container é recriado e o volume `arcane-data` é mantido.
+**Fuso horário.** A imagem do Arcane roda em UTC. Os scripts do Manager e do agent definem `TZ` com o fuso do host (`ARCANE_TZ` permite escolher outro, por exemplo `ARCANE_TZ=America/Fortaleza bash docker/arcane-setup.sh`); sem isso, os horários registrados pelo container (logs, agendamentos) ficam em UTC. O cumprimento do painel ("Boa noite") **não** mudou com o `TZ` no teste feito na .52, então ele não depende do fuso do container; não verifiquei como o Arcane o calcula. Para conferir: `docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' arcane | grep ^TZ=` (a imagem não tem `date` nem `printenv`). Para aplicar em um Arcane já instalado, rode o script de novo: só o container é recriado e o volume `arcane-data` é mantido.
 
 **Telemetria.** O Arcane envia por padrão um heartbeat (versão e identificador da instância) para `checkin.getarcane.app`. O suap-setup o desliga no Manager e nos agents (`ARCANE_ANALYTICS_DISABLED=true`); use `false` para mantê-lo.
 
@@ -1227,7 +1229,7 @@ O grupo "Via Docker" do menu do `suap-setup` oferece utilitários independentes,
 | Redis (porta 6379 exposta) | `docker/redis-setup.sh` | 6379 | Redis do cluster (senha obrigatória) |
 | PostgreSQL (porta 5432 exposta) | `docker/postgres-setup.sh` | 5432 | Banco do cluster (senha obrigatória; collation padrão da imagem, sem `pt_BR.UTF-8`) |
 | MinIO (object storage S3) | `docker/minio-setup.sh` | 80 / 9001 | Mídia compartilhada (seção 21) |
-| Arcane Agent (host remoto, modo Direct) | `docker/arcane-agent-setup.sh` | 3553 | Permite ao Arcane Manager gerenciar o Docker de outro servidor (seção 15.10) |
+| Arcane Agent (host remoto) | `docker/arcane-agent-setup.sh` | nenhuma (Edge) / 3553 (Direct) | Permite ao Arcane Manager gerenciar o Docker de outro servidor (seção 15.10) |
 | HAProxy (balanceador do suap_deploy) | `docker/haproxy-setup.sh` | 80 / 443 / 8404 | Balanceador dos nós `app` (seção 15.5); rode em servidor sem o Nginx do `suap_deploy` |
 | Arcane | `docker/arcane-setup.sh` | 3552 | Interface web livre (BSD-3-Clause) para gerenciar o Docker |
 | Dockhand | `docker/dockhand-setup.sh` | 9093 | Interface web para gerenciar o Docker (licença BSL 1.1: uso empresarial em produção exige plano pago) |
