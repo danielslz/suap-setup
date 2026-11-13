@@ -844,6 +844,8 @@ HAPROXY_BACKENDS='10.0.0.1:80:3,10.0.0.2:80:1' HAPROXY_SERVER_NAME=suap.institui
   bash docker/haproxy-setup.sh
 ```
 
+**Autoteste e diagnóstico.** Ao terminar, o script confere que o container está estável (sem reinícios), que a porta 80 redireciona para HTTPS, que o TLS responde na 443 e o estado de cada nó (`UP`/`DOWN`). Se algo falhar, mostra as últimas linhas do log e uma dica, e sai com erro. Um HAProxy que não sobe costuma aparecer no navegador como "A conexão foi reiniciada" (`PR_END_OF_FILE_ERROR`): veja `docker logs suap-haproxy`. O container roda como `root` só para abrir as portas 80 e 443 (em `network_mode: host` o usuário comum da imagem não consegue abrir portas abaixo de 1024, e o HAProxy falha com `cannot bind socket (Permission denied)`); os workers rodam como o usuário `haproxy`. Se você subiu o HAProxy com uma versão anterior do script e ele reinicia em loop, atualize (`git pull`) e rode `bash docker/haproxy-setup.sh` de novo: os valores ficam salvos em `/opt/docker/haproxy/.env`, então não precisa repetir as variáveis.
+
 O certificado vai em `/etc/ssl/suap/haproxy/suap.pem` (certificado completo + chave privada concatenados); se não existir, o script gera um autoassinado para teste. O script valida a configuração antes de aplicar e, ao mudar nós ou pesos, recarrega o HAProxy sem derrubar conexões. A divisão por peso aparece sob concorrência (o algoritmo é `leastconn`: com requisições instantâneas os nós se alternam). O restante desta seção descreve o que a configuração gerada faz, caso você use um HAProxy próprio (ou o pfSense).
 
 O `sleep` do drain só funciona se durar pelo menos o tempo que o balanceador leva para retirar o nó do pool. Backend HAProxy recomendado:

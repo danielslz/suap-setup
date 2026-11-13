@@ -154,6 +154,10 @@ chmod 644 "${CFG_NEW}"   # o HAProxy do container (uid 99) precisa ler o arquivo
 global
     log stdout format raw local0
     maxconn 4096
+    # O container sobe como root só para abrir as portas 80/443 (privilegiadas) e os workers
+    # passam a rodar como o usuário haproxy da imagem.
+    user haproxy
+    group haproxy
 
 defaults
     mode http
@@ -221,6 +225,10 @@ services:
   haproxy:
     image: \${HAPROXY_IMAGE}
     container_name: suap-haproxy
+    # root apenas para abrir as portas 80/443: com network_mode host valem as regras do host, onde
+    # só o root abre portas < 1024 (a imagem roda como usuário comum por padrão). O haproxy.cfg
+    # manda os workers para o usuário haproxy (diretivas user/group).
+    user: "0:0"
     network_mode: host
     environment:
       HAPROXY_STATS_AUTH: \${HAPROXY_STATS_AUTH}
@@ -267,10 +275,60 @@ if [ "${WAS_RUNNING}" = "1" ] && [ "${CFG_CHANGED}" = "1" ]; then
   docker kill --signal=HUP "${CONTAINER_NAME}" >/dev/null || msg_error "Falha ao recarregar; rode: docker restart ${CONTAINER_NAME}"
 fi
 
-sleep 2
-if ! docker ps --filter "name=^${CONTAINER_NAME}$" --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-  msg_error "Container HAProxy não está em execução. Verifique: docker logs ${CONTAINER_NAME}"
+# --- Autoteste: o container só "estar de pé" não basta (ele pode reiniciar em loop) ---
+_hp_logs() { docker logs --tail 15 "${CONTAINER_NAME}" 2>&1 | sed 's/^/      /'; }
+_hp_fail() {
+  msg_error "$1"
+  echo "  Últimas linhas do log do HAProxy:"
+  _hp_logs
+  if docker logs --tail 40 "${CONTAINER_NAME}" 2>&1 | grep -q "Permission denied"; then
+    msg_error "Dica: 'Permission denied' ao abrir a porta indica que o container não está como root (o compose gerado define user: \"0:0\"). Rode este script de novo."
+  elif docker logs --tail 40 "${CONTAINER_NAME}" 2>&1 | grep -qiE "Address already in use|cannot bind"; then
+    msg_error "Dica: a porta já está em uso por outro serviço neste servidor. Veja quem usa: ss -tlnp | grep -E ':(${HAPROXY_HTTP_PORT}|${HAPROXY_HTTPS_PORT}|${HAPROXY_STATS_PORT})\\b' ; ou mude HAPROXY_HTTP_PORT, HAPROXY_HTTPS_PORT ou HAPROXY_STATS_PORT."
+  fi
   exit 1
+}
+
+msg_action "Verificando o HAProxy..."
+sleep 4
+_state="$(docker inspect -f '{{.State.Status}} {{.RestartCount}}' "${CONTAINER_NAME}" 2>/dev/null || echo "ausente 0")"
+if [ "${_state%% *}" != "running" ] || [ "${_state##* }" != "0" ]; then
+  _hp_fail "O container do HAProxy não está estável (estado: ${_state%% *}, reinícios: ${_state##* })."
+fi
+
+_code="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "http://127.0.0.1:${HAPROXY_HTTP_PORT}/" 2>/dev/null || true)"
+if [ -z "${_code}" ] || [ "${_code}" = "000" ]; then
+  _hp_fail "Nenhuma resposta HTTP em 127.0.0.1:${HAPROXY_HTTP_PORT}."
+fi
+if [ "${HAPROXY_TLS}" = "true" ]; then
+  [ "${_code}" = "301" ] && echo "  [ok]    porta ${HAPROXY_HTTP_PORT}: redireciona para HTTPS (301)" \
+    || msg_skip "porta ${HAPROXY_HTTP_PORT} respondeu ${_code} (esperado 301)"
+  _tcode="$(curl -sk -o /dev/null -m 8 -w '%{http_code}' "https://127.0.0.1:${HAPROXY_HTTPS_PORT}/" 2>/dev/null || true)"
+  if [ -z "${_tcode}" ] || [ "${_tcode}" = "000" ]; then
+    _hp_fail "Falha no handshake TLS em 127.0.0.1:${HAPROXY_HTTPS_PORT} (verifique o certificado ${CERT_FILE})."
+  fi
+  echo "  [ok]    porta ${HAPROXY_HTTPS_PORT}: TLS funcionando (HTTP ${_tcode})"
+else
+  echo "  [ok]    porta ${HAPROXY_HTTP_PORT}: respondendo (HTTP ${_code})"
+fi
+
+# Estado dos nós (o primeiro health check leva até ~14 s)
+_stats="http://127.0.0.1:${HAPROXY_STATS_PORT}/;csv"
+_down=""
+for _i in $(seq 1 10); do
+  _csv="$(curl -s -m 5 -u "${HAPROXY_STATS_AUTH}" "${_stats}" 2>/dev/null || true)"
+  _down="$(awk -F, '$1=="be_suap" && $2 ~ /^web[0-9]+$/ && $18 !~ /^UP/ {print $2}' <<< "${_csv}" | tr '\n' ' ')"
+  _up="$(awk -F, '$1=="be_suap" && $2 ~ /^web[0-9]+$/ && $18 ~ /^UP/ {n++} END {print n+0}' <<< "${_csv}")"
+  [ -n "${_csv}" ] && [ -z "${_down}" ] && break
+  sleep 2
+done
+if [ -z "${_csv}" ]; then
+  msg_skip "Não consegui ler a página de estatísticas (porta ${HAPROXY_STATS_PORT})."
+else
+  awk -F, '$1=="be_suap" && $2 ~ /^web[0-9]+$/ {printf "  nó %-6s %s\n", $2, $18}' <<< "${_csv}"
+  if [ -n "${_down}" ]; then
+    msg_skip "Nó(s) fora do pool: ${_down%% }. O nó responde 200 em /ht/? Teste a partir daqui: curl -i -H 'Host: ${HAPROXY_SERVER_NAME}' http://<ip-do-nó>:<porta>/ht/ (503 = drain; 301 = nó com SSL_ENABLED=true; 400 = Host fora do ALLOWED_HOSTS)."
+  fi
 fi
 
 msg_action "HAProxy em execução!"

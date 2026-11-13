@@ -1448,10 +1448,22 @@ Stack em `${DOCKER_STACKS_DIR:-/opt/docker}/haproxy/` (`compose.yaml`, `haproxy.
 4. TLS: se /etc/ssl/suap/haproxy/suap.pem não existe, gera autoassinado (openssl; certificado + chave
    concatenados); grupo 99 + 640 (uid/gid do haproxy na imagem), fallback 644 (sudo -n, nunca trava em prompt)
 5. Gera o haproxy.cfg em arquivo temporário (644) e o valida: docker run --rm <imagem> haproxy -c
-6. stack_adopt_legacy; escreve .env e compose.yaml (network_mode host; segredo de estatísticas por variável de
-   ambiente do container: o cfg não contém senha); SELinux Enforcing: sufixo ",z" nos mounts
+6. stack_adopt_legacy; escreve .env e compose.yaml (network_mode host; user "0:0"; segredo de estatísticas por
+   variável de ambiente do container: o cfg não contém senha); SELinux Enforcing: sufixo ",z" nos mounts
 7. docker compose up -d; se o container já rodava e o cfg mudou: docker kill --signal=HUP (reload sem recriar)
+8. Autoteste: estado do container (running e RestartCount 0 após 4 s), HTTP em 127.0.0.1:<porta 80> (301 esperado
+   com TLS), handshake TLS em <porta 443> (curl -k) e estado de cada nó pela página de estatísticas (até 20 s para o
+   primeiro health check); em falha mostra as últimas linhas do log e a dica correspondente (Permission denied,
+   Address already in use) e sai com erro
 ```
+
+**Por que `user: "0:0"`:** a imagem oficial do HAProxy roda como o usuário `haproxy` (uid 99), e em
+`network_mode: host` valem as regras de rede do host, onde só o root abre portas abaixo de 1024
+(`net.ipv4.ip_unprivileged_port_start`, 1024 por padrão). Sem root o HAProxy falha com `cannot bind socket
+(Permission denied)` em 80 e 443 e reinicia em loop; o navegador vê a conexão ser reiniciada
+(`PR_END_OF_FILE_ERROR`). O `haproxy.cfg` gerado traz `user haproxy` e `group haproxy` no `global`, então só o processo
+mestre é root e os workers que atendem as requisições rodam sem privilégios. O `haproxy -c` do passo 5 não detecta
+isso, porque só valida a sintaxe e não abre as portas.
 
 Configuração gerada: `balance leastconn`; `option httpchk` com `http-check send meth GET uri /ht/ ver HTTP/1.1 hdr Host <site>`
 e `http-check expect status 200` (um nó com SSL ligado responde 301 e fica DOWN, em vez de parecer saudável);

@@ -505,7 +505,7 @@ O `docker/haproxy-setup.sh` sobe um HAProxy via Docker Compose (stack em `/opt/d
 | Propriedade | Valor |
 |-------------|-------|
 | Imagem | `haproxy:lts-alpine` (sobrescrevível via `HAPROXY_IMAGE`) |
-| Rede | `network_mode: host` (preserva o IP do cliente; usa 80, 443 e 8404) |
+| Rede e usuário | `network_mode: host` (preserva o IP do cliente; usa 80, 443 e 8404). O container sobe como `root` só para abrir as portas privilegiadas; o `haproxy.cfg` manda os workers para o usuário `haproxy` |
 | Nós | `HAPROXY_BACKENDS=host[:porta[:peso]],...` (ex.: `192.0.2.50:80:3,192.0.2.51:80:1`) |
 | Health check | `GET /ht/` com o `Host` de `HAPROXY_SERVER_NAME`; só `200` é saudável (`503` = drain, `301` = nó com SSL ligado) |
 | Algoritmo | `leastconn` com pesos (a divisão por peso aparece sob concorrência) |
@@ -517,7 +517,7 @@ HAPROXY_BACKENDS='192.0.2.50:80:3,192.0.2.51:80:1' HAPROXY_SERVER_NAME=suap.inst
   bash docker/haproxy-setup.sh
 ```
 
-Sem variáveis, o script pergunta os nós e o nome do site. Ele valida o `haproxy.cfg` (`haproxy -c`) antes de aplicar; ao mudar nós ou pesos e rodar de novo, **recarrega** o HAProxy (SIGHUP) sem recriar o container. Nos nós do suap_deploy use `SSL_ENABLED=false` e `TRUSTED_PROXIES=<ip do HAProxy>`. Para desfazer: `R) Reverter > Reverter HAProxy (Docker)` (ou `bash docker/haproxy-revert.sh`); o certificado em `/etc/ssl/suap/haproxy` nunca é apagado.
+Sem variáveis, o script pergunta os nós e o nome do site. Ao final ele faz um **autoteste**: confere que o container está estável (sem reinícios), que a porta 80 redireciona, que o TLS responde na 443 e o estado de cada nó, e mostra o log com uma dica se algo falhar. Ele valida o `haproxy.cfg` (`haproxy -c`) antes de aplicar; ao mudar nós ou pesos e rodar de novo, **recarrega** o HAProxy (SIGHUP) sem recriar o container. Nos nós do suap_deploy use `SSL_ENABLED=false` e `TRUSTED_PROXIES=<ip do HAProxy>`. Para desfazer: `R) Reverter > Reverter HAProxy (Docker)` (ou `bash docker/haproxy-revert.sh`); o certificado em `/etc/ssl/suap/haproxy` nunca é apagado.
 
 ### MinIO (Object Storage)
 
