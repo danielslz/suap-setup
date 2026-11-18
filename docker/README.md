@@ -92,6 +92,8 @@ Reversão em `docker/haproxy-revert.sh`.
 
 ## MinIO (`docker/minio-setup.sh`)
 
+> A edição comunitária do MinIO não é mais mantida upstream; veja o aviso em `docs/DEPLOYMENT.md`, seção 21.2.
+
 Utiliza o projeto **suap-minio** para provisionar um servidor de object storage
 S3-compatível via Docker. O suap-minio:
 

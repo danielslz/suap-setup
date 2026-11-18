@@ -525,6 +525,8 @@ Sem variáveis, o script pergunta os nós e o nome do site. `HAPROXY_SERVER_NAME
 
 ### MinIO (Object Storage)
 
+> **Aviso:** a edição comunitária do MinIO não é mais mantida (repositório arquivado, sem imagens oficiais desde outubro de 2025), e o `suap-minio` usa uma imagem de maio de 2024, sem as correções de segurança posteriores. Em instalação nova, prefira NFS ou outro serviço compatível com S3. Detalhes e fontes em `docs/DEPLOYMENT.md`, seção 21.2.
+
 O [MinIO](https://min.io/) é um servidor de object storage compatível com a API S3, utilizado pelo SUAP para armazenamento de arquivos de mídia e temporários. O script `docker/minio-setup.sh` delega para o projeto `suap-minio`, que fornece MinIO + Nginx como proxy.
 
 | Propriedade | Valor |

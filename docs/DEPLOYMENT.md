@@ -875,7 +875,7 @@ backend suap-app
 
 ### 15.6. Mídia compartilhada
 
-Em cluster, nós de aplicação e async precisam ver os mesmos uploads. Use **MinIO** (recomendado; sem mount, configurado pelo `.env` com `--s3-endpoint`) ou **NFS** montado em `<SUAP_DEPLOY_DIR>/deploy/media` em cada nó (com dono 33:33). Detalhes e `fstab` na seção 21.
+Em cluster, nós de aplicação e async precisam ver os mesmos uploads. Use **NFS** montado em `<SUAP_DEPLOY_DIR>/deploy/media` em cada nó (com dono 33:33) ou um serviço compatível com S3 (sem mount, configurado pelo `.env` com `--s3-endpoint`). O MinIO comunitário não é mais mantido (seção 21.2). Detalhes e `fstab` na seção 21.
 
 ### 15.7. Vault (opcional)
 
@@ -1228,7 +1228,7 @@ O grupo "Via Docker" do menu do `suap-setup` oferece utilitários independentes,
 |---|---|---|---|
 | Redis (porta 6379 exposta) | `docker/redis-setup.sh` | 6379 | Redis do cluster (senha obrigatória) |
 | PostgreSQL (porta 5432 exposta) | `docker/postgres-setup.sh` | 5432 | Banco do cluster (senha obrigatória; collation padrão da imagem, sem `pt_BR.UTF-8`) |
-| MinIO (object storage S3) | `docker/minio-setup.sh` | 80 / 9001 | Mídia compartilhada (seção 21) |
+| MinIO (object storage S3) | `docker/minio-setup.sh` | 80 / 9001 | Mídia compartilhada (seção 21). **Não mantido upstream**: veja o aviso da seção 21.2 |
 | Arcane Agent (host remoto) | `docker/arcane-agent-setup.sh` | nenhuma (Edge) / 3553 (Direct) | Permite ao Arcane Manager gerenciar o Docker de outro servidor (seção 15.10) |
 | HAProxy (balanceador do suap_deploy) | `docker/haproxy-setup.sh` | 80 / 443 / 8404 | Balanceador dos nós `app` (seção 15.5); rode em servidor sem o Nginx do `suap_deploy` |
 | Arcane | `docker/arcane-setup.sh` | 3552 | Interface web livre (BSD-3-Clause) para gerenciar o Docker |
@@ -1491,8 +1491,12 @@ mount -a
 > **Nota:** para a rota nativa, prefira NFSv4 (melhor segurança e firewall simplificado). Para a rota Docker, o suap_deploy recomenda NFSv3 com opções otimizadas (`rsize=65536,wsize=65536,nolock`). Garanta que o ponto de montagem pertence ao UID/GID 33 (`www-data`).
 
 ### 21.2. MinIO (alternativa escalável)
+> **Situação do MinIO (verificada em novembro de 2026).** A edição comunitária do MinIO (AGPLv3 desde 2021) **não é mais mantida**: o [repositório oficial](https://github.com/minio/minio) está arquivado e marcado como "no longer maintained", a distribuição passou a ser só código-fonte, e imagens Docker e binários oficiais deixaram de ser publicados em outubro de 2025 ([itsfoss](https://itsfoss.com/news/minio-moves-away-from-open-source/)). O `suap-minio` usa a imagem `quay.io/minio/minio:RELEASE.2024-05-28T17-19-04Z`, anterior a correções de segurança publicadas depois, por exemplo [CVE-2025-62506](https://github.com/advisories/GHSA-jjjj-jwhf-8rgr) (escalada de privilégio em contas de serviço/STS, corrigida em `RELEASE.2025-10-15T17-29-55Z`). A licença AGPLv3, por si só, não impede o uso interno sem modificação (consulte o jurídico da instituição se houver política sobre AGPL); o problema é a falta de correções.
+>
+> **Recomendação:** em instalação nova, prefira **NFS** (seção 21.1) ou outro serviço compatível com S3 mantido ativamente (o SUAP usa a API S3 via `--s3-endpoint`, não algo específico do MinIO). Alternativas citadas com frequência são Garage, SeaweedFS e Ceph RGW, ou um S3 de nuvem; **nenhuma delas foi testada com o SUAP neste guia**. Quem já usa o MinIO deve manter a porta da API e do console restritas à rede interna, não expô-lo à internet e planejar a migração. O item do menu continua disponível para essas instalações.
 
-MinIO oferece armazenamento de objetos compatível com S3, com escalabilidade horizontal e tolerância a falhas nativa via erasure coding. Na rota Docker, é a opção recomendada pelo suap_deploy — não exige mount NFS e configura-se pelas variáveis `DEFAULT_FILE_STORAGE` e `AWS_*` no `.env` (o `configure-node.sh --s3-endpoint` preenche essas variáveis).
+
+MinIO oferece armazenamento de objetos compatível com S3, com escalabilidade horizontal e tolerância a falhas nativa via erasure coding. Na rota Docker, o suap_deploy o recomendava antes do fim da manutenção (veja o aviso acima) — não exige mount NFS e configura-se pelas variáveis `DEFAULT_FILE_STORAGE` e `AWS_*` no `.env` (o `configure-node.sh --s3-endpoint` preenche essas variáveis).
 
 **Instalação de referência:** Projeto `suap-minio` (GitLab COSINF/IFRN)
 
