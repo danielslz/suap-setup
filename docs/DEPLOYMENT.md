@@ -1127,6 +1127,7 @@ bash docker/prod/suap-deploy.sh help
 | `profiles` | — | Mostra profiles, papel inferido, modo de imagem e SSL |
 | `check [--db]` | — | Valida a configuração; `--db` testa também o login no banco (seção 15.8) |
 | `fix-perms` | `chown -R 33:33 deploy/` + diretórios de runtime | Corrige `PermissionError` do Celery em `deploy/media/tmp` |
+| `clean-tmp [--days N] [--dry-run] [--install-cron]` | `find deploy/media/tmp ... -delete` | Limpa arquivos temporários antigos; cron diário opcional (seção 21.1) |
 | `drain` / `healthy` | `contrib/multi-node/*.sh` | Tira/devolve o nó do pool sem derrubar containers |
 | `compose <args...>` | `docker compose <args>` | Escape hatch no diretório do `suap_deploy` |
 | `dir` | — | Imprime o diretório do `suap_deploy` |
@@ -1519,6 +1520,17 @@ sudo -u '#33' sh -c 'echo ok-A > <SUAP_DEPLOY_DIR>/deploy/media/teste-nfs.txt'
 sudo -u '#33' sh -c 'echo ok-B >> <SUAP_DEPLOY_DIR>/deploy/media/teste-nfs.txt'
 # nó A: deve mostrar as duas linhas; depois apague o arquivo
 ```
+
+**Limpeza de `deploy/media/tmp`.** O SUAP usa `MEDIA_ROOT/tmp` como `TEMP_DIR` e `FILE_UPLOAD_TEMP_DIR`, e vários módulos gravam ali PDFs, DOCX e dumps com `delete=False`. Na cópia do código consultada não há tarefa nem comando que limpe a pasta (o beat usa o `DatabaseScheduler`, então tarefas cadastradas no banco da sua instalação não aparecem no código). O `suap_deploy` (`docs/FAQ.md`) recomenda um cron **no host**, fora do container. O `suap-deploy.sh` faz isso:
+```bash
+bash docker/prod/suap-deploy.sh clean-tmp --dry-run             # quantos arquivos e quanto espaço (nada é apagado)
+bash docker/prod/suap-deploy.sh clean-tmp                       # apaga, após confirmação
+bash docker/prod/suap-deploy.sh clean-tmp --install-cron        # cron diário às 3h30 em /etc/cron.d/suap-media-tmp
+bash docker/prod/suap-deploy.sh clean-tmp --remove-cron
+```
+Ele apaga só **dentro** de `deploy/media/tmp` arquivos com mais de 3 dias (`--days N` muda; `--hour H` muda a hora do cron) e, depois, as subpastas vazias com a mesma idade (a remoção de arquivos atualiza a data da pasta, então ela some numa execução seguinte). Recusa operar se a pasta não existe ou não se chama `tmp` (por exemplo, um link para `/tmp`), e sem terminal exige `--yes`. O cron instalado chama o `find` direto, com o caminho real da pasta, sem depender do script (o root não executa um arquivo que o seu usuário pode editar); erros vão para o syslog com a tag `suap-clean-tmp`. Os 3 dias deixam margem para uploads, PDFs em geração e relatórios baixados depois.
+
+Com a mídia compartilhada, instale o cron em **um único** nó, de preferência onde a pasta é local (o servidor de arquivos ou, no NFS temporário, o nó que exporta); o comando avisa quando a pasta está em NFS. Fora do `suap_deploy` (por exemplo, no servidor de arquivos), use o equivalente manual: `find <PASTA_MEDIA>/tmp -xdev -mindepth 1 -type f -mtime +3 -delete` (no RHEL, `tmpwatch --mtime --all 72 <PASTA_MEDIA>/tmp/`). **Nunca** aponte a limpeza para fora de `tmp/`: o resto de `media` são arquivos permanentes. Ao trocar de servidor de mídia, mova o cron junto.
 
 #### NFS temporário em um nó de aplicação
 

@@ -44,6 +44,9 @@ Ciclo de vida
                         Copia a imagem do SUAP deste nó para outro (docker save | ssh | docker load).
                         Para modo local em vários nós: compile em UM nó e distribua
   fix-perms             Recria os diretórios de deploy/ e ajusta o dono (33:33, www-data)
+  clean-tmp [--days N] [--dry-run] [--yes] [--install-cron [--hour H]|--remove-cron]
+                        Apaga de deploy/media/tmp arquivos com mais de N dias (padrão 3).
+                        --install-cron grava um cron diário em /etc/cron.d (em UM só nó com NFS)
   status                Estado dos containers
   logs [serviço...]     Logs em tempo real (ex.: logs web nginx)
   scale <n>             Número de workers celery (ex.: scale 3)
@@ -475,6 +478,111 @@ cmd_healthy() {
   bash "${DEPLOY_DIR}/contrib/multi-node/healthy.sh"
 }
 
+# --- clean-tmp ---
+# Limpa deploy/media/tmp (TEMP_DIR e FILE_UPLOAD_TEMP_DIR do SUAP). Só apaga DENTRO
+# dessa pasta: arquivos mais antigos que N dias e, depois, pastas vazias.
+CLEAN_TMP_CRON_FILE="${CLEAN_TMP_CRON_FILE:-/etc/cron.d/suap-media-tmp}"
+_clean_tmp_usage() {
+  cat <<EOF
+Uso: bash docker/prod/suap-deploy.sh clean-tmp [--days N] [--dry-run] [--yes]
+     bash docker/prod/suap-deploy.sh clean-tmp --install-cron [--days N] [--hour H]
+     bash docker/prod/suap-deploy.sh clean-tmp --remove-cron
+  --days N        Idade mínima em dias (padrão: 3)
+  --dry-run       Só mostra quantos arquivos e quanto espaço seriam liberados
+  --yes           Não pede confirmação (obrigatório sem terminal)
+  --install-cron  Grava ${CLEAN_TMP_CRON_FILE} (diário, às H:30; padrão H=3)
+  --remove-cron   Remove o cron instalado
+Com a mídia em NFS, rode (e instale o cron) em UM único nó, de preferência onde a pasta é local.
+EOF
+}
+cmd_clean_tmp() {
+  local days=3 dry="false" yes="false" action="clean" hour=3
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --days) days="${2:-}"; shift ;;
+      --hour) hour="${2:-}"; shift ;;
+      --dry-run) dry="true" ;;
+      --yes|-y) yes="true" ;;
+      --install-cron) action="install" ;;
+      --remove-cron) action="remove" ;;
+      -h|--help) _clean_tmp_usage; return 0 ;;
+      *) msg_error "Opção desconhecida: $1"; _clean_tmp_usage; return 1 ;;
+    esac
+    shift
+  done
+  if ! [[ "${days}" =~ ^[0-9]+$ ]] || [ "${days}" -lt 1 ]; then
+    msg_error "--days deve ser um inteiro >= 1"; return 1
+  fi
+  if ! [[ "${hour}" =~ ^[0-9]+$ ]] || [ "${hour}" -gt 23 ]; then
+    msg_error "--hour deve ser um inteiro de 0 a 23"; return 1
+  fi
+  # Os arquivos são do UID 33: sem root, usa sudo (SUAP_SUDO="" desliga, para testes).
+  local sudo_cmd=""
+  [ "$(id -u)" -ne 0 ] && sudo_cmd="${SUAP_SUDO-sudo}"
+  if [ "${action}" = "remove" ]; then
+    if [ -f "${CLEAN_TMP_CRON_FILE}" ]; then
+      ${sudo_cmd} rm -f "${CLEAN_TMP_CRON_FILE}" && msg_action "Cron removido: ${CLEAN_TMP_CRON_FILE}"
+    else
+      msg_skip "Nenhum cron instalado em ${CLEAN_TMP_CRON_FILE}"
+    fi
+    return 0
+  fi
+  _require_deploy_dir
+  local tmp_dir
+  tmp_dir="$(readlink -f "${DEPLOY_DIR}/deploy/media/tmp" 2>/dev/null || true)"
+  # Trava de segurança: só opera numa pasta existente chamada 'tmp', nunca na raiz.
+  if [ -z "${tmp_dir}" ] || [ ! -d "${tmp_dir}" ] || [ "$(basename "${tmp_dir}")" != "tmp" ] || [ "${tmp_dir}" = "/tmp" ]; then
+    msg_error "Pasta temporária não encontrada ou inválida: ${DEPLOY_DIR}/deploy/media/tmp (rode: fix-perms)"
+    return 1
+  fi
+  if ! [[ "${tmp_dir}" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+    msg_error "Caminho com caracteres não suportados: ${tmp_dir}"; return 1
+  fi
+  local fstype=""
+  command -v findmnt &>/dev/null && fstype="$(findmnt -n -o FSTYPE -T "${tmp_dir}" 2>/dev/null || true)"
+  if [[ "${fstype}" == nfs* ]]; then
+    msg_skip "A pasta está em NFS (${fstype}): rode clean-tmp em UM único nó, de preferência no servidor de arquivos, onde a pasta é local."
+  fi
+  if [ "${action}" = "install" ]; then
+    local line
+    line="30 ${hour} * * * root find ${tmp_dir} -xdev -mindepth 1 -type f -mtime +${days} -delete 2>&1 | logger -t suap-clean-tmp; find ${tmp_dir} -xdev -mindepth 1 -type d -empty -mtime +${days} -delete 2>&1 | logger -t suap-clean-tmp"
+    printf '# Gerado por suap-setup (suap-deploy.sh clean-tmp --install-cron). Remova com --remove-cron.\n# Apaga de %s arquivos com mais de %s dia(s) e depois as pastas vazias.\n%s\n' \
+      "${tmp_dir}" "${days}" "${line}" | ${sudo_cmd} tee "${CLEAN_TMP_CRON_FILE}" >/dev/null || return 1
+    ${sudo_cmd} chmod 644 "${CLEAN_TMP_CRON_FILE}"
+    msg_action "Cron instalado em ${CLEAN_TMP_CRON_FILE}: diário às ${hour}:30, arquivos com mais de ${days} dia(s) em ${tmp_dir}."
+    echo "  Erros vão para o syslog (tag suap-clean-tmp). Instale em UM só nó quando a mídia for compartilhada."
+    return 0
+  fi
+  local count bytes
+  count="$(${sudo_cmd} find "${tmp_dir}" -xdev -mindepth 1 -type f -mtime "+${days}" 2>/dev/null | wc -l)"
+  bytes="$(${sudo_cmd} find "${tmp_dir}" -xdev -mindepth 1 -type f -mtime "+${days}" -printf '%s\n' 2>/dev/null | awk '{s+=$1} END {printf "%d", s}')"
+  local human
+  human="$(awk -v b="${bytes:-0}" 'BEGIN { if (b >= 1073741824) printf "%.1f GB", b/1073741824; else printf "%.1f MB", b/1048576 }')"
+  echo "Pasta:    ${tmp_dir}${fstype:+ (${fstype})}"
+  echo "Critério: arquivos com mais de ${days} dia(s)"
+  echo "Encontrados: ${count} arquivo(s), ${human}"
+  if [ "${dry}" = "true" ]; then
+    ${sudo_cmd} find "${tmp_dir}" -xdev -mindepth 1 -type f -mtime "+${days}" 2>/dev/null | head -10 | sed 's/^/  /'
+    [ "${count}" -gt 10 ] && echo "  ..."
+    echo "(--dry-run: nada foi apagado)"
+    return 0
+  fi
+  if [ "${count}" -eq 0 ]; then
+    msg_skip "Nada a apagar."
+    return 0
+  fi
+  if [ "${yes}" != "true" ]; then
+    if [ ! -t 0 ]; then
+      msg_error "Sem terminal: use --yes para confirmar a remoção."; return 1
+    fi
+    local ans
+    read -rp "Apagar esses ${count} arquivo(s)? [s/N] " ans
+    [[ "${ans}" =~ ^[sS]$ ]] || { msg_skip "Cancelado."; return 0; }
+  fi
+  ${sudo_cmd} find "${tmp_dir}" -xdev -mindepth 1 -type f -mtime "+${days}" -delete
+  ${sudo_cmd} find "${tmp_dir}" -xdev -mindepth 1 -type d -empty -mtime "+${days}" -delete 2>/dev/null
+  msg_action "Removidos ${count} arquivo(s) (${human}) de ${tmp_dir}."
+}
 # --- check ---
 _CHECK_FAIL=0
 _CHECK_WARN=0
@@ -865,6 +973,7 @@ case "${cmd}" in
   update)   cmd_update "$@" ;;
   image-copy) cmd_image_copy "$@" ;;
   fix-perms) _require_deploy_dir; ensure_suap_deploy_dirs "${DEPLOY_DIR}" ;;
+  clean-tmp) cmd_clean_tmp "$@" ;;
   scale)    cmd_scale "$@" ;;
   bash)     _require_deploy_dir; _require_make; _require_docker; _mk bash ;;
   shell)    _require_deploy_dir; _require_make; _require_docker; _mk shell ;;
