@@ -904,8 +904,8 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
 | VM | IP | Papel | `COMPOSE_PROFILES` (papel) |
 |---|---|---|---|
 | Grande (16 cores / 32 GB) | 192.0.2.50 | web + nginx + pdfprinter + celery | `default` (`full`) |
-| Pequena (4 cores / 16 GB) | 192.0.2.51 | web + celery + celery-beat + celery-flower | `web,celery,celery-beat,celery-flower` (`web-celery-beat`) |
-| Pequena (4 cores / 16 GB) | 192.0.2.52 | PostgreSQL, Redis e **HAProxy** | — |
+| Pequena (4 cores / 8 GB) | 192.0.2.51 | web + celery + celery-beat + celery-flower | `web,celery,celery-beat,celery-flower` (`web-celery-beat`) |
+| Pequena (4 cores / 8 GB) | 192.0.2.52 | PostgreSQL, Redis e **HAProxy** | — |
 | Outra VM | — | Servidor de mídia (NFS) | — |
 
 **Por que o HAProxy fica na 192.0.2.52.** O Nginx do container ocupa 80, 443 e 8080 nos dois nós de aplicação, então o balanceador não pode dividir o host com ele sem um override do Compose. A .52 não roda Nginx e, como já concentra o banco, já é um ponto único de falha: colocar o balanceador ali não piora isso.
@@ -962,7 +962,15 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
    bash docker/prod/suap-deploy.sh update --no-build
    ```
 
-   `--db-name` e `--db-user` devem ser **iguais aos da .50** (os mesmos valores do passo 2). Rode `begin` e `createsuperuser` **só** em banco novo e em um único nó (aqui o banco já foi restaurado de backup). Com 16 GB, web (4G) + celery (4G) + beat (1G) + flower (1G) cabem, mas os 4 cores ficam disputados.
+   `--db-name` e `--db-user` devem ser **iguais aos da .50** (os mesmos valores do passo 2). Rode `begin` e `createsuperuser` **só** em banco novo e em um único nó (aqui o banco já foi restaurado de backup). **Memória da .51 (8 GB).** Os padrões do `env.sample` não cabem: web (4G) + celery (4G) + beat (1G) + flower (1G) somam 10 GB, e o `GUNICORN_WORKERS=8` do `env.sample` é demais para 4 cores. Sem ajuste, sob carga o kernel mata processos (OOM). Ponto de partida no `.env` da .51, somando cerca de 6 GB e deixando folga para o sistema:
+   ```ini
+   GUNICORN_WORKERS=3
+   DOCKER_WEB_MAX_MEMORY_SIZE=3G
+   DOCKER_CELERY_MAX_MEMORY_SIZE=2G
+   DOCKER_BEAT_MAX_MEMORY_SIZE=512M
+   DOCKER_FLOWER_MAX_MEMORY_SIZE=512M
+   ```
+   Depois de editar, rode `restart` e acompanhe com `docker stats --no-stream`. Esses valores são estimativa, não medição: ajuste olhando o consumo real sob carga. Se a memória continuar apertada, use o papel `web-beat` na .51 (sem workers Celery; eles ficam só na .50, que tem 32 GB) em vez de `web-celery-beat`. O custo é perder os workers se a .50 cair.
 5. **.52 — HAProxy.** Antes dele, confirme cada nó com o `curl` da seção 15.4 (`/ht/` deve dar 200). Enquanto a mídia não estiver compartilhada, aponte o HAProxy **só para a .50** (`HAPROXY_BACKENDS='192.0.2.50:80:1'`) e acrescente a .51 depois, repetindo o comando:
 
    ```bash
@@ -991,7 +999,7 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
 
 | Queda | Continua funcionando | Para ou degrada |
 |---|---|---|
-| **.50** | Web na .51 (o HAProxy retira a .50 em ~14 s; conexões a um nó desligado levam ~5 s e são refeitas em outro), workers, beat e flower na .51 | **Geração de PDF** (pdfprinter só na .50); capacidade menor (a .51 tem 4 cores); requisições em andamento na .50 falham |
+| **.50** | Web na .51 (o HAProxy retira a .50 em ~14 s; conexões a um nó desligado levam ~5 s e são refeitas em outro), workers, beat e flower na .51 | **Geração de PDF** (pdfprinter só na .50); capacidade menor (a .51 tem 4 cores e 8 GB); requisições em andamento na .50 falham |
 | **.51** | Web, workers e pdfprinter na .50 | **Beat** (tarefas agendadas) e Flower: não há failover automático (ver abaixo) |
 | **.52** | Nada | Tudo: banco, Redis e a entrada do HAProxy (ponto único de falha aceito nesta topologia) |
 | **Servidor de mídia** | — | Uploads e downloads falham nos dois nós; os processos que acessam arquivos podem travar (NFS `hard`) |
@@ -1032,7 +1040,8 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
 
 **Limites e ajustes**
 
-- Os pesos (3:1) e os limites de memória são pontos de partida: ajuste olhando CPU e latência após um teste de carga. Cada nó deveria aguentar a carga inteira sozinho para tolerar a queda do outro, o que a .51 (4 cores) não faz com a mesma folga da .50.
+- Os pesos (3:1) e os limites de memória são pontos de partida: ajuste olhando CPU e latência após um teste de carga. Cada nó deveria aguentar a carga inteira sozinho para tolerar a queda do outro, o que a .51 (4 cores, 8 GB) não faz com a mesma folga da .50.
+- A .52 tem 8 GB para PostgreSQL, Redis e HAProxy. Dimensione o `shared_buffers` do PostgreSQL (cerca de 25% da RAM, ou seja, ~2 GB) e o `maxmemory` do Redis para que a soma caiba na VM, e acompanhe o **disco**: com o disco cheio o PostgreSQL deixa de aceitar escritas.
 - O `bin/celery.sh` não passa `-c`, então o worker usa a concorrência padrão do Celery (um processo por CPU: 16 na .50). Dimensione `DOCKER_CELERY_MAX_MEMORY_SIZE` e some as conexões ao Postgres (workers do Gunicorn + processos Celery) para ajustar `max_connections` ou usar PgBouncer (seção 19.7).
 - O HAProxy divide os 4 cores da .52 com o banco e o Redis. Em produção real, considere uma VM própria para o balanceador.
 - A .52 é ponto único de falha (banco, Redis e balanceador). Alta disponibilidade completa exigiria replicação do banco com failover, Redis Sentinel e dois balanceadores com IP virtual, o que pede mais VMs. A topologia dá deploy sem downtime e tolerância à queda de um dos nós de aplicação, com as degradações da tabela acima.
