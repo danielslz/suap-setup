@@ -81,6 +81,7 @@
 - [20. Balanceamento de carga e alta disponibilidade](#20-balanceamento-de-carga-e-alta-disponibilidade)
 - [21. Armazenamento de mídia (NFS / MinIO)](#21-armazenamento-de-mídia-nfs--minio)
   - [21.1. NFS](#211-nfs)
+    - [NFS temporário em um nó de aplicação](#nfs-temporário-em-um-nó-de-aplicação)
   - [21.2. MinIO (alternativa escalável)](#212-minio-alternativa-escalável)
     - [Instalação via suap-setup](#instalação-via-suap-setup)
     - [Integração com o SUAP](#integração-com-o-suap)
@@ -927,7 +928,7 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
    ```
 
    Só reduzir o `COMPOSE_PROFILES` e rodar `restart`/`up` **não** remove esses containers (o Compose só enxerga os profiles ativos): o `rm -sf` é necessário, e o `configure-node.sh` avisa quando um container de beat/flower segue rodando depois de sair dos profiles. Informe **sempre** `--db-name` e `--db-user` com os valores reais do banco restaurado (os exemplos usam `suap` e `suap_app`; o `env.sample` traz `suap` e `postgres`, que provavelmente não são os seus, e o script só altera o que você informa). Use os mesmos valores nos dois nós. Se o `suap_deploy` foi subido sem o `suap-setup`, defina `SUAP_DEPLOY_DIR` no `.env` do `suap-setup` (`bash docker/prod/suap-deploy.sh dir` mostra o caminho resolvido).
-3. **Mídia compartilhada (obrigatória com dois nós web).** O servidor de mídia é uma VM à parte, **fora** dos nós de aplicação: se a mídia fosse exportada de um dos nós web, a queda dele travaria o outro (o NFS `hard` bloqueia os processos que acessam arquivos). Monte o NFS em `<SUAP_DEPLOY_DIR>/deploy/media` na .50 e na .51, com dono 33:33 (seção 21.1). Enquanto a mídia compartilhada não estiver mapeada, **mantenha só a .50 recebendo tráfego** (não suba o web da .51 nem a inclua nos nós do HAProxy): um upload feito na .51 ficaria só no disco local dela.
+3. **Mídia compartilhada (obrigatória com dois nós web).** O servidor de mídia é uma VM à parte, **fora** dos nós de aplicação: se a mídia fosse exportada de um dos nós web, a queda dele travaria o outro (o NFS `hard` bloqueia os processos que acessam arquivos). Para testar antes de o servidor de mídia existir, veja "NFS temporário em um nó de aplicação" na seção 21.1. Monte o NFS em `<SUAP_DEPLOY_DIR>/deploy/media` na .50 e na .51, com dono 33:33 (seção 21.1). Enquanto a mídia compartilhada não estiver mapeada, **mantenha só a .50 recebendo tráfego** (não suba o web da .51 nem a inclua nos nós do HAProxy): um upload feito na .51 ficaria só no disco local dela.
 4. **.51 — instalar o suap_deploy e aplicar o papel `web-celery-beat`** (web, workers, beat e flower).
 
    **4.1. Instalar o suap_deploy na .51** (se o servidor ainda não o tem; sem isso os comandos abaixo respondem `suap_deploy não encontrado`):
@@ -1498,6 +1499,52 @@ mount -a
 ```
 
 > **Nota:** para a rota nativa, prefira NFSv4 (melhor segurança e firewall simplificado). Para a rota Docker, o suap_deploy recomenda NFSv3 com opções otimizadas (`rsize=65536,wsize=65536,nolock`). Garanta que o ponto de montagem pertence ao UID/GID 33 (`www-data`).
+
+**Ordem de montagem e cópia da mídia existente.** Os containers só enxergam o mount se ele existir **antes** de subirem: faça `down`, monte e depois `up` (ou `restart`). Antes de montar sobre um `deploy/media` que já tem arquivos, copie-os para o compartilhamento (`sudo rsync -aHAX <SUAP_DEPLOY_DIR>/deploy/media/ <destino>/`) e renomeie o diretório local (por exemplo, `media.local-bak`) como backup; o mount esconderia o conteúdo antigo. Confira também os nós que só rodam Celery: eles podem ter gravado arquivos locais (`sudo find <SUAP_DEPLOY_DIR>/deploy/media -type f -not -path '*/tmp/*'`).
+
+**O Docker deve esperar o NFS no boot.** Os containers do `suap_deploy` voltam sozinhos quando o host reinicia. Se subirem antes do mount, gravam no diretório local por baixo dele, e esses arquivos ficam invisíveis para os outros nós. Em cada cliente NFS:
+```bash
+sudo mkdir -p /etc/systemd/system/docker.service.d
+printf '[Unit]\nRequiresMountsFor=%s/deploy/media\n' <SUAP_DEPLOY_DIR> | sudo tee /etc/systemd/system/docker.service.d/wait-media.conf
+sudo systemctl daemon-reload
+systemctl show docker -p RequiresMountsFor
+```
+O custo: se o servidor NFS estiver fora do ar no boot, o Docker do cliente não sobe (nem outros containers do host, como o agent do Arcane). Isso é preferível a subir gravando no lugar errado. Inclua `_netdev` nas opções do `fstab`.
+
+**Teste cruzado.** Grave com o UID 33 em um nó e leia no outro, nos dois sentidos:
+```bash
+# nó A
+sudo -u '#33' sh -c 'echo ok-A > <SUAP_DEPLOY_DIR>/deploy/media/teste-nfs.txt'
+# nó B: deve mostrar ok-A; depois acrescente
+sudo -u '#33' sh -c 'echo ok-B >> <SUAP_DEPLOY_DIR>/deploy/media/teste-nfs.txt'
+# nó A: deve mostrar as duas linhas; depois apague o arquivo
+```
+
+#### NFS temporário em um nó de aplicação
+
+Enquanto o servidor de mídia definitivo não existe, um dos nós de aplicação pode exportar a mídia para os demais. Use só para teste ou homologação: se esse nó cair, os outros travam ao acessar arquivos (NFS `hard`). Prefira o nó com mais disco livre e que já tem a mídia. Exemplo com a 192.0.2.50 servindo a 192.0.2.51, em Debian/Ubuntu e com NFSv4.2 (só a porta 2049/tcp):
+
+1. **No nó servidor (.50).** A mídia vai para uma pasta fora do `suap_deploy`, e o próprio nó a usa por **bind mount** (sem passar pelo NFS):
+   ```bash
+   D=<SUAP_DEPLOY_DIR>
+   bash docker/prod/suap-deploy.sh down
+   sudo apt install -y nfs-kernel-server rsync
+   sudo mkdir -p /srv/suap-media
+   sudo rsync -aHAX $D/deploy/media/ /srv/suap-media/
+   sudo chown -R 33:33 /srv/suap-media
+   sudo mv $D/deploy/media $D/deploy/media.local-bak && sudo mkdir $D/deploy/media
+   echo "/srv/suap-media  $D/deploy/media  none  bind  0  0" | sudo tee -a /etc/fstab
+   sudo systemctl daemon-reload && sudo mount -a
+   findmnt $D/deploy/media                       # SOURCE ...[/srv/suap-media]
+   sudo mkdir -p /etc/exports.d                  # pode não existir
+   echo "/srv/suap-media 192.0.2.51(rw,sync,no_subtree_check,no_root_squash)" | sudo tee /etc/exports.d/suap-media.exports
+   sudo exportfs -ra && sudo exportfs -v
+   bash docker/prod/suap-deploy.sh check && bash docker/prod/suap-deploy.sh up
+   ```
+   Libere a 2049/tcp **só** para os clientes (por exemplo, `sudo ufw allow from 192.0.2.51 to any port 2049 proto tcp`).
+2. **No cliente (.51).** `down`, `sudo apt install -y nfs-common`, renomeie o `deploy/media` local, acrescente ao `fstab` `192.0.2.50:/srv/suap-media  <SUAP_DEPLOY_DIR>/deploy/media  nfs  nfsvers=4.2,rw,hard,_netdev  0  0`, `mount -a`, confira com `findmnt` (tipo `nfs4`) e `stat -c '%u:%g'` (33:33), aplique o `RequiresMountsFor` acima, `check` e `up`.
+3. **Valide** com o teste cruzado e um upload pelo SUAP; só então inclua o cliente nos nós do HAProxy.
+4. **Migrar para o servidor definitivo.** `down` em todos os nós, `sudo rsync -aHAX /srv/suap-media/ <servidor definitivo>`, troque a linha do `fstab` em todos (o nó servidor deixa o bind e passa a montar o NFS como os outros), `mount -a`, `up`, e remova o export (`/etc/exports.d/suap-media.exports` e `exportfs -ra`). Apague os `media.local-bak` depois de alguns dias sem problemas.
 
 ### 21.2. MinIO (alternativa escalável)
 > **Situação do MinIO (verificada em novembro de 2026).** A edição comunitária do MinIO (AGPLv3 desde 2021) **não é mais mantida**: o [repositório oficial](https://github.com/minio/minio) está arquivado e marcado como "no longer maintained", a distribuição passou a ser só código-fonte, e imagens Docker e binários oficiais deixaram de ser publicados em outubro de 2025 ([itsfoss](https://itsfoss.com/news/minio-moves-away-from-open-source/)). O `suap-minio` usa a imagem `quay.io/minio/minio:RELEASE.2024-05-28T17-19-04Z`, anterior a correções de segurança publicadas depois, por exemplo [CVE-2025-62506](https://github.com/advisories/GHSA-jjjj-jwhf-8rgr) (escalada de privilégio em contas de serviço/STS, corrigida em `RELEASE.2025-10-15T17-29-55Z`). A licença AGPLv3, por si só, não impede o uso interno sem modificação (consulte o jurídico da instituição se houver política sobre AGPL); o problema é a falta de correções.
