@@ -9,10 +9,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && cd .. && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 # --- 2. Verificar existência do .env ---
-require_env_file "${SCRIPT_DIR}/.env"
+require_env_file "${SUAP_SETUP_ENV_FILE}"
 
 # --- 3. Carregar variáveis centralizadas ---
-load_env_file "${SCRIPT_DIR}/.env"
+load_env_file "${SUAP_SETUP_ENV_FILE}"
 
 # Definir valores padrão de desenvolvimento (caso não estejam no .env)
 : "${BASE_DIR:=$HOME/Projetos}"
@@ -26,7 +26,7 @@ export DISTRO_TYPE="deb"
 MANIFEST_KEY="suap-dev"
 
 # --- 4. Resolver SUAP_GIT_URL ---
-resolve_git_url "${SCRIPT_DIR}/.env"
+resolve_git_url "${SUAP_SETUP_ENV_FILE}"
 
 # --- 5. Verificar e instalar dependências do sistema ---
 PACKAGES=(

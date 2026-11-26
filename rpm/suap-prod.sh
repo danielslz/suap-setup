@@ -3,10 +3,10 @@ set -u
 
 ### Determinar diretório do projeto
 INSTALL_SCRIPT_DIR=$(cd "$(dirname $(readlink -f $0))" && cd .. && pwd)
-ENV_FILE="$INSTALL_SCRIPT_DIR/.env"
 
 # Source da biblioteca compartilhada
 source "$INSTALL_SCRIPT_DIR/lib/common.sh"
+ENV_FILE="${SUAP_SETUP_ENV_FILE}"
 
 # Verificar existência do .env
 require_env_file "$ENV_FILE"

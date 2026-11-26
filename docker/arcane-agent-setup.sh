@@ -34,8 +34,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 # Carregar .env se existir (opcional)
-if [ -f "${SCRIPT_DIR}/.env" ]; then
-  load_env_file "${SCRIPT_DIR}/.env"
+if [ -f "${SUAP_SETUP_ENV_FILE}" ]; then
+  load_env_file "${SUAP_SETUP_ENV_FILE}"
 fi
 
 check_docker_available

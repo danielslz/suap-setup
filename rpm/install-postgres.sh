@@ -12,8 +12,8 @@ source "${SCRIPT_DIR}/lib/common.sh"
 export DISTRO_TYPE="rpm"
 
 # --- 2. Carregar .env se disponível ---
-if [ -f "${SCRIPT_DIR}/.env" ]; then
-  load_env_file "${SCRIPT_DIR}/.env"
+if [ -f "${SUAP_SETUP_ENV_FILE}" ]; then
+  load_env_file "${SUAP_SETUP_ENV_FILE}"
 fi
 
 # Versão do PostgreSQL (padrão: 16)

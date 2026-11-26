@@ -9,10 +9,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && cd .. && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 # --- 2. Verificar existência do .env ---
-require_env_file "${SCRIPT_DIR}/.env"
+require_env_file "${SUAP_SETUP_ENV_FILE}"
 
 # --- 3. Carregar variáveis centralizadas ---
-load_env_file "${SCRIPT_DIR}/.env"
+load_env_file "${SUAP_SETUP_ENV_FILE}"
 
 # Definir valores padrão de produção (caso não estejam no .env)
 : "${BASE_DIR:=/opt}"
@@ -29,7 +29,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # --- 4. Resolver SUAP_GIT_URL ---
-resolve_git_url "${SCRIPT_DIR}/.env"
+resolve_git_url "${SUAP_SETUP_ENV_FILE}"
 
 # --- 5. Verificar e instalar dependências do sistema ---
 PACKAGES=(
@@ -107,7 +107,7 @@ fi
 
 # --- 8.1. Copiar .env centralizado para BASE_DIR (usado pelos runners do Supervisor) ---
 msg_action "Copiando .env para ${BASE_DIR}/.env (usado pelos runners do Supervisor)"
-cp "${SCRIPT_DIR}/.env" "${BASE_DIR}/.env"
+cp "${SUAP_SETUP_ENV_FILE}" "${BASE_DIR}/.env"
 
 # --- 9. Instalar UV (se não disponível no PATH) ---
 if command -v uv &>/dev/null; then

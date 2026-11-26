@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 # Carregar variáveis do .env centralizado
-load_env_file "${SCRIPT_DIR}/.env"
+load_env_file "${SUAP_SETUP_ENV_FILE}"
 
 # Definir tipo de distribuição
 DISTRO_TYPE="rpm"

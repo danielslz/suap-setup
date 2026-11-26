@@ -19,8 +19,8 @@ SCRIPT_DIR=$(cd "$(dirname "$(readlink -f "$0")")" && cd .. && pwd)
 source "${SCRIPT_DIR}/lib/common.sh"
 
 ### Carregar variáveis centralizadas (se existirem)
-if [ -f "${SCRIPT_DIR}/.env" ]; then
-  load_env_file "${SCRIPT_DIR}/.env"
+if [ -f "${SUAP_SETUP_ENV_FILE}" ]; then
+  load_env_file "${SUAP_SETUP_ENV_FILE}"
 fi
 
 DISTRO_TYPE="rpm"

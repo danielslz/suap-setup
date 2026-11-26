@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+set -u
+# bin/suap-setup - Ponto de entrada único do suap-setup.
+# Roteia subcomandos para os scripts do projeto (ver `suap-setup help`).
+# Compatível com bash 3.2 (sem readlink -f, sem arrays associativos).
+
+# Resolver symlinks em loop (portátil) e definir a raiz física
+_src="${BASH_SOURCE[0]}"
+while [ -L "${_src}" ]; do
+  _dir="$(cd -P "$(dirname "${_src}")" && pwd)"
+  _src="$(readlink "${_src}")"
+  case "${_src}" in
+    /*) ;;
+    *) _src="${_dir}/${_src}" ;;
+  esac
+done
+SUAP_SETUP_ROOT="$(cd -P "$(dirname "${_src}")/.." && pwd)"
+export SUAP_SETUP_ROOT
+
+source "${SUAP_SETUP_ROOT}/lib/common.sh"
+
+usage() {
+  cat << 'EOF_HELP'
+Uso: suap-setup <comando> [argumentos]
+
+Comandos:
+  menu                         Menu interativo (equivale a setup.sh)
+  host <alvo>                  Ambiente no host: dev | prod | update | redis | nginx | postgres
+  docker <alvo>                Via Docker: dev | prod | install
+  stack <nome>                 Stacks Docker: redis | postgres | dockhand | arcane |
+                               arcane-agent | haproxy | minio
+  deploy <comando...>          Gerencia o suap_deploy (docker/prod/suap-deploy.sh)
+  node configure [opções]      Configura um nó (docker/prod/configure-node.sh)
+  revert [grupo] <alvo>        Reverte uma funcionalidade. Grupos: host, docker, stack.
+                               Sem grupo, redis e postgres referem-se ao stack Docker;
+                               use 'revert host redis' para o Redis do host.
+  config path                  Mostra o caminho do .env e do diretório de estado
+  config migrate [opções]      Copia .env e estado de um clone para os caminhos novos
+  self-update [opções]         Atualiza o suap-setup (--version, --check, --rollback)
+  version                      Mostra a versão instalada
+  completion bash              Imprime o script de autocompletar do bash
+  help                         Mostra esta ajuda
+
+Exemplos:
+  suap-setup menu
+  suap-setup deploy update --migrate
+  suap-setup stack haproxy
+  suap-setup revert redis
+EOF_HELP
+}
+
+# fail_unknown(mensagem): erro + ajuda + exit 2
+fail_unknown() {
+  msg_error "$1"
+  usage
+  exit 2
+}
+
+# run_script(caminho-relativo, args...): valida e executa (ou imprime em dry-run)
+run_script() {
+  local rel="$1"
+  shift
+  local script="${SUAP_SETUP_ROOT}/${rel}"
+  if [ ! -f "${script}" ]; then
+    msg_error "Script não encontrado: ${script}"
+    exit 2
+  fi
+  if [ "${SUAP_SETUP_DRY_RUN:-}" = "1" ]; then
+    echo "EXEC: ${script}${*:+ $*}"
+    exit 0
+  fi
+  exec bash "${script}" "$@"
+}
+
+# distro_dir(): ecoa deb|rpm|arch|macos
+distro_dir() {
+  detect_distro
+  echo "${DISTRO_TYPE}"
+}
+
+# host_script(alvo, sufixo): ecoa o caminho relativo do script do host
+host_script() {
+  local target="$1" suffix="$2" name
+  case "${target}" in
+    dev) name="suap-dev" ;;
+    prod) name="suap-prod" ;;
+    update) name="suap-update" ;;
+    redis) name="install-redis" ;;
+    nginx) name="install-nginx" ;;
+    postgres) name="install-postgres" ;;
+    *) fail_unknown "Alvo de host desconhecido: '${target}'." ;;
+  esac
+  echo "$(distro_dir)/${name}${suffix}.sh"
+}
+
+# docker_script(alvo, sufixo)
+docker_script() {
+  local target="$1" suffix="$2"
+  case "${target}" in
+    dev) echo "docker/dev/docker-setup${suffix}.sh" ;;
+    prod) echo "docker/prod/docker-setup${suffix}.sh" ;;
+    install) echo "docker/install-docker${suffix}.sh" ;;
+    *) fail_unknown "Alvo docker desconhecido: '${target}'." ;;
+  esac
+}
+
+# stack_script(nome, tipo): tipo = setup | revert
+stack_script() {
+  local target="$1" kind="$2"
+  case "${target}" in
+    redis | postgres | dockhand | arcane | arcane-agent | haproxy | minio)
+      echo "docker/${target}-${kind}.sh"
+      ;;
+    *) fail_unknown "Stack desconhecido: '${target}'." ;;
+  esac
+}
+
+# cmd_extra(arquivo, args...): self-update e config migrate (lib/cmd-*.sh)
+cmd_extra() {
+  local file="$1"
+  shift
+  if [ ! -f "${SUAP_SETUP_ROOT}/lib/${file}" ]; then
+    msg_error "Comando não disponível nesta instalação."
+    exit 2
+  fi
+  run_script "lib/${file}" "$@"
+}
+
+cmd_revert() {
+  local group="${1:-}" target
+  case "${group}" in
+    "") fail_unknown "Informe o alvo da reversão." ;;
+    host | docker | stack)
+      [ $# -ge 2 ] || fail_unknown "Informe o alvo da reversão em '${group}'."
+      target="$2"
+      shift 2
+      case "${group}" in
+        host) run_script "$(host_script "${target}" "-revert")" "$@" ;;
+        docker) run_script "$(docker_script "${target}" "-revert")" "$@" ;;
+        stack) run_script "$(stack_script "${target}" revert)" "$@" ;;
+      esac
+      ;;
+    redis | postgres | dockhand | arcane | arcane-agent | haproxy | minio)
+      shift
+      run_script "$(stack_script "${group}" revert)" "$@"
+      ;;
+    *) fail_unknown "Alvo de reversão desconhecido: '${group}'." ;;
+  esac
+}
+
+cmd="${1:-help}"
+[ $# -gt 0 ] && shift
+
+case "${cmd}" in
+  help | -h | --help) usage ;;
+  version | --version) echo "suap-setup $(suap_setup_version)" ;;
+  menu) run_script "setup.sh" "$@" ;;
+  host)
+    [ $# -ge 1 ] || fail_unknown "Informe o alvo de host."
+    _t="$1"
+    shift
+    run_script "$(host_script "${_t}" "")" "$@"
+    ;;
+  docker)
+    [ $# -ge 1 ] || fail_unknown "Informe o alvo docker."
+    _t="$1"
+    shift
+    run_script "$(docker_script "${_t}" "")" "$@"
+    ;;
+  stack)
+    [ $# -ge 1 ] || fail_unknown "Informe o nome do stack."
+    _t="$1"
+    shift
+    run_script "$(stack_script "${_t}" setup)" "$@"
+    ;;
+  deploy) run_script "docker/prod/suap-deploy.sh" "$@" ;;
+  node)
+    if [ "${1:-}" = "configure" ]; then
+      shift
+      run_script "docker/prod/configure-node.sh" "$@"
+    else
+      fail_unknown "Uso: suap-setup node configure [opções]."
+    fi
+    ;;
+  revert) cmd_revert "$@" ;;
+  config)
+    case "${1:-}" in
+      path)
+        suap_setup_resolve_env_file
+        suap_setup_resolve_state_dir
+        ;;
+      migrate) cmd_extra "cmd-config.sh" "$@" ;;
+      *) fail_unknown "Uso: suap-setup config {path|migrate}." ;;
+    esac
+    ;;
+  self-update) cmd_extra "cmd-self-update.sh" "$@" ;;
+  completion)
+    if [ "${1:-}" = "bash" ]; then
+      cat "${SUAP_SETUP_ROOT}/completions/suap-setup.bash"
+    else
+      fail_unknown "Uso: suap-setup completion bash."
+    fi
+    ;;
+  *) fail_unknown "Subcomando desconhecido: '${cmd}'." ;;
+esac

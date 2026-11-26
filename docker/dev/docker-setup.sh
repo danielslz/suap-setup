@@ -15,10 +15,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 # 2. Verificar existência do .env
-require_env_file "${SCRIPT_DIR}/.env"
+require_env_file "${SUAP_SETUP_ENV_FILE}"
 
 # 3. Carregar variáveis do .env centralizado
-load_env_file "${SCRIPT_DIR}/.env"
+load_env_file "${SUAP_SETUP_ENV_FILE}"
 
 # 4. Verificar se Docker e Docker Compose estão disponíveis
 check_docker_available
@@ -35,7 +35,7 @@ SUAP_DIR=$(eval echo "${SUAP_DIR}")
 
 # 6. Se SUAP_DIR não existe, clonar o repositório
 if [ ! -d "${SUAP_DIR}" ]; then
-  resolve_git_url "${SCRIPT_DIR}/.env"
+  resolve_git_url "${SUAP_SETUP_ENV_FILE}"
   msg_action "Repositório SUAP não encontrado em ${SUAP_DIR}. Clonando..."
   mkdir -p "$(dirname "${SUAP_DIR}")"
   if ! git clone "${SUAP_GIT_URL}" "${SUAP_DIR}"; then

@@ -520,7 +520,7 @@ os arquivos destino não existem. Adicionalmente:
 
 ```bash
 # Copia .env centralizado para BASE_DIR (usado pelos runners do Supervisor)
-cp "${SCRIPT_DIR}/.env" "${BASE_DIR}/.env"
+cp "${SUAP_SETUP_ENV_FILE}" "${BASE_DIR}/.env"
 ```
 
 #### Etapa 6 — Criação de Virtualenv e Instalação de Dependências

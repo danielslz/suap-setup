@@ -21,6 +21,12 @@ msg_skip() { echo "${YELLOW}>>> $1 ${NO_COLOR}"; }
 # Exibe mensagem em vermelho (erro)
 msg_error() { echo "${RED}ERRO: $1 ${NO_COLOR}"; }
 
+# --- Caminhos de configuração e estado ---
+# shellcheck source=lib/paths.sh
+source "$(dirname "${BASH_SOURCE[0]}")/paths.sh"
+SUAP_SETUP_ENV_FILE="${SUAP_SETUP_ENV_FILE:-$(suap_setup_resolve_env_file)}"
+export SUAP_SETUP_ENV_FILE
+
 # --- Gerenciamento do Arquivo .env ---
 
 # require_env_file(env_path)
@@ -32,7 +38,8 @@ require_env_file() {
 
   if [ ! -f "${env_path}" ]; then
     msg_error "Arquivo .env não encontrado em '${env_path}'."
-    msg_error "Execute o setup.sh primeiro para gerar o arquivo de configuração."
+    msg_error "Execute 'suap-setup menu' (ou 'bash setup.sh') primeiro para gerar o arquivo de configuração."
+    msg_error "Para ver o caminho esperado do .env: suap-setup config path"
     exit 1
   fi
 }
@@ -43,6 +50,7 @@ require_env_file() {
 create_default_env() {
   local env_path="${1}"
 
+  mkdir -p "$(dirname "${env_path}")" 2>/dev/null || true
   cat > "${env_path}" << 'EOF'
 # =============================================================
 # Configuração centralizada do suap-setup
@@ -69,6 +77,7 @@ VENV_DIR=${BASE_DIR}/venv
 SUAP_GIT_URL=
 EOF
 
+  chmod 600 "${env_path}" 2>/dev/null || true
   msg_action "Arquivo .env criado em ${env_path} com valores padrão."
   msg_action "Edite o arquivo conforme seu ambiente antes de prosseguir."
 }
@@ -1059,28 +1068,24 @@ ensure_locale_timezone() {
 #        file_lines, repo_added
 
 # _manifest_state_dir()
-# Resolve o diretório onde os manifestos são gravados:
-#   1. <repo>/.state/ se o repositório for gravável (uso típico em dev)
-#   2. /var/lib/suap-setup/ como fallback (produção/root fora do repo)
+# Resolve o diretório onde os manifestos são gravados (ver lib/paths.sh):
+#   1. SUAP_SETUP_STATE_DIR, diretório de estado novo com dados, ou <repo>/.state legado
+#   2. Instalação por tarball: diretório de estado novo; clone: <repo>/.state
+#   3. Fallback de sistema (/var/lib/suap-setup) se o escolhido não for gravável
 # Ecoa o caminho do diretório (criando-o) e retorna 0; retorna 1 em falha.
 _manifest_state_dir() {
-  local repo_root repo_state
-  repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-  repo_state="${repo_root}/.state"
-
-  # Preferir .state/ no repo quando for possível criar/gravar
-  if mkdir -p "${repo_state}" 2>/dev/null && [ -w "${repo_state}" ]; then
-    echo "${repo_state}"
+  local state_dir sys_state
+  state_dir="$(suap_setup_resolve_state_dir)"
+  if mkdir -p "${state_dir}" 2>/dev/null && [ -w "${state_dir}" ]; then
+    echo "${state_dir}"
     return 0
   fi
-
   # Fallback de sistema
-  local sys_state="/var/lib/suap-setup"
+  sys_state="$(suap_setup_default_state_dir)"
   if mkdir -p "${sys_state}" 2>/dev/null && [ -w "${sys_state}" ]; then
     echo "${sys_state}"
     return 0
   fi
-
   return 1
 }
 
@@ -1592,8 +1597,8 @@ ensure_suap_deploy_dirs() {
 # Mensagem padrão quando o suap_deploy não existe no caminho resolvido, com os dois remédios.
 msg_suap_deploy_missing() {
   msg_error "suap_deploy não encontrado em ${1}."
-  msg_error "Neste servidor ainda não instalado: rode 'bash setup.sh' e escolha 'SUAP prod (suap_deploy)' (grupo Via Docker): ele pergunta o diretório e a URL do repositório, clona o suap_deploy e executa o 'make setup'. Ao final, saia do menu dele (0)."
-  msg_error "Já instalado em outro caminho: defina-o no .env do suap-setup, ex.: echo 'SUAP_DEPLOY_DIR=/opt/suap_deploy' >> .env"
+  msg_error "Neste servidor ainda não instalado: rode 'suap-setup menu' (ou 'bash setup.sh') e escolha 'SUAP prod (suap_deploy)' (grupo Via Docker): ele pergunta o diretório e a URL do repositório, clona o suap_deploy e executa o 'make setup'. Ao final, saia do menu dele (0)."
+  msg_error "Já instalado em outro caminho: defina-o no .env do suap-setup, ex.: echo 'SUAP_DEPLOY_DIR=/opt/suap_deploy' >> \"\$(suap-setup config path | head -n 1)\""
 }
 
 # =============================================================================

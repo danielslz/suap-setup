@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Carregar biblioteca compartilhada
 source "${SCRIPT_DIR}/lib/common.sh"
 
-ENV_FILE="${SCRIPT_DIR}/.env"
+ENV_FILE="${SUAP_SETUP_ENV_FILE}"
 
 # Detectar distribuição Linux (define DISTRO_TYPE e DISTRO_NAME)
 detect_distro

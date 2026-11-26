@@ -31,10 +31,10 @@ export DISTRO_TYPE
 MANIFEST_KEY="suap-dev"
 
 ### 2. Verificar existência do .env
-require_env_file "${SCRIPT_DIR}/.env"
+require_env_file "${SUAP_SETUP_ENV_FILE}"
 
 ### 3. Carregar variáveis centralizadas
-load_env_file "${SCRIPT_DIR}/.env"
+load_env_file "${SUAP_SETUP_ENV_FILE}"
 
 ### Sobrescrever variáveis para ambiente de desenvolvimento
 PYTHON_VERSION="${PYTHON_VERSION:-3.12}"
@@ -43,7 +43,7 @@ SUAP_DIR="${BASE_DIR}/suap"
 VENV_DIR="${SUAP_DIR}/.venv"
 
 ### 3. Garantir SUAP_GIT_URL disponível
-resolve_git_url "${SCRIPT_DIR}/.env"
+resolve_git_url "${SUAP_SETUP_ENV_FILE}"
 
 ### 4. Verificar e instalar dependências do sistema
 PACKAGES=(
