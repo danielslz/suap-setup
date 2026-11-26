@@ -248,7 +248,7 @@ O `suap-setup` é um único ponto de entrada que apenas roteia para os scripts e
 | `version` | imprime `suap-setup <versão>` |
 | `completion bash` | imprime `completions/suap-setup.bash` |
 | `help` | uso |
-`revert redis` e `revert postgres` sem grupo apontam para o stack Docker; o do host seria `revert host redis` / `revert host postgres`, mas nesta versão só existe script de reversão de host para `dev` (`<distro>/suap-dev-revert.sh`); os demais terminam com "Script não encontrado" (código 2). Alvo ou grupo desconhecido sai com código 2, e `config migrate` / `self-update` em uma árvore sem `lib/cmd-*.sh` respondem "Comando não disponível nesta instalação." com código 2.
+`revert redis` e `revert postgres` sem grupo apontam para o stack Docker. No grupo `host` só existe a reversão de `dev` (`<distro>/suap-dev-revert.sh`); outros alvos de host terminam com "Script não encontrado" (código 2). Alvo ou grupo desconhecido sai com código 2, e `config migrate` / `self-update` em uma árvore sem `lib/cmd-*.sh` respondem "Comando não disponível nesta instalação." com código 2.
 ### Resolução de configuração e estado
 `lib/paths.sh` só calcula e ecoa caminhos (sem `source` de outros arquivos). A instalação por tarball é detectada pelo arquivo `VERSION` na raiz; em um clone git ele não existe.
 | Item | Linux | macOS |

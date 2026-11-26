@@ -36,3 +36,7 @@ __pycache__/
 # Arquivos temporários
 *.tmp
 *.bak
+
+# Artefatos de workflows de agentes
+.agents/
+.worktrees/

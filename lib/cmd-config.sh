@@ -101,7 +101,8 @@ _copy_one() {
     return 0
   fi
   _ensure_dir "$(dirname "${dst}")" || return 1
-  _priv "${dst}" cp -R "${src}" "${dst}" || return 1
+  # umask 077: o .env já nasce sem leitura para outros (o chmod abaixo só confirma o modo)
+  (umask 077 && _priv "${dst}" cp -R "${src}" "${dst}") || return 1
   if [ -f "${dst}" ] && [ -n "${mode}" ]; then
     _priv "${dst}" chmod "${mode}" "${dst}"
   fi

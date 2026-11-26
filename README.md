@@ -29,6 +29,8 @@ O caminho principal é o comando único `suap-setup`, instalado a partir de uma 
 ```bash
 curl -fsSL https://github.com/danielslz/suap-setup/releases/latest/download/install.sh | sudo bash
 ```
+O `curl | bash` executa o `install.sh` sem conferência prévia (o tarball que ele baixa é conferido). Para conferir também o instalador, baixe-o e confira com o `SHA256SUMS` da mesma release antes de executar, como na instalação manual abaixo.
+
 O instalador baixa o tarball da última release estável, confere o `SHA256SUMS` e instala em `/opt/suap-setup` (`releases/<versão>`, `current` e `previous`), com o comando em `/usr/local/bin/suap-setup` e a completion do bash em `/usr/share/bash-completion/completions/suap-setup`. Os diretórios de configuração (`/etc/suap-setup`) e de estado (`/var/lib/suap-setup`) são criados com dono `SUDO_USER` e modo 700, para os scripts rodarem sem root quando possível.
 Para fixar uma versão (inclusive pré-release): `curl -fsSL …/install.sh | sudo bash -s -- --version v1.2.3`. Opções do `install.sh`: `--prefix`, `--bin-dir`, `--config-dir`, `--state-dir`, `--completion-dir`, `--version`, `--from-dir`, `--migrate-from`, `--no-completion`.
 ### Instalação manual com verificação
@@ -37,6 +39,7 @@ TAG=v1.2.3   # troque pela versão desejada
 BASE=https://github.com/danielslz/suap-setup/releases/download/${TAG}
 curl -fsSLO "${BASE}/suap-setup-${TAG}.tar.gz"
 curl -fsSLO "${BASE}/SHA256SUMS"
+curl -fsSLO "${BASE}/install.sh"                   # opcional: confere também o instalador
 sha256sum --ignore-missing -c SHA256SUMS          # no macOS: shasum -a 256 -c SHA256SUMS
 tar -xzf "suap-setup-${TAG}.tar.gz"
 sudo bash "suap-setup-${TAG}/install.sh" --from-dir "suap-setup-${TAG}"

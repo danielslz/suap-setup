@@ -32,8 +32,8 @@ Comandos:
   deploy <comando...>          Gerencia o suap_deploy (docker/prod/suap-deploy.sh)
   node configure [opções]      Configura um nó (docker/prod/configure-node.sh)
   revert [grupo] <alvo>        Reverte uma funcionalidade. Grupos: host, docker, stack.
-                               Sem grupo, redis e postgres referem-se ao stack Docker;
-                               use 'revert host redis' para o Redis do host.
+                               Sem grupo, redis e postgres referem-se ao stack Docker.
+                               No grupo host só existe 'revert host dev'.
   config path                  Mostra o caminho do .env e do diretório de estado
   config migrate [opções]      Copia .env e estado de um clone para os caminhos novos
   self-update [opções]         Atualiza o suap-setup (--version, --check, --rollback)
