@@ -1,0 +1,40 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar bats (se disponível; senão o run_tests.sh faz o bootstrap)
+        run: sudo apt-get update && sudo apt-get install -y bats bats-support bats-assert || true
+      - name: Rodar testes
+        run: bash tests/run_tests.sh
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validar tag
+        run: |
+          if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "Tag inválida: $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+      - name: Gerar assets
+        run: bash scripts/build-release.sh "$GITHUB_REF_NAME" --out dist
+      - name: Publicar release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=""
+          case "$GITHUB_REF_NAME" in *-*) flags="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* --generate-notes $flags

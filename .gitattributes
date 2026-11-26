@@ -1,0 +1,7 @@
+# Itens excluídos do tarball de release (git archive)
+tests export-ignore
+.github export-ignore
+.kiro export-ignore
+scripts export-ignore
+.gitattributes export-ignore
+.gitignore export-ignore
