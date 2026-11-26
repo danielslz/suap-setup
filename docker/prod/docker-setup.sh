@@ -147,9 +147,19 @@ echo "  11) Executar setup interativo (make setup)"
 echo "  12) Configurar o papel deste nó (multi-servidor / multi-nó)"
 echo "  13) Verificar a configuração (check)"
 echo "  14) Atualizar: pull/build + restart com drain (update)"
+echo "  15) Aplicar migrações do banco (migrate; mostra o plano antes)"
+echo "  16) Sincronizar permissões (sync_permissions)"
+echo "  17) Copiar a imagem do SUAP para outro nó (image-copy)"
+echo "  18) Subir com a imagem já presente, sem compilar (update --no-build)"
+echo "  19) Limpar arquivos temporários de deploy/media/tmp (clean-tmp)"
+echo "  20) Corrigir o dono de deploy/ (fix-perms)"
+echo "  21) Tirar este nó do balanceador (drain)"
+echo "  22) Devolver este nó ao balanceador (healthy)"
 echo "  0) Sair"
 echo ""
-read -rp "Escolha uma opção [0-14]: " PROD_CHOICE
+read -rp "Escolha uma opção [0-22]: " PROD_CHOICE
+SUAP_DEPLOY_SH="${SCRIPT_DIR}/docker/prod/suap-deploy.sh"
+export SUAP_DEPLOY_DIR
 
 # Em um stack já no ar, 'make up' não dispara o drain protocol (o recreate troca o
 # web com o nó ainda no pool do balanceador). Por isso, com o stack rodando, as
@@ -241,10 +251,50 @@ case "${PROD_CHOICE}" in
     bash "${SCRIPT_DIR}/docker/prod/configure-node.sh"
     ;;
   13)
-    bash "${SCRIPT_DIR}/docker/prod/suap-deploy.sh" check
+    bash "${SUAP_DEPLOY_SH}" check
     ;;
   14)
-    bash "${SCRIPT_DIR}/docker/prod/suap-deploy.sh" update
+    bash "${SUAP_DEPLOY_SH}" update
+    ;;
+  15)
+    bash "${SUAP_DEPLOY_SH}" migrate
+    ;;
+  16)
+    bash "${SUAP_DEPLOY_SH}" sync-permissions
+    ;;
+  17)
+    read -rp "Destino ([usuario@]host): " _dest
+    if [ -z "${_dest}" ]; then
+      msg_error "Nenhum destino informado. Operação cancelada."
+      exit 1
+    fi
+    _ic_opts=()
+    read -rp "Copiar também a imagem do suap-pdf (o destino roda o pdfprinter)? [s/N] " _ans
+    [[ "${_ans}" =~ ^[sS]$ ]] && _ic_opts+=(--with-pdf)
+    bash "${SUAP_DEPLOY_SH}" image-copy "${_dest}" ${_ic_opts[@]+"${_ic_opts[@]}"} --dry-run || exit 1
+    read -rp "Executar a cópia? [s/N] " _ans
+    [[ "${_ans}" =~ ^[sS]$ ]] && bash "${SUAP_DEPLOY_SH}" image-copy "${_dest}" ${_ic_opts[@]+"${_ic_opts[@]}"}
+    ;;
+  18)
+    bash "${SUAP_DEPLOY_SH}" update --no-build
+    ;;
+  19)
+    bash "${SUAP_DEPLOY_SH}" clean-tmp --dry-run || exit 1
+    read -rp "Apagar agora (a) ou instalar o cron diário (c)? [a/c/N] " _ans
+    case "${_ans}" in
+      a|A) bash "${SUAP_DEPLOY_SH}" clean-tmp --yes ;;
+      c|C) bash "${SUAP_DEPLOY_SH}" clean-tmp --install-cron ;;
+      *) msg_skip "Nada foi alterado." ;;
+    esac
+    ;;
+  20)
+    bash "${SUAP_DEPLOY_SH}" fix-perms
+    ;;
+  21)
+    bash "${SUAP_DEPLOY_SH}" drain
+    ;;
+  22)
+    bash "${SUAP_DEPLOY_SH}" healthy
     ;;
   0)
     echo "Saindo..."

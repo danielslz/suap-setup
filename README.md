@@ -349,10 +349,18 @@ O script `docker/prod/docker-setup.sh` delega para o projeto suap_deploy:
 12) Configurar o papel deste nó (multi-servidor / multi-nó)
 13) Verificar a configuração (check)
 14) Atualizar: pull/build + restart com drain (update)
+15) Aplicar migrações do banco (migrate; mostra o plano antes)
+16) Sincronizar permissões (sync_permissions)
+17) Copiar a imagem do SUAP para outro nó (image-copy)
+18) Subir com a imagem já presente, sem compilar (update --no-build)
+19) Limpar arquivos temporários de deploy/media/tmp (clean-tmp)
+20) Corrigir o dono de deploy/ (fix-perms)
+21) Tirar este nó do balanceador (drain)
+22) Devolver este nó ao balanceador (healthy)
 0) Sair
 ```
 
-Com o stack no ar, as opções 1 e 2 usam `make restart` (que dispara o drain) em vez de `make up`.
+Com o stack no ar, as opções 1 e 2 usam `make restart` (que dispara o drain) em vez de `make up`. As opções 12 a 22 chamam o `docker/prod/suap-deploy.sh`. A 17 pergunta o destino, mostra o plano (`--dry-run`) e pede confirmação; a 19 mostra o que seria apagado e pergunta se apaga agora ou instala o cron. Migrações e permissões gravam no banco compartilhado: rode as opções 15 e 16 em **um único** nó.
 
 O suap_deploy suporta dois modos de imagem: **registry** (pull de imagens pré-construídas) e **local** (build a partir do código-fonte clonado em `./src/suap`). Os serviços ativos são controlados pela variável `COMPOSE_PROFILES` no `.env` do suap_deploy. Inclui OWASP ModSecurity CRS como WAF no Nginx e resource limits por container.
 
@@ -379,14 +387,16 @@ bash docker/prod/suap-deploy.sh image-copy op@outro-no   # copia a imagem para o
 bash docker/prod/suap-deploy.sh update --no-build        # sobe com a imagem já presente, sem compilar
 bash docker/prod/suap-deploy.sh status
 bash docker/prod/suap-deploy.sh logs web nginx
-bash docker/prod/suap-deploy.sh exec python manage.py migrate
+bash docker/prod/suap-deploy.sh migrate                 # mostra o plano e aplica após confirmação (UM só nó)
+bash docker/prod/suap-deploy.sh sync-permissions
+bash docker/prod/suap-deploy.sh update --git-pull --migrate --sync-permissions   # tudo em sequência, antes do restart
 bash docker/prod/suap-deploy.sh scale 3               # workers celery
 bash docker/prod/suap-deploy.sh backup
 bash docker/prod/suap-deploy.sh check                 # valida .env, TLS, DB/Redis, profiles, drain
 bash docker/prod/suap-deploy.sh check --db            # + login no banco com o Django do container
 ```
 
-Comandos: `setup`, `build`, `pull`, `up`, `down`, `restart`, `update`, `image-copy`, `status`, `logs`, `scale`, `bash`, `shell`, `exec`, `begin`, `psql`, `backup`, `restore`, `node`, `profiles`, `check`, `fix-perms`, `clean-tmp`, `drain`, `healthy`, `compose`, `dir`. O `fix-perms` corrige o dono de `deploy/` (33:33, `www-data`), cuja troca para outro usuário faz o Celery falhar com `PermissionError` em `deploy/media/tmp`; `up`, `restart` e `update` recusam rodar nesse estado. O `clean-tmp` apaga de `deploy/media/tmp` arquivos com mais de N dias (`--days`, padrão 3; `--dry-run` só conta) e `--install-cron` grava um cron diário em `/etc/cron.d/suap-media-tmp` (com mídia em NFS, em um único nó). O `update` detecta o modo de imagem (local ou registry) e usa `restart`, nunca `up`, em um stack em execução.
+Comandos: `setup`, `build`, `pull`, `up`, `down`, `restart`, `update`, `image-copy`, `status`, `logs`, `scale`, `bash`, `shell`, `exec`, `begin`, `psql`, `backup`, `restore`, `migrate`, `sync-permissions`, `node`, `profiles`, `check`, `fix-perms`, `clean-tmp`, `drain`, `healthy`, `compose`, `dir`. O `fix-perms` corrige o dono de `deploy/` (33:33, `www-data`), cuja troca para outro usuário faz o Celery falhar com `PermissionError` em `deploy/media/tmp`; `up`, `restart` e `update` recusam rodar nesse estado. O `clean-tmp` apaga de `deploy/media/tmp` arquivos com mais de N dias (`--days`, padrão 3; `--dry-run` só conta) e `--install-cron` grava um cron diário em `/etc/cron.d/suap-media-tmp` (com mídia em NFS, em um único nó). O `update` detecta o modo de imagem (local ou registry) e usa `restart`, nunca `up`, em um stack em execução.
 
 #### Multi-servidor e multi-nó: `configure-node.sh`
 

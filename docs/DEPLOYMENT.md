@@ -651,10 +651,18 @@ O script então:
 12) Configurar o papel deste nó (multi-servidor / multi-nó)
 13) Verificar a configuração (check)
 14) Atualizar: pull/build + restart com drain (update)
+15) Aplicar migrações do banco (migrate; mostra o plano antes)
+16) Sincronizar permissões (sync_permissions)
+17) Copiar a imagem do SUAP para outro nó (image-copy)
+18) Subir com a imagem já presente, sem compilar (update --no-build)
+19) Limpar arquivos temporários de deploy/media/tmp (clean-tmp)
+20) Corrigir o dono de deploy/ (fix-perms)
+21) Tirar este nó do balanceador (drain)
+22) Devolver este nó ao balanceador (healthy)
 0) Sair
 ```
 
-> Com o stack já no ar, as opções 1 e 2 usam `make restart` (que dispara o drain) em vez de `make up`.
+> Com o stack já no ar, as opções 1 e 2 usam `make restart` (que dispara o drain) em vez de `make up`. As opções 12 a 22 chamam o `docker/prod/suap-deploy.sh`. A 17 pergunta o destino, mostra o plano (`--dry-run`) e pede confirmação; a 19 mostra o que seria apagado e pergunta se apaga agora ou instala o cron. Migrações e permissões gravam no banco compartilhado: rode as opções 15 e 16 em **um único** nó.
 
 ### 14.2. Configuração do `.env` e primeira subida
 
@@ -1112,13 +1120,15 @@ bash docker/prod/suap-deploy.sh help
 | `up` | `make up` | Sobe respeitando `COMPOSE_PROFILES` |
 | `down` | `make down` | Dispara o drain automático |
 | `restart` | `make restart` | `down` + `up` |
-| `update [--git-pull\|--no-build]` | build/pull + `make restart` (ou `make up` se parado) | Detecta o modo pela `SUAP_IMAGE`; `--git-pull` atualiza `src/suap` e `src/suap-pdf` |
+| `update [--git-pull\|--no-build] [--migrate] [--sync-permissions]` | build/pull + `make restart` (ou `make up` se parado) | Detecta o modo pela `SUAP_IMAGE`; `--git-pull` atualiza `src/suap` e `src/suap-pdf`; `--migrate`/`--sync-permissions` rodam antes do restart (seção 17) |
 | `status` | `make status` | |
 | `logs [serviço...]` | `make logs SERVICES="..."` | Ex.: `logs web nginx` |
 | `image-copy <[usuario@]host>` | `docker save \| gzip \| ssh \| docker load` | Copia a imagem do SUAP para outro nó (modo local em vários nós; seção 17.2) |
 | `scale <n>` | `docker compose up -d --scale celery=<n>` | Só workers celery |
 | `bash` / `shell` | `make bash` / `make shell` | Shell no web / Django shell |
-| `exec <cmd...>` | `make exec COMMAND="..."` | Ex.: `exec python manage.py migrate` |
+| `exec <cmd...>` | `make exec COMMAND="..."` | Ex.: `exec python manage.py sync_permissions_ifb` (customizações locais) |
+| `migrate [--plan] [--yes]` | `docker compose run --rm -T --no-deps web python manage.py migrate` | Mostra o plano; aplica após confirmação. **Um só nó** |
+| `sync-permissions [--yes]` | `... manage.py sync_permissions` | Após confirmação. **Um só nó** |
 | `begin` | `make begin` | `create_db` + `carga_inicial` (banco novo) |
 | `psql` | `make psql` | Usa o serviço `db` do compose; com banco externo, o FAQ do `suap_deploy` recomenda o `psql` do próprio host |
 | `backup` | `make backup` | Dump em `deploy/backup/` |
@@ -1182,12 +1192,21 @@ docker compose pull && make restart
 (cd src/suap && git pull) && make build && make restart
 ```
 
+**Migrações e permissões.** Nem o `update` nem o `make` do `suap_deploy` rodam `migrate` ou `sync_permissions`; o `collectstatic` roda no build da imagem. Rode-os quando a versão nova precisar, em **um único** nó:
+```bash
+bash docker/prod/suap-deploy.sh migrate --plan        # só lista as pendentes
+bash docker/prod/suap-deploy.sh migrate               # mostra o plano e aplica após confirmação
+bash docker/prod/suap-deploy.sh sync-permissions      # após confirmação
+bash docker/prod/suap-deploy.sh update --migrate --sync-permissions   # build/pull, depois migrate e sync_permissions, e só então o restart
+```
+Os comandos usam um container descartável do `web` (`docker compose run --rm -T --no-deps web`), com a imagem e o `src/suap` atuais do nó; não dependem do `web` estar no ar. No `update`, eles rodam **antes** do restart: se falharem, o restart não acontece e o nó segue com a versão anterior. Entre a migração e o restart, a versão anterior roda sobre o banco já migrado; em versões com migrações que removem ou renomeiam colunas usadas, prefira uma janela de manutenção. Sem terminal, `migrate` e `sync-permissions` exigem `--yes`. O `manage.py sync` do SUAP roda essas e outras tarefas (`loaddata initial_data`, `collectstatic`, `carregar_apis` e sincronizações); o `suap-setup` não o chama. Comandos de customização local (por exemplo, `sync_permissions_ifb`) ficam a cargo do `exec`: `bash docker/prod/suap-deploy.sh exec python manage.py <comando>`.
+
 > **Nunca use `make up` para atualizar um stack em execução.** O recreate do `up -d` não dispara o `pre_stop` do Nginx: o web é trocado com o nó ainda no pool do balanceador e o usuário vê `502`. O `restart` faz o `down` (com drain) e depois o `up`.
 
 ### 17.1. Rolling update em vários nós
 
 1. Valide a nova versão em **homologação**.
-2. Se a versão tiver migrações de banco, execute-as **uma única vez**, a partir de um nó, antes de reiniciar os demais: `bash docker/prod/suap-deploy.sh exec python manage.py migrate`.
+2. Se a versão tiver migrações de banco ou permissões novas, rode-as **uma única vez**, a partir de um nó, antes de reiniciar os demais: `bash docker/prod/suap-deploy.sh migrate` e `bash docker/prod/suap-deploy.sh sync-permissions` (ou `update --migrate --sync-permissions` no primeiro nó).
 3. Atualize **um nó de cada vez**: `bash docker/prod/suap-deploy.sh update`. O drain retira o nó do pool, termina as requisições em voo e o devolve ao subir.
 4. Comece pelo nó `async-primary` e pelos `async` (ou pelos `app`, conforme a política da instituição) e confirme com `status` e `logs` antes de passar ao próximo.
 5. Para voltar de modo (`local` ↔ `registry`), reexecute o `make setup`; ele ajusta `SUAP_IMAGE` e o `docker-compose.override.yml`.
@@ -1195,7 +1214,7 @@ docker compose pull && make restart
 **Modo `local` em dois ou mais nós (exemplo: .50 compila, .51 recebe a imagem).** No modo `local`, `update` recompila a imagem; por isso, só **um** nó (a origem) roda `update`/`--git-pull`, e os demais recebem a imagem pronta (seção 17.2). Exemplo com a .50 como origem e a .51 como destino:
 
 1. **Origem (.50).** Confira que `src/suap` não tem alterações de código (`git -C <SUAP_DEPLOY_DIR>/src/suap status --short`; mudanças só em `uv.lock`/`pyproject.toml` não afetam a execução) e atualize: `bash docker/prod/suap-deploy.sh update --git-pull`. Anote o commit: `git -C <SUAP_DEPLOY_DIR>/src/suap rev-parse --short HEAD`.
-2. **Migrações (se houver).** Rode uma única vez, a partir da origem: `bash docker/prod/suap-deploy.sh exec python manage.py migrate`.
+2. **Migrações e permissões (se houver).** Rode uma única vez, a partir da origem: `bash docker/prod/suap-deploy.sh migrate` (mostra o plano antes) e, se a versão trouxer permissões novas, `bash docker/prod/suap-deploy.sh sync-permissions`. No passo 1, `update --git-pull --migrate --sync-permissions` faz tudo em sequência. **Não** use essas opções no destino (passo 4): o banco é o mesmo.
 3. **Copie a imagem.** Ainda na origem: `bash docker/prod/suap-deploy.sh image-copy <usuario>@192.0.2.51 --dry-run` e, se o plano estiver certo, repita sem `--dry-run` (acrescente `--with-pdf` se o destino roda o pdfprinter).
 4. **Destino (.51).** Alinhe o código e suba sem compilar: `git -C <SUAP_DEPLOY_DIR>/src/suap fetch && git -C <SUAP_DEPLOY_DIR>/src/suap checkout <commit>` e `bash docker/prod/suap-deploy.sh update --no-build`. Não use `update` sem `--no-build` nem `build` no destino.
 5. **Confirme em cada nó:** `bash docker/prod/suap-deploy.sh check` e `status`; o ID da imagem (`docker image ls`) e o commit de `src/suap` devem ser iguais nos dois nós.

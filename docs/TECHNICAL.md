@@ -1058,6 +1058,14 @@ O script apresenta um menu de gerenciamento:
 12) Configurar o papel deste nó (multi-servidor / multi-nó)
 13) Verificar a configuração (check)
 14) Atualizar: pull/build + restart com drain (update)
+15) Aplicar migrações do banco (migrate; mostra o plano antes)
+16) Sincronizar permissões (sync_permissions)
+17) Copiar a imagem do SUAP para outro nó (image-copy)
+18) Subir com a imagem já presente, sem compilar (update --no-build)
+19) Limpar arquivos temporários de deploy/media/tmp (clean-tmp)
+20) Corrigir o dono de deploy/ (fix-perms)
+21) Tirar este nó do balanceador (drain)
+22) Devolver este nó ao balanceador (healthy)
 0) Sair
 ```
 

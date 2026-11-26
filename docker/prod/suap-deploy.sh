@@ -34,12 +34,14 @@ Ciclo de vida
   up                    Sobe os serviços (respeita COMPOSE_PROFILES)
   down                  Para os serviços (dispara o drain automático)
   restart               down + up (caminho de deploy sem downtime)
-  update [--git-pull|--no-build]
+  update [--git-pull|--no-build] [--migrate] [--sync-permissions]
                         Atualiza: build (local) ou pull (registry) e depois
                         restart se o stack estiver no ar, ou up se estiver parado.
                         --git-pull atualiza src/suap e src/suap-pdf antes (modo local)
                         --no-build  não compila nem baixa: usa a imagem que já está neste nó
                         (ex.: copiada de outro nó com image-copy) e só reinicia
+                        --migrate / --sync-permissions rodam migrate e sync_permissions
+                        depois do build/pull e ANTES do restart (use em UM só nó)
   image-copy <[usuario@]host> [--with-pdf] [--with-ai] [--dry-run]
                         Copia a imagem do SUAP deste nó para outro (docker save | ssh | docker load).
                         Para modo local em vários nós: compile em UM nó e distribua
@@ -57,6 +59,10 @@ Operação no container web
   exec <comando...>     Comando arbitrário (ex.: exec python manage.py migrate)
 
 Banco
+  migrate [--plan] [--yes]
+                        Mostra as migrações pendentes e aplica após confirmação (UM só nó)
+  sync-permissions [--yes]
+                        manage.py sync_permissions (UM só nó). Customizações: use exec
   begin                 create_db + carga_inicial (banco novo)
   psql                  psql com as credenciais do .env
   backup                Dump em deploy/backup/
@@ -195,11 +201,13 @@ _infer_role() {
 
 # --- Comandos ---
 cmd_update() {
-  local git_pull=0 no_build=0 arg
+  local git_pull=0 no_build=0 do_migrate=0 do_perms=0 arg
   for arg in "$@"; do
     case "${arg}" in
       --git-pull) git_pull=1 ;;
       --no-build) no_build=1 ;;
+      --migrate) do_migrate=1 ;;
+      --sync-permissions) do_perms=1 ;;
       *) msg_error "Opção desconhecida para update: ${arg}"; exit 1 ;;
     esac
   done
@@ -242,6 +250,18 @@ cmd_update() {
     _dc pull || exit 1
   fi
 
+  # Migrações e permissões ANTES do restart: se falharem, o nó continua com a
+  # versão anterior no ar. Com o código novo já na imagem/src, rodam num container
+  # descartável. Em cluster, use essas opções só no primeiro nó atualizado.
+  if [ "${do_migrate}" = "1" ] || [ "${do_perms}" = "1" ]; then
+    [ "${no_build}" = "1" ] && msg_skip "--migrate/--sync-permissions com --no-build: confirme que nenhum outro nó já rodou (o banco é compartilhado)."
+  fi
+  if [ "${do_migrate}" = "1" ]; then
+    cmd_migrate --yes || { msg_error "Migrações falharam: o restart NÃO foi feito; o stack segue com a versão anterior."; exit 1; }
+  fi
+  if [ "${do_perms}" = "1" ]; then
+    cmd_sync_permissions --yes || { msg_error "sync_permissions falhou: o restart NÃO foi feito."; exit 1; }
+  fi
   if _stack_running; then
     msg_action "Stack em execução: restart (down com drain + up)..."
     _mk restart || exit 1
@@ -478,6 +498,73 @@ cmd_healthy() {
   bash "${DEPLOY_DIR}/contrib/multi-node/healthy.sh"
 }
 
+# --- migrate / sync-permissions ---
+# Rodam num container descartável do web (compose run --rm -T --no-deps): usam a
+# imagem e o src/suap atuais do nó e não dependem do web no ar. Gravam no banco
+# compartilhado: rode em UM único nó do cluster.
+_manage() {
+  _dc run --rm -T --no-deps web python manage.py "$@"
+}
+_confirm() {
+  local prompt="$1" ans
+  if [ ! -t 0 ]; then
+    msg_error "Sem terminal: use --yes para confirmar."
+    return 1
+  fi
+  read -rp "${prompt} [s/N] " ans
+  [[ "${ans}" =~ ^[sS]$ ]]
+}
+cmd_migrate() {
+  local yes="false" plan_only="false" arg
+  for arg in "$@"; do
+    case "${arg}" in
+      --yes|-y) yes="true" ;;
+      --plan) plan_only="true" ;;
+      -h|--help) echo "Uso: bash docker/prod/suap-deploy.sh migrate [--plan] [--yes]"; return 0 ;;
+      *) msg_error "Opção desconhecida para migrate: ${arg}"; return 1 ;;
+    esac
+  done
+  _require_deploy_dir; _require_docker; _require_env
+  msg_action "Migrações pendentes (manage.py migrate --plan):"
+  local plan rc
+  plan="$(_manage migrate --plan 2>&1)"; rc=$?
+  printf '%s\n' "${plan}" | sed 's/^/  /'
+  if [ "${rc}" -ne 0 ]; then
+    msg_error "Falha ao listar as migrações (código ${rc}). Confira a conexão com o banco: check --db"
+    return 1
+  fi
+  if printf '%s' "${plan}" | grep -qi "No planned migration operations"; then
+    msg_skip "Nenhuma migração pendente."
+    return 0
+  fi
+  [ "${plan_only}" = "true" ] && { echo "(--plan: nada foi aplicado)"; return 0; }
+  echo "  Rode em UM único nó: o banco é compartilhado pelo cluster. Faça backup antes de migrações grandes."
+  if [ "${yes}" != "true" ]; then
+    _confirm "Aplicar as migrações acima?" || { msg_skip "Cancelado."; return 0; }
+  fi
+  msg_action "Aplicando migrações (manage.py migrate --noinput)..."
+  _manage migrate --noinput || { msg_error "migrate falhou."; return 1; }
+  msg_action "Migrações aplicadas."
+}
+cmd_sync_permissions() {
+  local yes="false" arg
+  for arg in "$@"; do
+    case "${arg}" in
+      --yes|-y) yes="true" ;;
+      -h|--help) echo "Uso: bash docker/prod/suap-deploy.sh sync-permissions [--yes]"; return 0 ;;
+      *) msg_error "Opção desconhecida para sync-permissions: ${arg}"; return 1 ;;
+    esac
+  done
+  _require_deploy_dir; _require_docker; _require_env
+  echo "  manage.py sync_permissions recria grupos e permissões a partir do código do SUAP."
+  echo "  Rode em UM único nó. Customizações locais (ex.: sync_permissions_ifb) ficam a cargo do exec."
+  if [ "${yes}" != "true" ]; then
+    _confirm "Rodar sync_permissions agora?" || { msg_skip "Cancelado."; return 0; }
+  fi
+  msg_action "Executando manage.py sync_permissions..."
+  _manage sync_permissions || { msg_error "sync_permissions falhou."; return 1; }
+  msg_action "Permissões sincronizadas."
+}
 # --- clean-tmp ---
 # Limpa deploy/media/tmp (TEMP_DIR e FILE_UPLOAD_TEMP_DIR do SUAP). Só apaga DENTRO
 # dessa pasta: arquivos mais antigos que N dias e, depois, pastas vazias.
@@ -974,6 +1061,8 @@ case "${cmd}" in
   image-copy) cmd_image_copy "$@" ;;
   fix-perms) _require_deploy_dir; ensure_suap_deploy_dirs "${DEPLOY_DIR}" ;;
   clean-tmp) cmd_clean_tmp "$@" ;;
+  migrate)  cmd_migrate "$@" ;;
+  sync-permissions) cmd_sync_permissions "$@" ;;
   scale)    cmd_scale "$@" ;;
   bash)     _require_deploy_dir; _require_make; _require_docker; _mk bash ;;
   shell)    _require_deploy_dir; _require_make; _require_docker; _mk shell ;;
