@@ -3,7 +3,9 @@
 O suap-setup **não mantém Dockerfiles próprios**. Em vez disso, os scripts
 delegam para os projetos oficiais:
 
-## Desenvolvimento (`docker/dev/docker-setup.sh`)
+Os scripts são acionados pelo comando `suap-setup` (`suap-setup docker …`, `suap-setup stack …`, `suap-setup deploy …`). Os caminhos `bash docker/…` citados abaixo continuam funcionando.
+
+## Desenvolvimento (`suap-setup docker dev` / `docker/dev/docker-setup.sh`)
 
 Utiliza o `docker-compose.dev.yml` do repositório **suap** (código-fonte da
 aplicação). Isso garante que:
@@ -22,7 +24,7 @@ aplicação). Isso garante que:
 - `SUAP_GIT_URL` - URL git do repositório (para clone automático)
 - `SUAP_IMAGE` - URL da imagem no registry
 
-## Produção (`docker/prod/docker-setup.sh`)
+## Produção (`suap-setup docker prod` / `docker/prod/docker-setup.sh`)
 
 Utiliza o projeto **suap_deploy** que é o orquestrador oficial de produção.
 O suap_deploy:
@@ -41,9 +43,9 @@ O suap_deploy:
 4. Delega para os targets do Makefile
 
 **Atalhos (`docker/prod/`):**
-- `suap-deploy.sh <comando>`: opera o suap_deploy sem trocar de pasta (build, up, down, restart, `update`,
+- `suap-setup deploy <comando>` (ou `bash docker/prod/suap-deploy.sh <comando>`): opera o suap_deploy sem trocar de pasta (build, up, down, restart, `update`,
   logs, scale, exec, backup, restore, `check`…). Camada fina: delega para `make -C` e `docker compose`.
-- `configure-node.sh`: define o papel do nó (`single`, `app`, `async-primary`, `async`, `homolog`) e as
+- `suap-setup node configure` (ou `bash docker/prod/configure-node.sh`): define o papel do nó (`single`, `app`, `async-primary`, `async`, `homolog`) e as
   conexões de DB/Redis/SSL/S3 no `.env` do suap_deploy, com backup e `--dry-run`.
 
 **Variáveis necessárias no `.env` do suap-setup:**
@@ -60,13 +62,13 @@ Os utilitários independentes abaixo usam Docker Compose. Cada um cria
 (`stack_init`, `stack_env_load`, `stack_env_write`, `stack_compose`,
 `stack_adopt_legacy`, `stack_revert`) ficam em `lib/common.sh`.
 
-## Dockhand (`docker/dockhand-setup.sh`)
+## Dockhand (`suap-setup stack dockhand` / `docker/dockhand-setup.sh`)
 
 Instala e inicia o Dockhand (interface web para gerenciamento Docker).
 Este é um utilitário independente e não depende dos projetos acima.
 Reversão em `docker/dockhand-revert.sh`.
 
-## Arcane (`docker/arcane-setup.sh`)
+## Arcane (`suap-setup stack arcane` / `docker/arcane-setup.sh`)
 
 Utilitário independente, alternativa livre (BSD-3-Clause) ao Dockhand. Sobe o
 container `arcane` (`ghcr.io/getarcaneapp/manager`) na porta `3552`, com volume
@@ -74,7 +76,7 @@ container `arcane` (`ghcr.io/getarcaneapp/manager`) na porta `3552`, com volume
 gerada e guardada no `.env` do stack; faça backup dela. Reversão em
 `docker/arcane-revert.sh`.
 
-## Arcane Agent (`docker/arcane-agent-setup.sh`)
+## Arcane Agent (`suap-setup stack arcane-agent` / `docker/arcane-agent-setup.sh`)
 
 Utilitário independente para hosts **remotos**: sobe o `arcane-agent` (`ghcr.io/getarcaneapp/agent`) em
 modo Edge (padrão; o agent conecta de saída no Manager, sem porta publicada) ou Direct (`ARCANE_AGENT_MODE=direct`,
@@ -82,7 +84,7 @@ porta `3553`, obsoleto no Arcane), para o Manager gerenciar o Docker daquele hos
 gerado ao criar o environment no Manager (`ARCANE_AGENT_TOKEN`, `ARCANE_MANAGER_URL`). A telemetria do
 Arcane fica desligada por padrão (`ARCANE_ANALYTICS_DISABLED=true`). Reversão em `docker/arcane-agent-revert.sh`.
 
-## HAProxy (`docker/haproxy-setup.sh`)
+## HAProxy (`suap-setup stack haproxy` / `docker/haproxy-setup.sh`)
 
 Utilitário independente: balanceador (container `suap-haproxy`, `network_mode: host`) para os nós
 `app` do suap_deploy. Termina o TLS (443), redireciona 80 e faz health check em `/ht/` (só `200`
@@ -90,7 +92,7 @@ Utilitário independente: balanceador (container `suap-haproxy`, `network_mode: 
 `HAPROXY_SERVER_NAME`, `HAPROXY_TLS` e portas. Rode em servidor sem o Nginx do suap_deploy.
 Reversão em `docker/haproxy-revert.sh`.
 
-## MinIO (`docker/minio-setup.sh`)
+## MinIO (`suap-setup stack minio` / `docker/minio-setup.sh`)
 
 > A edição comunitária do MinIO não é mais mantida upstream; veja o aviso em `docs/DEPLOYMENT.md`, seção 21.2.
 
@@ -120,13 +122,13 @@ S3-compatível via Docker. O suap-minio:
    - `AWS_ACCESS_KEY_ID=<access-key>`
    - `AWS_SECRET_ACCESS_KEY=<secret-key>`
 
-## Redis (`docker/redis-setup.sh`)
+## Redis (`suap-setup stack redis` / `docker/redis-setup.sh`)
 
 Utilitário independente: sobe o container `suap-redis` (`redis:7-alpine`) com a
 porta `6379` exposta em `0.0.0.0` e senha obrigatória. Dados no volume
 `suap-redis-data`. Reversão em `docker/redis-revert.sh`.
 
-## PostgreSQL (`docker/postgres-setup.sh`)
+## PostgreSQL (`suap-setup stack postgres` / `docker/postgres-setup.sh`)
 
 Utilitário independente: sobe o container `suap-postgres` (`postgres:<versão>`)
 com a porta `5432` exposta, senha obrigatória e `bytea_output=escape`. Dados no
@@ -134,7 +136,7 @@ volume `suap-postgres-data`. Reversão em `docker/postgres-revert.sh`.
 
 ## Reversões
 
-Cada setup Docker tem um `*-revert.sh` correspondente (acionado por `R` no `setup.sh`):
+Cada setup Docker tem um `*-revert.sh` correspondente (acionado por `R` no menu ou por `suap-setup revert <alvo>`):
 `install-docker-revert.sh`, `dockhand-revert.sh`, `arcane-revert.sh`, `arcane-agent-revert.sh`, `haproxy-revert.sh`, `minio-revert.sh`, `redis-revert.sh`,
 `postgres-revert.sh`, `dev/docker-setup-revert.sh` e `prod/docker-setup-revert.sh`.
 Todos usam `confirm_destructive` para volumes, imagens e diretórios, e aceitam

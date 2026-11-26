@@ -5,6 +5,7 @@
 1. [Visão Geral da Arquitetura](#visão-geral-da-arquitetura)
 2. [Biblioteca Compartilhada (lib/common.sh)](#biblioteca-compartilhada)
 3. [Wrapper Principal (setup.sh)](#wrapper-principal)
+   - [Comando `suap-setup` (dispatcher), caminhos e releases](#comando-suap-setup-dispatcher-caminhos-e-releases)
 4. [Ambiente de Desenvolvimento — Nativo](#ambiente-de-desenvolvimento-nativo)
 5. [Ambiente de Produção — Nativo](#ambiente-de-produção-nativo)
 6. [Instalação de Redis](#instalação-de-redis)
@@ -168,7 +169,7 @@ NO_COLOR=$(tput sgr0)
 
 **Arquivo:** `setup.sh`
 
-Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
+Menu interativo do projeto, que automatiza toda a cadeia de configuração. É o que `suap-setup menu` executa; `bash setup.sh` num clone git continua válido. Os demais comandos do `suap-setup` (rotas para cada script) estão na seção seguinte.
 
 ### Fluxo de Execução Detalhado
 
@@ -223,6 +224,90 @@ Ponto de entrada único do projeto. Automatiza toda a cadeia de configuração.
 | 7 | 11 | `docker/redis-setup.sh` |
 | 8 | 12 | `docker/postgres-setup.sh` |
 
+---
+
+## Comando `suap-setup` (dispatcher), caminhos e releases
+**Arquivos:** `bin/suap-setup`, `lib/paths.sh`, `lib/release.sh`, `lib/cmd-self-update.sh`, `lib/cmd-config.sh`, `install.sh`, `completions/suap-setup.bash`, `scripts/build-release.sh`, `.github/workflows/release.yml`
+O `suap-setup` é um único ponto de entrada que apenas roteia para os scripts existentes; nenhum deles mudou de comportamento. `bash setup.sh`, `bash docker/prod/suap-deploy.sh` e os demais scripts continuam válidos em um clone git. O dispatcher resolve a raiz física (seguindo symlinks, compatível com bash 3.2), exporta `SUAP_SETUP_ROOT`, carrega `lib/common.sh` e executa o alvo com `exec bash <script> "$@"`.
+### Tabela de rotas
+| Comando | Script executado |
+|---|---|
+| `menu` | `setup.sh` |
+| `host dev\|prod\|update\|redis\|nginx\|postgres` | `<deb\|rpm\|arch\|macos>/suap-dev.sh`, `suap-prod.sh`, `suap-update.sh`, `install-redis.sh`, `install-nginx.sh`, `install-postgres.sh` (a pasta vem de `detect_distro`) |
+| `docker dev\|prod\|install` | `docker/dev/docker-setup.sh`, `docker/prod/docker-setup.sh`, `docker/install-docker.sh` |
+| `stack redis\|postgres\|dockhand\|arcane\|arcane-agent\|haproxy\|minio` | `docker/<nome>-setup.sh` |
+| `deploy <comando…>` | `docker/prod/suap-deploy.sh` |
+| `node configure [opções]` | `docker/prod/configure-node.sh` |
+| `revert host <alvo>` | `<distro>/<script>-revert.sh` |
+| `revert docker <alvo>` | `docker/dev/docker-setup-revert.sh`, `docker/prod/docker-setup-revert.sh`, `docker/install-docker-revert.sh` |
+| `revert stack <nome>` | `docker/<nome>-revert.sh` |
+| `revert <nome>` | `docker/<nome>-revert.sh` para `redis`, `postgres`, `dockhand`, `arcane`, `arcane-agent`, `haproxy`, `minio` |
+| `config path` | imprime o `.env` e o diretório de estado resolvidos (2 linhas) |
+| `config migrate …` | `lib/cmd-config.sh migrate …` |
+| `self-update …` | `lib/cmd-self-update.sh …` |
+| `version` | imprime `suap-setup <versão>` |
+| `completion bash` | imprime `completions/suap-setup.bash` |
+| `help` | uso |
+`revert redis` e `revert postgres` sem grupo apontam para o stack Docker; o do host seria `revert host redis` / `revert host postgres`, mas nesta versão só existe script de reversão de host para `dev` (`<distro>/suap-dev-revert.sh`); os demais terminam com "Script não encontrado" (código 2). Alvo ou grupo desconhecido sai com código 2, e `config migrate` / `self-update` em uma árvore sem `lib/cmd-*.sh` respondem "Comando não disponível nesta instalação." com código 2.
+### Resolução de configuração e estado
+`lib/paths.sh` só calcula e ecoa caminhos (sem `source` de outros arquivos). A instalação por tarball é detectada pelo arquivo `VERSION` na raiz; em um clone git ele não existe.
+| Item | Linux | macOS |
+|---|---|---|
+| `.env` (config dir) | `/etc/suap-setup/.env` | `~/.config/suap-setup/.env` |
+| Estado | `/var/lib/suap-setup` | `~/.local/state/suap-setup` |
+Precedência do `.env`: (1) `SUAP_SETUP_ENV_FILE`; (2) `${SUAP_SETUP_CONFIG_DIR}/.env`, se existir; (3) `<raiz>/.env` do clone, se existir; (4) destino de criação: instalação por tarball usa o diretório de configuração, clone usa `<raiz>/.env`. O `lib/common.sh` exporta `SUAP_SETUP_ENV_FILE` ao ser carregado, e os scripts passaram a usar `"${SUAP_SETUP_ENV_FILE}"` no lugar de `"${SCRIPT_DIR}/.env"`. `create_default_env` cria o diretório pai e aplica `chmod 600`.
+Precedência do estado (`_manifest_state_dir`): (1) `SUAP_SETUP_STATE_DIR`; (2) diretório de estado novo, se já tiver manifestos; (3) `<raiz>/.state` do clone, se existir e tiver arquivos; (4) criação: tarball usa o diretório novo, clone usa `<raiz>/.state` com fallback para o diretório padrão. Depois de `config migrate`, o diretório novo vence e o clone passa a enxergar os mesmos dados.
+`config migrate [--from DIR] [--dry-run]` copia `.env` e `.state/*` para os caminhos novos, nunca sobrescreve um destino existente, aplica modo 600 ao `.env` e ao `arcane.key` e não altera o clone. Sem `--from`, só procura `~/suap-setup` (e o do `SUDO_USER`) e sugere. `install.sh --migrate-from DIR` chama o mesmo comando (com `env -u SUAP_SETUP_ENV_FILE`, para o filho resolver o destino novo).
+### Layout de `/opt/suap-setup` e instalação
+```
+/opt/suap-setup/
+├── releases/
+│   ├── v1.2.2/
+│   └── v1.2.3/            # raiz com bin/, lib/, VERSION, ...
+├── current -> releases/v1.2.3     # symlink relativo
+└── previous                        # arquivo com a tag anterior (ex.: v1.2.2)
+/usr/local/bin/suap-setup -> /opt/suap-setup/current/bin/suap-setup
+/usr/share/bash-completion/completions/suap-setup -> /opt/suap-setup/current/completions/suap-setup.bash
+```
+No macOS os mesmos elementos ficam em `~/.local/share/suap-setup` e `~/.local/bin/suap-setup`, sem `sudo` e sem completion automática. `install.sh` baixa e verifica como usuário comum e só usa `sudo` para escrever no prefixo quando ele não é gravável. Cria os diretórios de configuração e estado com dono `SUDO_USER` e modo 700. Mantém as 3 releases mais recentes, sem nunca remover `current` nem `previous`. Opções: `--prefix`, `--bin-dir`, `--config-dir`, `--state-dir`, `--completion-dir`, `--version`, `--from-dir`, `--migrate-from`, `--no-completion`.
+### Fluxo de release
+```
+git tag vX.Y.Z && git push origin vX.Y.Z
+  → workflow release.yml (tags v[0-9]+.[0-9]+.[0-9]+*)
+      1. job test: bash tests/run_tests.sh
+      2. job release: valida a tag (^vX.Y.Z(-sufixo)?$)
+      3. scripts/build-release.sh <tag> --out dist
+      4. gh release create <tag> dist/* (--prerelease se a tag tiver "-")
+```
+Assets de cada release: `suap-setup-vX.Y.Z.tar.gz` (diretório raiz `suap-setup-vX.Y.Z/`, com `VERSION` sem o `v`), `install.sh` avulso (para `curl | sudo bash`) e `SHA256SUMS`. O tarball sai de `git archive` e de `.gitattributes` (`export-ignore` para `tests/`, `.github/`, `.kiro/`, `scripts/`, `.gitattributes` e `.gitignore`), é reprodutível (`--sort=name --owner=0 --group=0 --numeric-owner --mtime`) e usa `shasum -a 256` quando não há `sha256sum`. Limite assumido: o `SHA256SUMS` vem do mesmo host do tarball, então protege contra corrupção e truncamento, não contra uma release comprometida; assinatura (minisign/cosign) está fora do escopo.
+### `self-update` e rollback
+| Opção | Efeito |
+|---|---|
+| (nenhuma) | instala a última release **estável** |
+| `--check` | só informa a versão instalada e a disponível |
+| `--version vX.Y.Z` | fixa uma versão (aceita pré-release e downgrade) |
+| `--rollback` | troca `current` pela tag guardada em `previous` |
+A última release é resolvida seguindo o redirecionamento de `<releases>/latest` (`curl -fsSIL -o /dev/null -w '%{url_effective}'`), sem a API do GitHub (sem limite anônimo e sem `jq`). O download usa `--connect-timeout 10 --max-time 300`. Tarball e `SHA256SUMS` são baixados e conferidos em um diretório temporário antes de qualquer escrita, de modo que erro de rede ou checksum deixa a instalação intacta (saída 1). A troca atualiza o symlink `current` e o arquivo `previous`, e depois remove releases antigas. Em um clone git (a raiz não está dentro de `releases/`), o `self-update` recusa e explica como migrar.
+### Variáveis `SUAP_SETUP_*`
+| Variável | Uso |
+|---|---|
+| `SUAP_SETUP_ENV_FILE` | caminho completo do `.env` (vence todas as outras regras) |
+| `SUAP_SETUP_CONFIG_DIR` | diretório de configuração (contém o `.env`) |
+| `SUAP_SETUP_STATE_DIR` | diretório de estado (manifestos, `arcane.key`) |
+| `SUAP_SETUP_ROOT` | raiz da instalação; exportada pelo dispatcher |
+| `SUAP_SETUP_RELEASES_URL` | base das releases (padrão: `https://github.com/danielslz/suap-setup/releases`); aceita `file://` (espelho interno ou testes) |
+| `SUAP_SETUP_LATEST_TAG` | força a "última" tag sem consultar a rede (gancho de teste) |
+| `SUAP_SETUP_DRY_RUN=1` | o dispatcher imprime `EXEC: <script> <args>` e sai, sem executar |
+### Testes do CLI
+| Arquivo | O que testa |
+|---|---|
+| `tests/unit/test_paths.bats` | resolução de `.env`, estado, versão e precedências |
+| `tests/unit/test_dispatcher.bats` | rotas, `revert` com e sem grupo, erros e `SUAP_SETUP_DRY_RUN` |
+| `tests/unit/test_release_build.bats` | `scripts/build-release.sh` (conteúdo, exclusões, reprodutibilidade, SHA256SUMS) |
+| `tests/unit/test_install.bats` | `install.sh` com prefixos temporários (nunca toca `/etc`, `/opt` ou `/usr/local`) |
+| `tests/unit/test_self_update.bats` | `self-update` (`--check`, `--version`, `--rollback`, checksum inválido, offline, clone) |
+| `tests/unit/test_config_migrate.bats` | `config migrate` (cópia, `--dry-run`, não sobrescreve, permissões) |
+`tests/test_helper/release-fixture.bash` monta um repositório git temporário para gerar releases `file://`. Testes que chamam `install.sh` precisam passar `--config-dir`, `--state-dir` e `--completion-dir` temporários.
 ---
 
 ## Ambiente de Desenvolvimento Nativo
@@ -1173,7 +1258,7 @@ os logs em `deploy/logs/`.
 
 ### Atalho não interativo: `suap-deploy.sh`
 
-**Arquivo:** `docker/prod/suap-deploy.sh`
+**Arquivo:** `docker/prod/suap-deploy.sh` (comando: `suap-setup deploy …`; `bash docker/prod/suap-deploy.sh …` continua funcionando)
 
 Camada fina sobre o Makefile e o `docker compose` do suap_deploy. Resolve o diretório com
 `resolve_suap_deploy_dir()` (de `lib/common.sh`: `SUAP_DEPLOY_DIR`, ou ao lado de `SUAP_DIR`, ou
@@ -1245,7 +1330,7 @@ desatualizado → falha com orientação de `restart`) e traduz erros comuns do 
 
 ### Papel do nó: `configure-node.sh`
 
-**Arquivo:** `docker/prod/configure-node.sh`
+**Arquivo:** `docker/prod/configure-node.sh` (comando: `suap-setup node configure …`)
 
 Edita o `.env` do suap_deploy para configurar o papel do nó em ambientes multi-servidor/multi-nó.
 
@@ -1285,7 +1370,7 @@ só a senha, sem `--redis-host`, reaproveita host e porta de `REDIS_URL`), `--ss
 `--trusted-proxies`, `--drain-seconds`, `--s3-endpoint/--s3-access-key`, `--flower-auth`, `--yes`, `--dry-run`.
 Senhas somente por prompt silencioso ou `NODE_DB_PASSWORD`, `NODE_REDIS_PASSWORD`, `NODE_S3_SECRET_KEY`.
 `NODE_SECRET_KEY` grava o `SECRET_KEY` do Django (mínimo 32 caracteres; mesmos caracteres proibidos dos demais segredos): o `make setup` gera uma chave por servidor, e em cluster todos os nós devem usar a mesma.
-Sem o suap_deploy no caminho resolvido, `suap-deploy.sh` e `configure-node.sh` mostram `msg_suap_deploy_missing` (instalar via `setup.sh` > "SUAP prod (suap_deploy)" ou definir `SUAP_DEPLOY_DIR` no `.env`).
+Sem o suap_deploy no caminho resolvido, `suap-deploy.sh` e `configure-node.sh` mostram `msg_suap_deploy_missing` (instalar via `suap-setup menu` > "SUAP prod (suap_deploy)" ou definir `SUAP_DEPLOY_DIR` no `.env`).
 
 ### Reversão (Docker prod)
 
@@ -2097,6 +2182,7 @@ Testam funções individuais de `lib/common.sh` em isolamento:
 | `test_dev_flow.bats` | Idempotência, geração de configs, detecção de deps |
 | `test_prod_flow.bats` | Validação de root, menu Supervisor, permissões, clone |
 | `test_interactive_wizard.bats` | Wizard interativo de .env |
+| `test_paths.bats`, `test_dispatcher.bats`, `test_release_build.bats`, `test_install.bats`, `test_self_update.bats`, `test_config_migrate.bats` | Comando `suap-setup`, caminhos, release, instalador, `self-update` e `config migrate` (veja "Testes do CLI") |
 
 #### Testes de Propriedade (`tests/property/`)
 

@@ -146,12 +146,12 @@ Tutoriais e/ou manuais com dezenas de comandos executados manualmente, em sequê
 
 O `suap-setup` resolve esses problemas por meio de:
 
-- **Wizard interativo** (`setup.sh`) que gera um `.env` centralizado, com prompts descritivos e valores padrão para cada variável.
+- **Wizard interativo** (`suap-setup menu`; legado: `bash setup.sh`) que gera um `.env` centralizado, com prompts descritivos e valores padrão para cada variável.
 - **Suporte multiplataforma**: Debian/Ubuntu (`apt`), Fedora/RHEL/CentOS/AlmaLinux/Rocky (`dnf`), Arch/Manjaro (`pacman`), macOS (Homebrew, apenas dev) e Docker.
 - **Idempotência**: reexecutar um script pula etapas já concluídas sem corromper o que já está pronto.
 - **Halt em falhas críticas**: se uma dependência falha ao instalar, o script interrompe imediatamente.
 - **Separação de responsabilidades por script**: `suap-dev.sh`, `suap-prod.sh`, `suap-update.sh`, `install-redis.sh`, `install-nginx.sh`.
-- **Operação sem trocar de pasta** na rota Docker: `docker/prod/suap-deploy.sh` (build, up, down, update, logs, backup, check…) e `docker/prod/configure-node.sh` (papel do nó em configurações multi-servidor e multi-nó).
+- **Operação sem trocar de pasta** na rota Docker: `suap-setup deploy` (build, up, down, update, logs, backup, check…) e `suap-setup node configure` (papel do nó em configurações multi-servidor e multi-nó).
 - **Delegação para os repositórios oficiais** nas rotas Docker: o suap-setup não mantém `Dockerfile`/`docker-compose` próprios — delega para o compose nativo do SUAP (dev) e para o Makefile do `suap_deploy` (produção).
 - **Rollback automático** no script de atualização: se `git pull` ou a instalação de dependências falhar, os serviços são reiniciados automaticamente antes do script encerrar com erro.
 - **Cobertura de testes** (via `bats-core`) validando idempotência, roteamento do menu, geração do `.env` e ausência de artefatos Docker locais indevidos.
@@ -180,13 +180,13 @@ O SUAP roda em produção de duas formas. Ambas são suportadas pelo `suap-setup
 
 | Tarefa | Rota nativa | Rota Docker |
 |---|---|---|
-| Configurar a aplicação | Menu "Configurar ambiente de produção" (`{distro}/suap-prod.sh`) | Menu "SUAP prod (suap_deploy)" (`docker/prod/docker-setup.sh`) |
-| Atualizar | Menu "Atualizar SUAP (produção)" (`{distro}/suap-update.sh`) | `bash docker/prod/suap-deploy.sh update` |
+| Configurar a aplicação | Menu "Configurar ambiente de produção" (`suap-setup host prod`) | Menu "SUAP prod (suap_deploy)" (`suap-setup docker prod`) |
+| Atualizar | Menu "Atualizar SUAP (produção)" (`suap-setup host update`) | `suap-setup deploy update` |
 | Servidor web | Menu "Instalar Nginx" | Container Nginx do `suap_deploy` |
 | PostgreSQL e Redis | Menus "Instalar PostgreSQL" e "Instalar Redis" (no host) | No host (mesmos menus) **ou** em containers (menus "Redis" e "PostgreSQL" do grupo "Via Docker") |
-| Balanceador (HAProxy) | Menu "HAProxy (balanceador do suap_deploy)" — serve às duas rotas | Menu "HAProxy (balanceador do suap_deploy)" (`docker/haproxy-setup.sh`) |
-| Configurar o papel de um nó | Escolha do menu do Supervisor (SUAP / Celery / Ambos) | `bash docker/prod/configure-node.sh` |
-| Validar a configuração | — | `bash docker/prod/suap-deploy.sh check` |
+| Balanceador (HAProxy) | Menu "HAProxy (balanceador do suap_deploy)" — serve às duas rotas | Menu "HAProxy (balanceador do suap_deploy)" (`suap-setup stack haproxy`) |
+| Configurar o papel de um nó | Escolha do menu do Supervisor (SUAP / Celery / Ambos) | `suap-setup node configure` |
+| Validar a configuração | — | `suap-setup deploy check` |
 
 ---
 
@@ -296,9 +296,18 @@ Antes de iniciar a implantação em qualquer ambiente, são necessários os segu
 Instalar o `suap-setup` em cada servidor:
 
 ```bash
-git clone https://github.com/danielslz/suap-setup.git
-cd suap-setup
+curl -fsSL https://github.com/danielslz/suap-setup/releases/latest/download/install.sh | sudo bash
 ```
+
+Onde ficam os dados no servidor (instalação por release):
+
+| O quê | Caminho |
+|---|---|
+| Programa | `/opt/suap-setup` (comando `/usr/local/bin/suap-setup`) |
+| Configuração (`.env` do suap-setup) | `/etc/suap-setup/.env` |
+| Estado (manifestos de reversão, chave do Arcane) | `/var/lib/suap-setup` |
+
+> **Caminhos antigos continuam funcionando.** Quem já usa um clone git pode seguir com `bash setup.sh` e `bash docker/prod/suap-deploy.sh …`: o `.env` e o `.state` do clone são usados enquanto não houver arquivos nos caminhos novos. Para migrar, veja a seção "Migrando de um clone git" do [README](../README.md). `suap-setup config path` mostra o `.env` e o diretório de estado em uso; `suap-setup self-update` atualiza o programa.
 
 ---
 
@@ -315,12 +324,11 @@ Em homologação, um **servidor único** concentra aplicação, banco, Redis e t
 Em ordem, no servidor de homologação:
 
 ```bash
-git clone https://github.com/danielslz/suap-setup.git
-cd suap-setup
-bash setup.sh
+curl -fsSL https://github.com/danielslz/suap-setup/releases/latest/download/install.sh | sudo bash
+suap-setup menu
 ```
 
-No menu, execute (uma de cada vez, repetindo `bash setup.sh`):
+No menu, execute (uma de cada vez, repetindo `suap-setup menu`):
 
 1. **Instalar PostgreSQL** — repositório PGDG, cluster, banco e usuário de aplicação (seção 10.3);
 2. **Instalar Redis**;
@@ -330,10 +338,10 @@ No menu, execute (uma de cada vez, repetindo `bash setup.sh`):
 Os scripts equivalentes podem ser chamados diretamente:
 
 ```bash
-sudo bash deb/install-postgres.sh   # ou rpm/ ou arch/ conforme a distribuição
-sudo bash deb/install-redis.sh
-sudo bash deb/suap-prod.sh
-sudo bash deb/install-nginx.sh
+sudo suap-setup host postgres   # detecta a distribuição
+sudo suap-setup host redis
+sudo suap-setup host prod
+sudo suap-setup host nginx
 ```
 
 Variáveis solicitadas pelo wizard na primeira execução da produção nativa: `PYTHON_VERSION`, `BASE_DIR`, `SUAP_DIR`, `VENV_DIR`, `SUAP_GIT_URL`, `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `CELERY_MAX_WORKERS`, `CELERY_MIN_WORKERS`, `CELERY_BROKER_URL` e `CELERY_FLOWER_AUTH`.
@@ -354,9 +362,8 @@ Depois, prepare a aplicação e o primeiro acesso (seção 19.10).
 A produção deve seguir a arquitetura segmentada descrita na seção 7, com o `suap-setup` executado **em cada VM**, cada uma assumindo um papel específico. Em todas, comece por:
 
 ```bash
-git clone https://github.com/danielslz/suap-setup.git
-cd suap-setup
-bash setup.sh
+curl -fsSL https://github.com/danielslz/suap-setup/releases/latest/download/install.sh | sudo bash
+suap-setup menu
 ```
 
 ### 10.1. VM(s) de Aplicação
@@ -384,7 +391,7 @@ Caminhos do Supervisor por distribuição:
 ### 10.2. Instalação do Nginx (rota nativa)
 
 ```bash
-bash deb/install-nginx.sh   # ou rpm/ ou arch/ conforme a distribuição
+suap-setup host nginx   # detecta a distribuição
 ```
 
 A configuração provida automaticamente inclui:
@@ -403,14 +410,14 @@ Instalar os serviços de banco e cache nesta VM:
 
 ```bash
 cd suap-setup
-bash setup.sh
+suap-setup menu
 ```
 
 Selecione **Instalar Redis** e depois **Instalar PostgreSQL** (grupo "Serviços (no host)"), ou execute-os diretamente:
 
 ```bash
-sudo bash deb/install-redis.sh      # ou rpm/ ou arch/ conforme distribuição
-sudo bash deb/install-postgres.sh   # ou rpm/ ou arch/ conforme distribuição
+sudo suap-setup host redis      # detecta a distribuição
+sudo suap-setup host postgres   # detecta a distribuição
 ```
 
 O script de instalação do PostgreSQL (`install-postgres.sh`) realiza automaticamente:
@@ -452,7 +459,7 @@ O `suap-setup` fornece scripts dedicados de atualização para a rota nativa (me
 ### 11.1. Executando a atualização
 
 ```bash
-sudo bash deb/suap-update.sh   # ou rpm/ ou arch/ conforme distribuição
+sudo suap-setup host update   # detecta a distribuição
 ```
 
 Fluxo executado automaticamente:
@@ -532,7 +539,7 @@ O endpoint `/ht/` do SUAP lê `deploy/status.txt`: `healthy` responde 200 (o bal
 - ao **parar** (`down`/`stop`/`restart`), o Nginx escreve `drain`, espera `DRAIN_SECONDS` e só então encerra graciosamente (`SIGQUIT`, até 6 min para a requisição mais longa); o web para depois;
 - ao **subir**, o web escreve `healthy`.
 
-> **Atenção:** o drain **não** roda no recreate do `docker compose up -d`. Para atualizar um stack em execução use sempre `restart` (ou o comando `update` do `suap-deploy.sh`), nunca `up`.
+> **Atenção:** o drain **não** roda no recreate do `docker compose up -d`. Para atualizar um stack em execução use sempre `restart` (ou o comando `update` do `suap-setup deploy`), nunca `up`.
 
 ### 12.5. Volumes e dados
 
@@ -550,7 +557,7 @@ O `suap_deploy` só orquestra containers: ele **não instala** o Docker nem prep
 
 | Item | Detalhe |
 |---|---|
-| Docker Engine + Compose v2 | O `suap-setup` oferece instalar (`docker/install-docker.sh`) quando não encontra o Docker. Para o drain protocol é necessário Compose >= 2.30 |
+| Docker Engine + Compose v2 | O `suap-setup` oferece instalar (`suap-setup docker install`) quando não encontra o Docker. Para o drain protocol é necessário Compose >= 2.30 |
 | `git`, `make`, `openssl`, `python3`, `sudo` | Usados pelo `make setup` |
 | Usuário `www-data` com **UID/GID 33** | Os containers escrevem em `deploy/` com esse id |
 | Locale `pt_BR.UTF-8` e timezone | Ex.: `America/Recife` ou sua região |
@@ -578,7 +585,7 @@ useradd www-data; usermod -u 33 www-data   # UID/GID 33
 
 ### 13.1. Permissões de `deploy/`
 
-Web, Celery e pdfprinter rodam como `www-data` (UID 33). Se `deploy/` (ou `deploy/media/tmp`) pertencer a outro usuário, o Celery entra em crash loop com `PermissionError: ... /opt/suap/deploy/media/tmp/pymp-...`. Correção: `bash docker/prod/suap-deploy.sh fix-perms` (ou `sudo chown -R 33:33 <SUAP_DEPLOY_DIR>/deploy`). O `check` reprova esse estado e `up`/`restart`/`update` do `suap-deploy.sh` se recusam a subir com ele. Em `deploy/media` grande ou em NFS, o `chown -R` pode demorar.
+Web, Celery e pdfprinter rodam como `www-data` (UID 33). Se `deploy/` (ou `deploy/media/tmp`) pertencer a outro usuário, o Celery entra em crash loop com `PermissionError: ... /opt/suap/deploy/media/tmp/pymp-...`. Correção: `suap-setup deploy fix-perms` (ou `sudo chown -R 33:33 <SUAP_DEPLOY_DIR>/deploy`). O `check` reprova esse estado e `up`/`restart`/`update` do `suap-deploy.sh` se recusam a subir com ele. Em `deploy/media` grande ou em NFS, o `chown -R` pode demorar.
 
 ### 13.2. Rede do Docker
 
@@ -608,9 +615,8 @@ Para homologação, use a rota Docker em **servidor único**, com PostgreSQL e R
 ### 14.1. Passo a passo
 
 ```bash
-git clone https://github.com/danielslz/suap-setup.git
-cd suap-setup
-bash setup.sh
+curl -fsSL https://github.com/danielslz/suap-setup/releases/latest/download/install.sh | sudo bash
+suap-setup menu
 ```
 
 No menu, selecione, no grupo "Via Docker":
@@ -662,33 +668,33 @@ O script então:
 0) Sair
 ```
 
-> Com o stack já no ar, as opções 1 e 2 usam `make restart` (que dispara o drain) em vez de `make up`. As opções 12 a 22 chamam o `docker/prod/suap-deploy.sh`. A 17 pergunta o destino, mostra o plano (`--dry-run`) e pede confirmação; a 19 mostra o que seria apagado e pergunta se apaga agora ou instala o cron. Migrações e permissões gravam no banco compartilhado: rode as opções 15 e 16 em **um único** nó.
+> Com o stack já no ar, as opções 1 e 2 usam `make restart` (que dispara o drain) em vez de `make up`. As opções 12 a 22 chamam o `suap-setup deploy`. A 17 pergunta o destino, mostra o plano (`--dry-run`) e pede confirmação; a 19 mostra o que seria apagado e pergunta se apaga agora ou instala o cron. Migrações e permissões gravam no banco compartilhado: rode as opções 15 e 16 em **um único** nó.
 
 ### 14.2. Configuração do `.env` e primeira subida
 
 Edite o `.env` do `suap_deploy` (em `SUAP_DEPLOY_DIR`) e ajuste, no mínimo, `SITE_URL`, `NGINX_SERVER_NAME`, `ALLOWED_HOSTS`, `DATABASE_*`, `EMAIL_*`. Para homologação com DB e Redis locais, o papel é `homolog`:
 
 ```bash
-bash docker/prod/configure-node.sh --role homolog --site-url https://suap-hml.instituicao.edu.br --yes
+suap-setup node configure --role homolog --site-url https://suap-hml.instituicao.edu.br --yes
 ```
 
 Depois, escolha o modo e suba:
 
 ```bash
 # Modo local (build a partir do código)
-bash docker/prod/suap-deploy.sh build
-bash docker/prod/suap-deploy.sh up
+suap-setup deploy build
+suap-setup deploy up
 
 # Modo registry
-bash docker/prod/suap-deploy.sh pull
-bash docker/prod/suap-deploy.sh up
+suap-setup deploy pull
+suap-setup deploy up
 ```
 
 Em banco vazio, inicialize e crie o superusuário:
 
 ```bash
-bash docker/prod/suap-deploy.sh begin          # create_db + carga_inicial
-bash docker/prod/suap-deploy.sh exec python manage.py createsuperuser
+suap-setup deploy begin          # create_db + carga_inicial
+suap-setup deploy exec python manage.py createsuperuser
 ```
 
 > O `SUAP_PDF_ACCESS_TOKEN` é gerado pelo `make setup`. Configure o **mesmo valor** no SUAP (Configurações do módulo comum → "Token da API do SuapPDF"); caso contrário a geração de PDF responde `401`. Em cluster, vale o token do `.env` do nó que **roda o pdfprinter**: o código do SUAP não lê essa variável (usa o campo gravado no banco), então o `SUAP_PDF_ACCESS_TOKEN` dos nós que não rodam o pdfprinter não é usado e pode ser diferente; se o pdfprinter rodar em mais de um nó, todos precisam do mesmo token. Para ver o valor: `grep ^SUAP_PDF_ACCESS_TOKEN= <SUAP_DEPLOY_DIR>/.env`.
@@ -743,11 +749,11 @@ Dimensionamento e partições de disco por papel: seção 6.2 (aplicação e asy
 Em cada nó de aplicação ou async, o fluxo é o mesmo:
 
 ```bash
-git clone https://github.com/danielslz/suap-setup.git && cd suap-setup
-bash setup.sh                                  # "SUAP prod (suap_deploy)": clona o suap_deploy e roda o make setup
-bash docker/prod/configure-node.sh             # define o papel e as conexões deste nó
-bash docker/prod/suap-deploy.sh check          # valida a configuração
-bash docker/prod/suap-deploy.sh update         # pull/build e sobe (ou reinicia com drain)
+curl -fsSL https://github.com/danielslz/suap-setup/releases/latest/download/install.sh | sudo bash
+suap-setup menu                                  # "SUAP prod (suap_deploy)": clona o suap_deploy e roda o make setup
+suap-setup node configure             # define o papel e as conexões deste nó
+suap-setup deploy check          # valida a configuração
+suap-setup deploy update         # pull/build e sobe (ou reinicia com drain)
 ```
 
 ### 15.3. Configurando cada nó com `configure-node.sh`
@@ -764,7 +770,7 @@ Informe **sempre** `--db-name` e `--db-user`: o `.env` do `suap_deploy` vem com 
 
 ```bash
 NODE_DB_PASSWORD='...' NODE_REDIS_PASSWORD='...' \
-bash docker/prod/configure-node.sh --role app \
+suap-setup node configure --role app \
   --db-host 10.0.1.5 --db-name suap --db-user suap_app \
   --redis-host 10.0.1.5 \
   --ssl false --site-url https://suap.instituicao.edu.br \
@@ -775,7 +781,7 @@ bash docker/prod/configure-node.sh --role app \
 
 ```bash
 NODE_DB_PASSWORD='...' NODE_REDIS_PASSWORD='...' \
-bash docker/prod/configure-node.sh --role async-primary \
+suap-setup node configure --role async-primary \
   --db-host 10.0.1.5 --db-name suap --db-user suap_app \
   --redis-host 10.0.1.5 \
   --flower-auth operador:SenhaForte123 --yes
@@ -784,7 +790,7 @@ bash docker/prod/configure-node.sh --role async-primary \
 **Nós async adicionais:**
 
 ```bash
-bash docker/prod/configure-node.sh --role async \
+suap-setup node configure --role async \
   --db-host 10.0.1.5 --db-name suap --db-user suap_app \
   --redis-host 10.0.1.5 --yes
 ```
@@ -792,11 +798,11 @@ bash docker/prod/configure-node.sh --role async \
 **Storage de mídia em MinIO/S3 (qualquer papel):**
 
 ```bash
-NODE_S3_SECRET_KEY='...' bash docker/prod/configure-node.sh \
+NODE_S3_SECRET_KEY='...' suap-setup node configure \
   --s3-endpoint http://10.0.1.20 --s3-access-key suap-app --yes
 ```
 
-Opções completas: `bash docker/prod/configure-node.sh --help`. O que o script altera no `.env`:
+Opções completas: `suap-setup node configure --help`. O que o script altera no `.env`:
 
 | Opção | Variáveis do `.env` |
 |---|---|
@@ -809,7 +815,7 @@ Opções completas: `bash docker/prod/configure-node.sh --help`. O que o script 
 | `--s3-*` | `DEFAULT_FILE_STORAGE`, `AWS_S3_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
 | `--flower-auth` | `FLOWER_BASIC_AUTH` |
 
-> **`ALLOWED_HOSTS` precisa ter `web` e `nginx`.** Os health checks do compose acessam o web por `http://web:8000/ht/` e o nginx por `http://nginx:80/ht/`; o Django só os aceita se esses nomes estiverem em `ALLOWED_HOSTS`. Sem `web`, o log mostra `Invalid HTTP_HOST header: 'web:8000'. You may need to add 'web' to ALLOWED_HOSTS`, o web fica unhealthy e o nginx não sobe. O `configure-node.sh` garante esses dois nomes em **todo** nó `web` ou `default`, com ou sem `--site-url` (só acrescenta o que falta, sem apagar nada, e preserva `*`), e o `check` reprova a ausência de `web` e de `nginx`. Se o log do web mostrar `Invalid HTTP_HOST header: 'nginx'` (ou `'web:8000'`), rode `bash docker/prod/configure-node.sh --yes` no nó e depois `bash docker/prod/suap-deploy.sh restart`: o `restart` recria os containers, e é isso que faz o `.env` novo valer. Para corrigir à mão: `ALLOWED_HOSTS=<seu-domínio>,localhost,127.0.0.1,web,nginx`.
+> **`ALLOWED_HOSTS` precisa ter `web` e `nginx`.** Os health checks do compose acessam o web por `http://web:8000/ht/` e o nginx por `http://nginx:80/ht/`; o Django só os aceita se esses nomes estiverem em `ALLOWED_HOSTS`. Sem `web`, o log mostra `Invalid HTTP_HOST header: 'web:8000'. You may need to add 'web' to ALLOWED_HOSTS`, o web fica unhealthy e o nginx não sobe. O `configure-node.sh` garante esses dois nomes em **todo** nó `web` ou `default`, com ou sem `--site-url` (só acrescenta o que falta, sem apagar nada, e preserva `*`), e o `check` reprova a ausência de `web` e de `nginx`. Se o log do web mostrar `Invalid HTTP_HOST header: 'nginx'` (ou `'web:8000'`), rode `suap-setup node configure --yes` no nó e depois `suap-setup deploy restart`: o `restart` recria os containers, e é isso que faz o `.env` novo valer. Para corrigir à mão: `ALLOWED_HOSTS=<seu-domínio>,localhost,127.0.0.1,web,nginx`.
 
 > **Senha do Redis e o Celery.** O Django lê a senha de `REDIS_PASSWORD`/`SESSION_PASSWORD`, mas o Celery só conhece `CELERY_BROKER_URL` e `CELERY_RESULT_BACKEND`: a senha precisa estar **dentro** da URL, com o `:` antes dela (`redis://:SENHA@host:6379/1`). Escrever `redis://SENHA@host` faz o Redis ler a senha como *nome de usuário* e o worker fica em loop com `invalid username-password pair or user is disabled`. O `configure-node.sh` monta as URLs certas (codificando caracteres como `@`, `:`, `/` e `%`); `--redis-host` é opcional se você só quer trocar a senha (host e porta atuais são reaproveitados).
 
@@ -820,7 +826,7 @@ Para DB e Redis externos, o `host.docker.internal` (já configurado no compose v
 ### 15.4. TLS e Nginx
 
 - **Atrás de balanceador que termina o TLS:** use `SSL_ENABLED=false` (`--ssl false`). O Nginx passa a escutar só na porta 80 e o health check do balanceador fica correto. Com `SSL_ENABLED=true` a porta 80 responde `301` para tudo, e o HAProxy conta `3xx` como saudável e nunca enxerga o `drain`.
-- **Nó único sem balanceador:** `SSL_ENABLED=true` com certificado em `/etc/ssl/suap/nginx/fullchain.crt` e `privkey.key` (`chmod 644` no `.crt` e `600` no `.key`). Em produção use certificado real (Let's Encrypt ou CA institucional); o autoassinado do `scripts/gen-cert.sh` serve apenas para homologação. A renovação (por exemplo, `certbot`) fica a cargo do host. Depois de trocar o certificado: `bash docker/prod/suap-deploy.sh restart`.
+- **Nó único sem balanceador:** `SSL_ENABLED=true` com certificado em `/etc/ssl/suap/nginx/fullchain.crt` e `privkey.key` (`chmod 644` no `.crt` e `600` no `.key`). Em produção use certificado real (Let's Encrypt ou CA institucional); o autoassinado do `scripts/gen-cert.sh` serve apenas para homologação. A renovação (por exemplo, `certbot`) fica a cargo do host. Depois de trocar o certificado: `suap-setup deploy restart`.
 - **`SECURE_PROXY_SSL_HEADER` com o TLS no balanceador.** O `env.sample` traz essa variável vazia, e (conforme o `settings_base.py` do SUAP) vazia faz o Django ignorar o `X-Forwarded-Proto`: ele trataria toda requisição como HTTP, mesmo vinda do HTTPS do balanceador, gerando links e redirecionamentos com `http://`. Com `SSL_ENABLED=false`, o `configure-node.sh --ssl false` define `SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https` (e `--ssl true` o esvazia de volta); o `check` avisa quando o nó tem SSL desligado e o valor vazio. O HAProxy gerado pelo `haproxy-setup.sh` envia `X-Forwarded-Proto: https`.
 - `TRUSTED_PROXIES` deve conter o IP/CIDR do balanceador para que os logs e o Django vejam o IP real do cliente. Para mais de um proxy, o `suap_deploy` exige repetir a diretiva `set_real_ip_from` dentro do valor (ver o comentário no `env.sample`).
 - O `nginx/active/server.conf.template` é um **symlink gerado em runtime**; sem ele o Nginx não sobe. O `make setup` e o `configure-node.sh --ssl` o criam. O alvo precisa ser **relativo** (`../templates/...`).
@@ -846,16 +852,16 @@ docker ps --format '{{.Names}}\t{{.Ports}}' | grep -E 'nginx|web'
 
 ### 15.5. Balanceador e drain protocol
 
-**Instalação com o suap-setup.** O item **HAProxy (balanceador do suap_deploy)** do menu (`docker/haproxy-setup.sh`) sobe um HAProxy em container (stack em `/opt/docker/haproxy/`), já com o health check estrito em `/ht/`, pesos por nó, terminação TLS e página de estatísticas. Rode-o em um servidor **sem** o Nginx do `suap_deploy`, que ocupa as portas 80, 443 e 8080:
+**Instalação com o suap-setup.** O item **HAProxy (balanceador do suap_deploy)** do menu (`suap-setup stack haproxy`) sobe um HAProxy em container (stack em `/opt/docker/haproxy/`), já com o health check estrito em `/ht/`, pesos por nó, terminação TLS e página de estatísticas. Rode-o em um servidor **sem** o Nginx do `suap_deploy`, que ocupa as portas 80, 443 e 8080:
 
 ```bash
 HAPROXY_BACKENDS='10.0.0.1:80:3,10.0.0.2:80:1' HAPROXY_SERVER_NAME=suap.instituicao.edu.br \
-  bash docker/haproxy-setup.sh
+  suap-setup stack haproxy
 ```
 
 **`HAPROXY_SERVER_NAME` é o domínio do SUAP, não um IP.** Ele vira o cabeçalho `Host` do health check e o balanceador repassa o `Host` do cliente aos nós; o Django dos nós só aceita os hosts de `ALLOWED_HOSTS` (o domínio de `--site-url`, `localhost`, `127.0.0.1`, `web` e `nginx`). Com o IP do HAProxy no lugar do domínio, os nós respondem 400 (`DisallowedHost`) e ficam `DOWN`. Pelo mesmo motivo, abrir o site pelo **IP** do balanceador no navegador também falha (400, e o `CSRF_TRUSTED_ORIGINS` padrão `https://*.br` não cobre IPs): acesse pelo domínio. Sem DNS, no seu computador acrescente ao arquivo `hosts` (`/etc/hosts` no Linux e macOS; `C:\Windows\System32\drivers\etc\hosts` no Windows) a linha `<ip do HAProxy>  suap.instituicao.edu.br`. O certificado autoassinado gerado para teste faz o navegador avisar; é esperado.
 
-**Autoteste e diagnóstico.** Ao terminar, o script confere que o container está estável (sem reinícios), que a porta 80 redireciona para HTTPS, que o TLS responde na 443 e o estado de cada nó (`UP`/`DOWN`). Se algo falhar, mostra as últimas linhas do log e uma dica, e sai com erro. Se algum nó estiver `DOWN`, testa cada um com o mesmo `Host` do health check e explica: `400` = host fora do `ALLOWED_HOSTS`, `301` = nó com `SSL_ENABLED=true`, `503` = nó em drain ou web ainda não saudável, sem conexão = nó desligado, porta errada ou firewall. Um HAProxy que não sobe costuma aparecer no navegador como "A conexão foi reiniciada" (`PR_END_OF_FILE_ERROR`): veja `docker logs suap-haproxy`. O container roda como `root` só para abrir as portas 80 e 443 (em `network_mode: host` o usuário comum da imagem não consegue abrir portas abaixo de 1024, e o HAProxy falha com `cannot bind socket (Permission denied)`); os workers rodam como o usuário `haproxy`. Se você subiu o HAProxy com uma versão anterior do script e ele reinicia em loop, atualize (`git pull`) e rode `bash docker/haproxy-setup.sh` de novo: os valores ficam salvos em `/opt/docker/haproxy/.env`, então não precisa repetir as variáveis.
+**Autoteste e diagnóstico.** Ao terminar, o script confere que o container está estável (sem reinícios), que a porta 80 redireciona para HTTPS, que o TLS responde na 443 e o estado de cada nó (`UP`/`DOWN`). Se algo falhar, mostra as últimas linhas do log e uma dica, e sai com erro. Se algum nó estiver `DOWN`, testa cada um com o mesmo `Host` do health check e explica: `400` = host fora do `ALLOWED_HOSTS`, `301` = nó com `SSL_ENABLED=true`, `503` = nó em drain ou web ainda não saudável, sem conexão = nó desligado, porta errada ou firewall. Um HAProxy que não sobe costuma aparecer no navegador como "A conexão foi reiniciada" (`PR_END_OF_FILE_ERROR`): veja `docker logs suap-haproxy`. O container roda como `root` só para abrir as portas 80 e 443 (em `network_mode: host` o usuário comum da imagem não consegue abrir portas abaixo de 1024, e o HAProxy falha com `cannot bind socket (Permission denied)`); os workers rodam como o usuário `haproxy`. Se você subiu o HAProxy com uma versão anterior do script e ele reinicia em loop, atualize (`suap-setup self-update`) e rode `suap-setup stack haproxy` de novo: os valores ficam salvos em `/opt/docker/haproxy/.env`, então não precisa repetir as variáveis.
 
 O certificado vai em `/etc/ssl/suap/haproxy/suap.pem` (certificado completo + chave privada concatenados); se não existir, o script gera um autoassinado para teste. O script valida a configuração antes de aplicar e, ao mudar nós ou pesos, recarrega o HAProxy sem derrubar conexões. A divisão por peso aparece sob concorrência (o algoritmo é `leastconn`: com requisições instantâneas os nós se alternam). O restante desta seção descreve o que a configuração gerada faz, caso você use um HAProxy próprio (ou o pfSense).
 
@@ -880,7 +886,7 @@ backend suap-app
 - `timeout connect 5s`: valores altos seguram requisições de um nó que some sem responder.
 - **pfSense** (*Services → HAProxy → Backend*): em cada servidor, campo *Advanced*: `fastinter 2000 fall 3 rise 2`; em *Advanced settings → Backend pass thru*: `option redispatch 1`; *Connection timeout*: `5000`.
 
-**Teste do drain** (num nó): `bash docker/prod/suap-deploy.sh drain` e acompanhe o HAProxy — o servidor deve ficar DOWN em ~14 s. Depois, `bash docker/prod/suap-deploy.sh healthy`. O drain manual **não sobrevive** a um `up`/`restart`, porque o web escreve `healthy` a cada início; rode `drain` de novo depois de subir se o nó deve continuar fora do pool.
+**Teste do drain** (num nó): `suap-setup deploy drain` e acompanhe o HAProxy — o servidor deve ficar DOWN em ~14 s. Depois, `suap-setup deploy healthy`. O drain manual **não sobrevive** a um `up`/`restart`, porque o web escreve `healthy` a cada início; rode `drain` de novo depois de subir se o nó deve continuar fora do pool.
 
 ### 15.6. Mídia compartilhada
 
@@ -893,7 +899,7 @@ Instituições que guardam segredos no HashiCorp Vault podem gerar o `.env` com 
 ### 15.8. Validação
 
 ```bash
-bash docker/prod/suap-deploy.sh check
+suap-setup deploy check
 ```
 
 O comando valida: Docker Compose >= 2.30; `make`; presença do `.env`; `SECRET_KEY`, `DATABASE_PASSWORD` e `SUAP_PDF_ACCESS_TOKEN`; valores de exemplo em `SITE_URL`/`ALLOWED_HOSTS` e a presença de `web` e `nginx` em `ALLOWED_HOSTS` (reprova nos nós `web`/`default`); `DEBUG`; profiles desconhecidos ou legados; beat/flower ativos (lembrete de nó único) e senha padrão do Flower; coerência entre `SSL_ENABLED`, o template do Nginx e o certificado; conectividade TCP com PostgreSQL e Redis; autenticação no Redis (a senha de `REDIS_PASSWORD` e a credencial de `CELERY_BROKER_URL` são testadas com AUTH/PING) e o formato `redis://:SENHA@host` do broker; gravação do UID 33 nos diretórios de `deploy/` (`media/tmp`, `logs`, `sessions`, `pdf/tmp`…) e `status.txt`. Também avisa quando `DATABASE_USER=postgres` (conta de superusuário; a aplicação deve usar um usuário próprio, seção 19.4), exceto no profile `local-db`. Termina com código de saída 1 se houver falhas.
@@ -901,7 +907,7 @@ O comando valida: Docker Compose >= 2.30; `make`; presença do `.env`; `SECRET_K
 **Teste de login no banco (`check --db`).** O `check` comum só confere se a porta do PostgreSQL responde. Com `--db` ele abre uma conexão **com o Django de um container**, ou seja, com exatamente o usuário, a senha e o host que a aplicação usa:
 
 ```bash
-bash docker/prod/suap-deploy.sh check --db
+suap-setup deploy check --db
 ```
 
 Saída típica: `em uso pelo app: usuário=suap banco=suap host=<ip>:5432` e `Login no banco OK`. O teste usa um container em execução (`docker compose exec`, que não cria nada); se não houver nenhum, usa um container temporário do `celery` (o `run` não dispara os hooks de drain, então não altera o `deploy/status.txt`). Nunca imprime a senha. Se falhar, mostra o erro do Postgres e uma dica: usuário ou senha incorretos, `pg_hba.conf` sem liberar o host, banco ou usuário inexistente, ou sem conexão (`listen_addresses`, firewall). Se o usuário que o container usa é diferente do `DATABASE_USER` do `.env`, ele aponta que o container foi criado antes da mudança do `.env` e manda rodar `restart`. O teste leva alguns segundos porque inicia o Django do SUAP.
@@ -926,49 +932,49 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
 
    ```bash
    NODE_DB_PASSWORD='...' NODE_REDIS_PASSWORD='...' \
-   bash docker/prod/configure-node.sh --role full \
+   suap-setup node configure --role full \
      --db-host 192.0.2.52 --db-name suap --db-user suap_app \
      --redis-host 192.0.2.52 --ssl false \
      --site-url https://suap.instituicao.edu.br --trusted-proxies 192.0.2.52 --yes
-   bash docker/prod/suap-deploy.sh compose rm -sf celery-beat celery-flower
-   bash docker/prod/suap-deploy.sh check
-   bash docker/prod/suap-deploy.sh restart
+   suap-setup deploy compose rm -sf celery-beat celery-flower
+   suap-setup deploy check
+   suap-setup deploy restart
    ```
 
-   Só reduzir o `COMPOSE_PROFILES` e rodar `restart`/`up` **não** remove esses containers (o Compose só enxerga os profiles ativos): o `rm -sf` é necessário, e o `configure-node.sh` avisa quando um container de beat/flower segue rodando depois de sair dos profiles. Informe **sempre** `--db-name` e `--db-user` com os valores reais do banco restaurado (os exemplos usam `suap` e `suap_app`; o `env.sample` traz `suap` e `postgres`, que provavelmente não são os seus, e o script só altera o que você informa). Use os mesmos valores nos dois nós. Se o `suap_deploy` foi subido sem o `suap-setup`, defina `SUAP_DEPLOY_DIR` no `.env` do `suap-setup` (`bash docker/prod/suap-deploy.sh dir` mostra o caminho resolvido).
+   Só reduzir o `COMPOSE_PROFILES` e rodar `restart`/`up` **não** remove esses containers (o Compose só enxerga os profiles ativos): o `rm -sf` é necessário, e o `configure-node.sh` avisa quando um container de beat/flower segue rodando depois de sair dos profiles. Informe **sempre** `--db-name` e `--db-user` com os valores reais do banco restaurado (os exemplos usam `suap` e `suap_app`; o `env.sample` traz `suap` e `postgres`, que provavelmente não são os seus, e o script só altera o que você informa). Use os mesmos valores nos dois nós. Se o `suap_deploy` foi subido sem o `suap-setup`, defina `SUAP_DEPLOY_DIR` no `.env` do `suap-setup` (`suap-setup deploy dir` mostra o caminho resolvido).
 3. **Mídia compartilhada (obrigatória com dois nós web).** O servidor de mídia é uma VM à parte, **fora** dos nós de aplicação: se a mídia fosse exportada de um dos nós web, a queda dele travaria o outro (o NFS `hard` bloqueia os processos que acessam arquivos). Para testar antes de o servidor de mídia existir, veja "NFS temporário em um nó de aplicação" na seção 21.1. Monte o NFS em `<SUAP_DEPLOY_DIR>/deploy/media` na .50 e na .51, com dono 33:33 (seção 21.1). Enquanto a mídia compartilhada não estiver mapeada, **mantenha só a .50 recebendo tráfego** (não suba o web da .51 nem a inclua nos nós do HAProxy): um upload feito na .51 ficaria só no disco local dela.
 4. **.51 — instalar o suap_deploy e aplicar o papel `web-celery-beat`** (web, workers, beat e flower).
 
    **4.1. Instalar o suap_deploy na .51** (se o servidor ainda não o tem; sem isso os comandos abaixo respondem `suap_deploy não encontrado`):
 
    ```bash
-   git clone https://github.com/danielslz/suap-setup.git && cd suap-setup
-   bash setup.sh      # escolha "SUAP prod (suap_deploy)", no grupo "Via Docker"
+   curl -fsSL https://github.com/danielslz/suap-setup/releases/latest/download/install.sh | sudo bash
+   suap-setup menu      # escolha "SUAP prod (suap_deploy)", no grupo "Via Docker"
    ```
 
-   O wizard pergunta `SUAP_DEPLOY_DIR` (use o mesmo caminho da .50, por exemplo `/opt/suap_deploy`) e `SUAP_DEPLOY_GIT_URL`; depois o script clona o `suap_deploy` e roda o `make setup` dele, que pergunta o **modo de imagem**. Use **o mesmo modo da .50** (veja com `bash docker/prod/suap-deploy.sh profiles` na .50, linha "Modo de imagem"): `local` exige clonar o código e a imagem do SUAP (compilar em cada nó é o que a seção 17.2 recomenda evitar: compile em **um** nó e copie a imagem), `registry` só baixa as imagens. Terminado o `make setup`, o script abre o menu de gerenciamento: escolha **0 (Sair)**; a configuração do nó vem a seguir.
+   O wizard pergunta `SUAP_DEPLOY_DIR` (use o mesmo caminho da .50, por exemplo `/opt/suap_deploy`) e `SUAP_DEPLOY_GIT_URL`; depois o script clona o `suap_deploy` e roda o `make setup` dele, que pergunta o **modo de imagem**. Use **o mesmo modo da .50** (veja com `suap-setup deploy profiles` na .50, linha "Modo de imagem"): `local` exige clonar o código e a imagem do SUAP (compilar em cada nó é o que a seção 17.2 recomenda evitar: compile em **um** nó e copie a imagem), `registry` só baixa as imagens. Terminado o `make setup`, o script abre o menu de gerenciamento: escolha **0 (Sair)**; a configuração do nó vem a seguir.
 
-   **4.2. Aplicar o papel.** O `make setup` gera um `SECRET_KEY` novo em cada servidor, mas em um cluster **todos os nós devem usar o mesmo** (tokens assinados, como links de redefinição de senha, falham entre nós com chaves diferentes). Chaves diferentes fazem o SUAP **deslogar o usuário e perder o CSS de forma intermitente**, conforme o HAProxy alterna entre os nós (a sessão assinada por um nó é inválida no outro). Para conferir, rode `bash docker/prod/suap-deploy.sh check` em cada nó: a linha `SECRET_KEY (hash ...)` deve mostrar o mesmo valor em todos. Copie o da .50 (`grep ^SECRET_KEY= <SUAP_DEPLOY_DIR>/.env`) e informe-o aqui:
+   **4.2. Aplicar o papel.** O `make setup` gera um `SECRET_KEY` novo em cada servidor, mas em um cluster **todos os nós devem usar o mesmo** (tokens assinados, como links de redefinição de senha, falham entre nós com chaves diferentes). Chaves diferentes fazem o SUAP **deslogar o usuário e perder o CSS de forma intermitente**, conforme o HAProxy alterna entre os nós (a sessão assinada por um nó é inválida no outro). Para conferir, rode `suap-setup deploy check` em cada nó: a linha `SECRET_KEY (hash ...)` deve mostrar o mesmo valor em todos. Copie o da .50 (`grep ^SECRET_KEY= <SUAP_DEPLOY_DIR>/.env`) e informe-o aqui:
 
    ```bash
    NODE_DB_PASSWORD='...' NODE_REDIS_PASSWORD='...' NODE_SECRET_KEY='<SECRET_KEY da .50>' \
-   bash docker/prod/configure-node.sh --role web-celery-beat \
+   suap-setup node configure --role web-celery-beat \
      --db-host 192.0.2.52 --db-name suap --db-user suap_app \
      --redis-host 192.0.2.52 --ssl false \
      --site-url https://suap.instituicao.edu.br --trusted-proxies 192.0.2.52 \
      --flower-auth operador:SenhaForte --yes
-   bash docker/prod/suap-deploy.sh check
+   suap-setup deploy check
    ```
 
-   **Subir a .51.** Em modo `registry`: `bash docker/prod/suap-deploy.sh update`. Em modo `local`, **não compile na .51**: copie a imagem da .50 e suba sem build (seção 17.2):
+   **Subir a .51.** Em modo `registry`: `suap-setup deploy update`. Em modo `local`, **não compile na .51**: copie a imagem da .50 e suba sem build (seção 17.2):
 
    ```bash
    # na .50 (origem da imagem): copia a imagem e mostra o commit de src/suap
-   bash docker/prod/suap-deploy.sh image-copy <usuario>@<ip .51>
+   suap-setup deploy image-copy <usuario>@<ip .51>
 
    # na .51: mesmo commit do código (o modo local monta src/suap por cima da imagem) e subir sem compilar
    git -C <SUAP_DEPLOY_DIR>/src/suap fetch && git -C <SUAP_DEPLOY_DIR>/src/suap checkout <commit mostrado pelo image-copy>
-   bash docker/prod/suap-deploy.sh update --no-build
+   suap-setup deploy update --no-build
    ```
 
    `--db-name` e `--db-user` devem ser **iguais aos da .50** (os mesmos valores do passo 2). Rode `begin` e `createsuperuser` **só** em banco novo e em um único nó (aqui o banco já foi restaurado de backup). **Memória da .51 (8 GB).** Os padrões do `env.sample` não cabem: web (4G) + celery (4G) + beat (1G) + flower (1G) somam 10 GB, e o `GUNICORN_WORKERS=8` do `env.sample` é demais para 4 cores. Sem ajuste, sob carga o kernel mata processos (OOM). Ponto de partida no `.env` da .51, somando cerca de 6 GB e deixando folga para o sistema:
@@ -984,7 +990,7 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
 
    ```bash
    HAPROXY_BACKENDS='192.0.2.50:80:3,192.0.2.51:80:1' HAPROXY_SERVER_NAME=suap.instituicao.edu.br \
-     bash docker/haproxy-setup.sh
+     suap-setup stack haproxy
    ```
 
 6. **URL do pdfprinter.** O pdfprinter roda só na .50. Em *Configurações do módulo comum*, o campo **"Caminho para o executável do LibreOffice/API do SuapPDF"** deve receber `http://192.0.2.50:9000` (porta publicada pelo compose; o nome `pdfprinter` só resolve dentro da rede Docker da .50) e o campo **"Token da API do SuapPDF"** o valor de `SUAP_PDF_ACCESS_TOKEN` **do `.env` da .50** (o nó que roda o pdfprinter e valida o token). O `.env` da .51 também tem um `SUAP_PDF_ACCESS_TOKEN` gerado pelo `make setup`, mas ele não é usado (a .51 não roda o pdfprinter) e pode ficar diferente. A configuração fica no banco, então vale para os dois nós e para o Celery, sem reiniciar. Libere a porta 9000 no firewall apenas para a .50 e a .51.
@@ -1000,9 +1006,9 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
    file /tmp/teste.pdf
    ```
 
-   Esperado: `200` e `PDF document`. `401` é token errado (por exemplo, o `.env` da .51 em vez do da .50); `000` ou recusa é firewall na porta 9000. Depois de salvar a configuração, teste o caminho real da aplicação em `bash docker/prod/suap-deploy.sh shell`, lendo a URL e o token do banco com `Configuracao.get_valor_por_chave('comum', 'caminho_libreoffice')` e `'token_libreoffice'` e fazendo o mesmo `POST` com `requests`: deve responder `200` e `b'%PDF-'`.
+   Esperado: `200` e `PDF document`. `401` é token errado (por exemplo, o `.env` da .51 em vez do da .50); `000` ou recusa é firewall na porta 9000. Depois de salvar a configuração, teste o caminho real da aplicação em `suap-setup deploy shell`, lendo a URL e o token do banco com `Configuracao.get_valor_por_chave('comum', 'caminho_libreoffice')` e `'token_libreoffice'` e fazendo o mesmo `POST` com `requests`: deve responder `200` e `b'%PDF-'`.
 7. **Firewall.** .50/.51: porta 80 só para a .52 (HAProxy); 5555 (Flower) só rede interna. .52: 80/443 para os clientes, 8404 (estatísticas) e as portas do banco e do Redis só para a rede interna. Se usar o Arcane (seção 15.10): 3553 na .50/.51 só para a .52, e 3552 na .52 só para a rede administrativa e os agents.
-8. **Validar:** `check` em cada nó; estatísticas do HAProxy com os nós UP; `bash docker/prod/suap-deploy.sh drain` em um nó deve deixá-lo DOWN em ~14 s (e `healthy` o devolve).
+8. **Validar:** `check` em cada nó; estatísticas do HAProxy com os nós UP; `suap-setup deploy drain` em um nó deve deixá-lo DOWN em ~14 s (e `healthy` o devolve).
 
 **Comportamento quando uma VM cai**
 
@@ -1026,24 +1032,24 @@ Topologia usada como teste do ambiente de produção, com uma VM grande e duas p
 | .51 voltou, depois do passo 3 | **sim** | não | Correto: uma VM só |
 
 1. **Confirme que a .51 está mesmo fora do ar** (desligada ou sem rede), antes de mover o beat. Se ela ainda estiver rodando, mover o beat já cria o beat em duas VMs.
-2. **Suba o beat na .50.** Na .50, rode `bash docker/prod/configure-node.sh --role single --yes` (muda só os profiles para `default,celery-beat,celery-flower`) e depois `bash docker/prod/suap-deploy.sh up`. O `up` sobe apenas o beat e o flower; o web não é tocado.
+2. **Suba o beat na .50.** Na .50, rode `suap-setup node configure --role single --yes` (muda só os profiles para `default,celery-beat,celery-flower`) e depois `suap-setup deploy up`. O `up` sobe apenas o beat e o flower; o web não é tocado.
 3. **Quando a .51 voltar a ligar, derrube o beat dela imediatamente.** Todos esses containers têm `restart: always`: ao ligar, o Docker da .51 sobe de novo o que estava rodando, **inclusive o beat**, e nesse momento ele passa a rodar nas duas VMs. Na .51, rode logo:
 
    ```bash
-   bash docker/prod/suap-deploy.sh compose rm -sf celery-beat celery-flower
-   bash docker/prod/configure-node.sh --role custom --profiles web,celery --yes
+   suap-setup deploy compose rm -sf celery-beat celery-flower
+   suap-setup node configure --role custom --profiles web,celery --yes
    ```
 
    O primeiro comando remove os containers; o segundo tira o beat e o flower dos profiles da .51, para que não voltem num próximo `restart`. Até você fazer isso, as tarefas agendadas rodam em dobro.
 4. **Decida onde o beat fica daqui em diante.** Pode ficar na .50 de forma permanente (nada mais a fazer; a .51 segue sem beat). Para voltar ao desenho original, faça nesta ordem, para nunca haver duas VMs com beat:
-   - na .50: `bash docker/prod/configure-node.sh --role full --yes` e `bash docker/prod/suap-deploy.sh compose rm -sf celery-beat celery-flower`;
-   - na .51: `bash docker/prod/configure-node.sh --role web-celery-beat --yes` e `bash docker/prod/suap-deploy.sh up`.
+   - na .50: `suap-setup node configure --role full --yes` e `suap-setup deploy compose rm -sf celery-beat celery-flower`;
+   - na .51: `suap-setup node configure --role web-celery-beat --yes` e `suap-setup deploy up`.
 
-9. **Acessar o Flower.** O Flower roda só no nó com o profile `celery-flower` (aqui a .51) e publica a porta **5555** direto no host; ele **não** passa pelo Nginx nem pelo HAProxy. Abra `http://<IP da .51>:5555` e entre com o `FLOWER_BASIC_AUTH` do `.env` desse nó (`usuario:senha`; o padrão do `env.sample` é `admin:senha`: troque com `bash docker/prod/configure-node.sh --role web-celery-beat --flower-auth operador:SenhaForte --yes` seguido de `restart`). Se o seu PC estiver fora da rede liberada no firewall, **não abra a 5555 para fora**; use um túnel SSH e acesse `http://localhost:5555`:
+9. **Acessar o Flower.** O Flower roda só no nó com o profile `celery-flower` (aqui a .51) e publica a porta **5555** direto no host; ele **não** passa pelo Nginx nem pelo HAProxy. Abra `http://<IP da .51>:5555` e entre com o `FLOWER_BASIC_AUTH` do `.env` desse nó (`usuario:senha`; o padrão do `env.sample` é `admin:senha`: troque com `suap-setup node configure --role web-celery-beat --flower-auth operador:SenhaForte --yes` seguido de `restart`). Se o seu PC estiver fora da rede liberada no firewall, **não abra a 5555 para fora**; use um túnel SSH e acesse `http://localhost:5555`:
    ```bash
    ssh -N -L 5555:localhost:5555 <usuario>@<IP da .51>
    ```
-   Se não abrir, confira se o container está no ar (`bash docker/prod/suap-deploy.sh status`) e teste na própria .51 com `curl -I http://localhost:5555/healthcheck` (200 = Flower de pé; o problema é rede ou firewall). Se o Flower mudar de nó (failover do beat, seção "Falhas"), o endereço muda junto.
+   Se não abrir, confira se o container está no ar (`suap-setup deploy status`) e teste na própria .51 com `curl -I http://localhost:5555/healthcheck` (200 = Flower de pé; o problema é rede ou firewall). Se o Flower mudar de nó (failover do beat, seção "Falhas"), o endereço muda junto.
 
 **Atualizações.** No modo `local`, compile a imagem na .50 e copie para a .51 (`image-copy` e `update --no-build`); o passo a passo está na seção 17.1 ("Modo `local` em dois ou mais nós") e na 17.2.
 
@@ -1074,7 +1080,7 @@ No exemplo das 3 VMs:
 1. **.52 — Manager.** A `ARCANE_APP_URL` precisa ser alcançável pelos agents:
 
    ```bash
-   ARCANE_APP_URL=http://192.0.2.52:3552 bash docker/arcane-setup.sh
+   ARCANE_APP_URL=http://192.0.2.52:3552 suap-setup stack arcane
    ```
 
    Acesse `http://192.0.2.52:3552`, entre com `arcane` / `arcane-admin` e troque a senha.
@@ -1083,12 +1089,12 @@ No exemplo das 3 VMs:
 
    ```bash
    ARCANE_MANAGER_URL=http://192.0.2.52:3552 ARCANE_AGENT_TOKEN='arc_...' \
-     bash docker/arcane-agent-setup.sh
+     suap-setup stack arcane-agent
    ```
 
    Sem as variáveis, o script pergunta a URL e o token (oculto).
 4. **Validar:** cada environment deve ficar **Online** ou **Standby** (Standby é o estado normal do transporte `poll`: o agent faz check-in periódico e abre o túnel sob demanda, então a primeira ação pode levar alguns segundos), e os containers do `suap_deploy` (web, nginx, celery, pdfprinter…) aparecem na lista.
-5. **Migrar agents já instalados em Direct.** Se o Manager mostrar "As conexões diretas com agentes estão obsoletas e serão removidas na v3", crie um environment Edge para o nó (passo 2) e, no nó, rode `ARCANE_AGENT_MODE=edge ARCANE_AGENT_TOKEN='arc_...' ARCANE_MANAGER_URL=http://192.0.2.52:3552 bash docker/arcane-agent-setup.sh`. O script grava o modo no `.env` do stack e deixa de publicar a porta 3553. Confirme que o novo environment ficou Online/Standby e remova o Direct antigo. Uma instalação Direct existente não muda sozinha: sem `ARCANE_AGENT_MODE`, o script a mantém em Direct (o token de um environment Direct não serve para um Edge).
+5. **Migrar agents já instalados em Direct.** Se o Manager mostrar "As conexões diretas com agentes estão obsoletas e serão removidas na v3", crie um environment Edge para o nó (passo 2) e, no nó, rode `ARCANE_AGENT_MODE=edge ARCANE_AGENT_TOKEN='arc_...' ARCANE_MANAGER_URL=http://192.0.2.52:3552 suap-setup stack arcane-agent`. O script grava o modo no `.env` do stack e deixa de publicar a porta 3553. Confirme que o novo environment ficou Online/Standby e remova o Direct antigo. Uma instalação Direct existente não muda sozinha: sem `ARCANE_AGENT_MODE`, o script a mantém em Direct (o token de um environment Direct não serve para um Edge).
 
 **Firewall e segurança.** O agent monta o socket do Docker e aceita comandos pela rede, o que equivale a acesso root ao host; o token fica no `.env` do stack (modo 600).
 - Modo Edge (padrão): .50 e .51 não abrem porta para o Arcane; elas só precisam alcançar a **3552** da .52. Se havia regra para a 3553, remova-a.
@@ -1096,7 +1102,7 @@ No exemplo das 3 VMs:
 - .52: porta **3552** para os agents (.50 e .51) e para a rede administrativa; nunca para fora da instituição.
 - Troque a senha padrão do Manager antes de qualquer outro passo.
 
-**Fuso horário.** A imagem do Arcane roda em UTC. Os scripts do Manager e do agent definem `TZ` com o fuso do host (`ARCANE_TZ` permite escolher outro, por exemplo `ARCANE_TZ=America/Fortaleza bash docker/arcane-setup.sh`); sem isso, os horários registrados pelo container (logs, agendamentos) ficam em UTC. O cumprimento do painel ("Bom dia"/"Boa noite") **não** depende do container: ele usa o fuso do **navegador**. Se aparecer "Boa noite" à tarde, confira no console do navegador (F12) com `new Date().toString()`: `GMT+0000` indica o fuso do sistema operacional do PC em UTC; corrija-o no PC (por exemplo, UTC-03:00). Para conferir: `docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' arcane | grep ^TZ=` (a imagem não tem `date` nem `printenv`). Para aplicar em um Arcane já instalado, rode o script de novo: só o container é recriado e o volume `arcane-data` é mantido.
+**Fuso horário.** A imagem do Arcane roda em UTC. Os scripts do Manager e do agent definem `TZ` com o fuso do host (`ARCANE_TZ` permite escolher outro, por exemplo `ARCANE_TZ=America/Fortaleza suap-setup stack arcane`); sem isso, os horários registrados pelo container (logs, agendamentos) ficam em UTC. O cumprimento do painel ("Bom dia"/"Boa noite") **não** depende do container: ele usa o fuso do **navegador**. Se aparecer "Boa noite" à tarde, confira no console do navegador (F12) com `new Date().toString()`: `GMT+0000` indica o fuso do sistema operacional do PC em UTC; corrija-o no PC (por exemplo, UTC-03:00). Para conferir: `docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' arcane | grep ^TZ=` (a imagem não tem `date` nem `printenv`). Para aplicar em um Arcane já instalado, rode o script de novo: só o container é recriado e o volume `arcane-data` é mantido.
 
 **Telemetria.** O Arcane envia por padrão um heartbeat (versão e identificador da instância) para `checkin.getarcane.app`. O suap-setup o desliga no Manager e nos agents (`ARCANE_ANALYTICS_DISABLED=true`); use `false` para mantê-lo.
 
@@ -1106,10 +1112,10 @@ No exemplo das 3 VMs:
 
 ## 16. Operação diária (suap-deploy.sh)
 
-Para operar o `suap_deploy` **sem mudar de diretório** e sem decorar os alvos do Makefile, use o atalho `docker/prod/suap-deploy.sh`. Ele é uma camada fina: resolve `SUAP_DEPLOY_DIR` (do `.env` do `suap-setup`), valida pré-requisitos e delega para o `make` e o `docker compose` do `suap_deploy`. Funciona de qualquer pasta, é não interativo e serve para SSH, cron e automações.
+Para operar o `suap_deploy` **sem mudar de diretório** e sem decorar os alvos do Makefile, use o atalho `suap-setup deploy` (equivale a `docker/prod/suap-deploy.sh`). Ele é uma camada fina: resolve `SUAP_DEPLOY_DIR` (do `.env` do `suap-setup`), valida pré-requisitos e delega para o `make` e o `docker compose` do `suap_deploy`. Funciona de qualquer pasta, é não interativo e serve para SSH, cron e automações.
 
 ```bash
-bash docker/prod/suap-deploy.sh help
+suap-setup deploy help
 ```
 
 | Comando | Equivale a | Observação |
@@ -1133,7 +1139,7 @@ bash docker/prod/suap-deploy.sh help
 | `psql` | `make psql` | Usa o serviço `db` do compose; com banco externo, o FAQ do `suap_deploy` recomenda o `psql` do próprio host |
 | `backup` | `make backup` | Dump em `deploy/backup/` |
 | `restore <arquivo>` | `make restore DUMP=...` | |
-| `node [opções]` | `configure-node.sh` | Papel do nó |
+| `node [opções]` | `suap-setup node configure` | Papel do nó |
 | `profiles` | — | Mostra profiles, papel inferido, modo de imagem e SSL |
 | `check [--db]` | — | Valida a configuração; `--db` testa também o login no banco (seção 15.8) |
 | `fix-perms` | `chown -R 33:33 deploy/` + diretórios de runtime | Corrige `PermissionError` do Celery em `deploy/media/tmp` |
@@ -1145,11 +1151,11 @@ bash docker/prod/suap-deploy.sh help
 Exemplos:
 
 ```bash
-bash docker/prod/suap-deploy.sh status
-bash docker/prod/suap-deploy.sh logs web nginx
-bash docker/prod/suap-deploy.sh exec python manage.py sync
-bash docker/prod/suap-deploy.sh scale 3
-bash docker/prod/suap-deploy.sh backup
+suap-setup deploy status
+suap-setup deploy logs web nginx
+suap-setup deploy exec python manage.py sync
+suap-setup deploy scale 3
+suap-setup deploy backup
 ```
 
 > **Quando usar o atalho e quando usar o `make` direto?** O atalho é equivalente ao `make` para tudo que está na tabela. Se você já está em `SUAP_DEPLOY_DIR`, o `make` direto continua válido. O atalho acrescenta `update`, `scale`, `profiles`, `check`, `node` e a resolução do diretório.
@@ -1158,7 +1164,7 @@ bash docker/prod/suap-deploy.sh backup
 
 ```cron
 # Backup diário do banco (host)
-0 2 * * *  root  bash /opt/suap-setup/docker/prod/suap-deploy.sh backup   # ajuste o caminho do suap-setup
+0 2 * * *  root  /usr/local/bin/suap-setup deploy backup
 
 # PDFs e temporários se acumulam: limpe no HOST (não no container)
 0 *  * * *  root  tmpwatch 4h /tmp
@@ -1169,7 +1175,7 @@ Os logs de aplicação ficam em `deploy/logs/`. Copie as configurações de `log
 
 ### 16.2. Escalando workers
 
-`celery` (workers) escala: `bash docker/prod/suap-deploy.sh scale 3`. **Não** escale `celery-beat` nem `celery-flower`.
+`celery` (workers) escala: `suap-setup deploy scale 3`. **Não** escale `celery-beat` nem `celery-flower`.
 
 ---
 
@@ -1178,8 +1184,8 @@ Os logs de aplicação ficam em `deploy/logs/`. Copie as configurações de `log
 A forma correta depende do modo de imagem. O comando `update` encapsula as duas e escolhe `restart` (com drain) se o stack está no ar, ou `up` se está parado:
 
 ```bash
-bash docker/prod/suap-deploy.sh update              # modo registry: pull + restart | modo local: build + restart
-bash docker/prod/suap-deploy.sh update --git-pull   # modo local: git pull em src/suap e src/suap-pdf antes
+suap-setup deploy update              # modo registry: pull + restart | modo local: build + restart
+suap-setup deploy update --git-pull   # modo local: git pull em src/suap e src/suap-pdf antes
 ```
 
 Equivalente manual, dentro de `SUAP_DEPLOY_DIR`:
@@ -1194,30 +1200,30 @@ docker compose pull && make restart
 
 **Migrações e permissões.** Nem o `update` nem o `make` do `suap_deploy` rodam `migrate` ou `sync_permissions`; o `collectstatic` roda no build da imagem. Rode-os quando a versão nova precisar, em **um único** nó:
 ```bash
-bash docker/prod/suap-deploy.sh migrate --plan        # só lista as pendentes
-bash docker/prod/suap-deploy.sh migrate               # mostra o plano e aplica após confirmação
-bash docker/prod/suap-deploy.sh sync-permissions      # após confirmação
-bash docker/prod/suap-deploy.sh update --migrate --sync-permissions   # build/pull, depois migrate e sync_permissions, e só então o restart
+suap-setup deploy migrate --plan        # só lista as pendentes
+suap-setup deploy migrate               # mostra o plano e aplica após confirmação
+suap-setup deploy sync-permissions      # após confirmação
+suap-setup deploy update --migrate --sync-permissions   # build/pull, depois migrate e sync_permissions, e só então o restart
 ```
-Os comandos usam um container descartável do `web` (`docker compose run --rm -T --no-deps web`), com a imagem e o `src/suap` atuais do nó; não dependem do `web` estar no ar. No `update`, eles rodam **antes** do restart: se falharem, o restart não acontece e o nó segue com a versão anterior. Entre a migração e o restart, a versão anterior roda sobre o banco já migrado; em versões com migrações que removem ou renomeiam colunas usadas, prefira uma janela de manutenção. Sem terminal, `migrate` e `sync-permissions` exigem `--yes`. O `manage.py sync` do SUAP roda essas e outras tarefas (`loaddata initial_data`, `collectstatic`, `carregar_apis` e sincronizações); o `suap-setup` não o chama. Comandos de customização local (por exemplo, `sync_permissions_ifb`) ficam a cargo do `exec`: `bash docker/prod/suap-deploy.sh exec python manage.py <comando>`.
+Os comandos usam um container descartável do `web` (`docker compose run --rm -T --no-deps web`), com a imagem e o `src/suap` atuais do nó; não dependem do `web` estar no ar. No `update`, eles rodam **antes** do restart: se falharem, o restart não acontece e o nó segue com a versão anterior. Entre a migração e o restart, a versão anterior roda sobre o banco já migrado; em versões com migrações que removem ou renomeiam colunas usadas, prefira uma janela de manutenção. Sem terminal, `migrate` e `sync-permissions` exigem `--yes`. O `manage.py sync` do SUAP roda essas e outras tarefas (`loaddata initial_data`, `collectstatic`, `carregar_apis` e sincronizações); o `suap-setup` não o chama. Comandos de customização local (por exemplo, `sync_permissions_ifb`) ficam a cargo do `exec`: `suap-setup deploy exec python manage.py <comando>`.
 
 > **Nunca use `make up` para atualizar um stack em execução.** O recreate do `up -d` não dispara o `pre_stop` do Nginx: o web é trocado com o nó ainda no pool do balanceador e o usuário vê `502`. O `restart` faz o `down` (com drain) e depois o `up`.
 
 ### 17.1. Rolling update em vários nós
 
 1. Valide a nova versão em **homologação**.
-2. Se a versão tiver migrações de banco ou permissões novas, rode-as **uma única vez**, a partir de um nó, antes de reiniciar os demais: `bash docker/prod/suap-deploy.sh migrate` e `bash docker/prod/suap-deploy.sh sync-permissions` (ou `update --migrate --sync-permissions` no primeiro nó).
-3. Atualize **um nó de cada vez**: `bash docker/prod/suap-deploy.sh update`. O drain retira o nó do pool, termina as requisições em voo e o devolve ao subir.
+2. Se a versão tiver migrações de banco ou permissões novas, rode-as **uma única vez**, a partir de um nó, antes de reiniciar os demais: `suap-setup deploy migrate` e `suap-setup deploy sync-permissions` (ou `update --migrate --sync-permissions` no primeiro nó).
+3. Atualize **um nó de cada vez**: `suap-setup deploy update`. O drain retira o nó do pool, termina as requisições em voo e o devolve ao subir.
 4. Comece pelo nó `async-primary` e pelos `async` (ou pelos `app`, conforme a política da instituição) e confirme com `status` e `logs` antes de passar ao próximo.
 5. Para voltar de modo (`local` ↔ `registry`), reexecute o `make setup`; ele ajusta `SUAP_IMAGE` e o `docker-compose.override.yml`.
 
 **Modo `local` em dois ou mais nós (exemplo: .50 compila, .51 recebe a imagem).** No modo `local`, `update` recompila a imagem; por isso, só **um** nó (a origem) roda `update`/`--git-pull`, e os demais recebem a imagem pronta (seção 17.2). Exemplo com a .50 como origem e a .51 como destino:
 
-1. **Origem (.50).** Confira que `src/suap` não tem alterações de código (`git -C <SUAP_DEPLOY_DIR>/src/suap status --short`; mudanças só em `uv.lock`/`pyproject.toml` não afetam a execução) e atualize: `bash docker/prod/suap-deploy.sh update --git-pull`. Anote o commit: `git -C <SUAP_DEPLOY_DIR>/src/suap rev-parse --short HEAD`.
-2. **Migrações e permissões (se houver).** Rode uma única vez, a partir da origem: `bash docker/prod/suap-deploy.sh migrate` (mostra o plano antes) e, se a versão trouxer permissões novas, `bash docker/prod/suap-deploy.sh sync-permissions`. No passo 1, `update --git-pull --migrate --sync-permissions` faz tudo em sequência. **Não** use essas opções no destino (passo 4): o banco é o mesmo.
-3. **Copie a imagem.** Ainda na origem: `bash docker/prod/suap-deploy.sh image-copy <usuario>@192.0.2.51 --dry-run` e, se o plano estiver certo, repita sem `--dry-run` (acrescente `--with-pdf` se o destino roda o pdfprinter).
-4. **Destino (.51).** Alinhe o código e suba sem compilar: `git -C <SUAP_DEPLOY_DIR>/src/suap fetch && git -C <SUAP_DEPLOY_DIR>/src/suap checkout <commit>` e `bash docker/prod/suap-deploy.sh update --no-build`. Não use `update` sem `--no-build` nem `build` no destino.
-5. **Confirme em cada nó:** `bash docker/prod/suap-deploy.sh check` e `status`; o ID da imagem (`docker image ls`) e o commit de `src/suap` devem ser iguais nos dois nós.
+1. **Origem (.50).** Confira que `src/suap` não tem alterações de código (`git -C <SUAP_DEPLOY_DIR>/src/suap status --short`; mudanças só em `uv.lock`/`pyproject.toml` não afetam a execução) e atualize: `suap-setup deploy update --git-pull`. Anote o commit: `git -C <SUAP_DEPLOY_DIR>/src/suap rev-parse --short HEAD`.
+2. **Migrações e permissões (se houver).** Rode uma única vez, a partir da origem: `suap-setup deploy migrate` (mostra o plano antes) e, se a versão trouxer permissões novas, `suap-setup deploy sync-permissions`. No passo 1, `update --git-pull --migrate --sync-permissions` faz tudo em sequência. **Não** use essas opções no destino (passo 4): o banco é o mesmo.
+3. **Copie a imagem.** Ainda na origem: `suap-setup deploy image-copy <usuario>@192.0.2.51 --dry-run` e, se o plano estiver certo, repita sem `--dry-run` (acrescente `--with-pdf` se o destino roda o pdfprinter).
+4. **Destino (.51).** Alinhe o código e suba sem compilar: `git -C <SUAP_DEPLOY_DIR>/src/suap fetch && git -C <SUAP_DEPLOY_DIR>/src/suap checkout <commit>` e `suap-setup deploy update --no-build`. Não use `update` sem `--no-build` nem `build` no destino.
+5. **Confirme em cada nó:** `suap-setup deploy check` e `status`; o ID da imagem (`docker image ls`) e o commit de `src/suap` devem ser iguais nos dois nós.
 
 Atualize um nó de cada vez, como no passo 3 acima: com os dois nós no balanceador, o `drain` retira o nó do pool durante o `restart`. Os arquivos não versionados (como `suap/settings.py`) não vêm com a imagem nem com o `git`: se foram personalizados na origem, copie-os para o destino.
 
@@ -1227,9 +1233,9 @@ No modo `local`, cada nó que roda `build` compila a imagem sozinho. Em vários 
 
 ```bash
 # no nó de origem (o que tem a imagem pronta)
-bash docker/prod/suap-deploy.sh image-copy <usuario>@<ip-do-destino>             # só a imagem do SUAP
-bash docker/prod/suap-deploy.sh image-copy <usuario>@<ip-do-destino> --with-pdf   # + suap-pdf (se o destino roda o pdfprinter)
-bash docker/prod/suap-deploy.sh image-copy <usuario>@<ip-do-destino> --dry-run    # só mostra o plano
+suap-setup deploy image-copy <usuario>@<ip-do-destino>             # só a imagem do SUAP
+suap-setup deploy image-copy <usuario>@<ip-do-destino> --with-pdf   # + suap-pdf (se o destino roda o pdfprinter)
+suap-setup deploy image-copy <usuario>@<ip-do-destino> --dry-run    # só mostra o plano
 ```
 
 O comando confere que a imagem existe no nó de origem, testa SSH e Docker no destino, transfere com `docker save | gzip | ssh | docker load` e confirma que o **ID** da imagem no destino é igual ao da origem. **Andamento:** em um terminal, o comando mostra o progresso da transferência: com o `pv` instalado (`sudo apt install pv` ou `sudo dnf install pv`) aparece uma barra com bytes, velocidade, porcentagem e tempo restante; sem ele, o `dd` (já presente no Linux) mostra os bytes copiados e a velocidade. A porcentagem usa o tamanho da imagem como estimativa (o tar pode diferir alguns %). Ao final ele informa o tempo total. Sem terminal (cron) não há indicador, e `SUAP_PROGRESS=auto|pv|dd|none` força a escolha.
@@ -1239,7 +1245,7 @@ O comando confere que a imagem existe no nó de origem, testa SSH e Docker no de
 No destino:
 
 1. **Mesmo código.** No modo `local`, o compose monta `src/suap` por cima do código da imagem; o `image-copy` mostra o commit de origem. O comando lista o que está alterado em `src/suap`: arquivos usados só no **build** (`uv.lock`, `pyproject.toml`, Dockerfiles) não afetam o código em execução, porque as dependências já estão dentro da imagem, e o destino não precisa deles (por exemplo, um `uv.lock` corrigido localmente e ainda não commitado); já arquivos de **código** alterados e não commitados disparam um aviso, pois o destino não consegue reproduzi-los (commite ou descarte antes). Arquivos não versionados, como o `suap/settings.py` (gerado pelo `make setup` a partir do `settings_sample.py`), também são listados: se foram personalizados na origem, copie-os para o destino. No destino: `git -C <SUAP_DEPLOY_DIR>/src/suap fetch && git -C <SUAP_DEPLOY_DIR>/src/suap checkout <commit>`.
-2. **Subir sem compilar:** `bash docker/prod/suap-deploy.sh update --no-build`. O `--no-build` não faz build nem pull; exige que a imagem exista no nó e usa `restart` (com drain) se o stack estiver no ar. Ele é incompatível com `--git-pull`, que deixaria o `src/` diferente da imagem.
+2. **Subir sem compilar:** `suap-setup deploy update --no-build`. O `--no-build` não faz build nem pull; exige que a imagem exista no nó e usa `restart` (com drain) se o stack estiver no ar. Ele é incompatível com `--git-pull`, que deixaria o `src/` diferente da imagem.
 3. **Não rode `update` sem `--no-build` nem `build` no destino:** os dois recompilam. Se o `update` falhar no build, a mensagem de erro já aponta para o `image-copy`.
 
 Um `docker compose up` não tenta compilar quando a imagem já existe localmente (confirmado em um teste com um compose de exemplo); só compila se ela estiver ausente.
@@ -1254,15 +1260,15 @@ Para a política de janelas de atualização, ver a seção 22.
 
 O grupo "Via Docker" do menu do `suap-setup` oferece utilitários independentes, todos via Docker Compose, com os stacks em `/opt/docker/<nome>/` (`compose.yaml` + `.env` com segredos, permissão 600). Cada um tem reversão no submenu **Reverter**.
 
-| Item do menu | Script | Porta | Uso típico |
+| Item do menu | Comando | Porta | Uso típico |
 |---|---|---|---|
-| Redis (porta 6379 exposta) | `docker/redis-setup.sh` | 6379 | Redis do cluster (senha obrigatória) |
-| PostgreSQL (porta 5432 exposta) | `docker/postgres-setup.sh` | 5432 | Banco do cluster (senha obrigatória; collation padrão da imagem, sem `pt_BR.UTF-8`) |
-| MinIO (object storage S3) | `docker/minio-setup.sh` | 80 / 9001 | Mídia compartilhada (seção 21). **Não mantido upstream**: veja o aviso da seção 21.2 |
-| Arcane Agent (host remoto) | `docker/arcane-agent-setup.sh` | nenhuma (Edge) / 3553 (Direct) | Permite ao Arcane Manager gerenciar o Docker de outro servidor (seção 15.10) |
-| HAProxy (balanceador do suap_deploy) | `docker/haproxy-setup.sh` | 80 / 443 / 8404 | Balanceador dos nós `app` (seção 15.5); rode em servidor sem o Nginx do `suap_deploy` |
-| Arcane | `docker/arcane-setup.sh` | 3552 | Interface web livre (BSD-3-Clause) para gerenciar o Docker |
-| Dockhand | `docker/dockhand-setup.sh` | 9093 | Interface web para gerenciar o Docker (licença BSL 1.1: uso empresarial em produção exige plano pago) |
+| Redis (porta 6379 exposta) | `suap-setup stack redis` | 6379 | Redis do cluster (senha obrigatória) |
+| PostgreSQL (porta 5432 exposta) | `suap-setup stack postgres` | 5432 | Banco do cluster (senha obrigatória; collation padrão da imagem, sem `pt_BR.UTF-8`) |
+| MinIO (object storage S3) | `suap-setup stack minio` | 80 / 9001 | Mídia compartilhada (seção 21). **Não mantido upstream**: veja o aviso da seção 21.2 |
+| Arcane Agent (host remoto) | `suap-setup stack arcane-agent` | nenhuma (Edge) / 3553 (Direct) | Permite ao Arcane Manager gerenciar o Docker de outro servidor (seção 15.10) |
+| HAProxy (balanceador do suap_deploy) | `suap-setup stack haproxy` | 80 / 443 / 8404 | Balanceador dos nós `app` (seção 15.5); rode em servidor sem o Nginx do `suap_deploy` |
+| Arcane | `suap-setup stack arcane` | 3552 | Interface web livre (BSD-3-Clause) para gerenciar o Docker |
+| Dockhand | `suap-setup stack dockhand` | 9093 | Interface web para gerenciar o Docker (licença BSL 1.1: uso empresarial em produção exige plano pago) |
 
 Pontos de atenção:
 
@@ -1461,8 +1467,8 @@ Ou use **pgBackRest** para backup incremental e WAL archiving de forma integrada
 Independentemente da rota (nativa ou Docker):
 
 1. **Banco e usuário criados** conforme 10.4, com `bytea_output = 'escape'`.
-2. **Rodar as migrações** (`manage.py migrate`; na rota Docker, `bash docker/prod/suap-deploy.sh exec python manage.py migrate` ou `begin` em banco novo).
-3. **Criar o superusuário inicial**: `python manage.py createsuperuser` (Docker: `bash docker/prod/suap-deploy.sh exec python manage.py createsuperuser`)
+2. **Rodar as migrações** (`manage.py migrate`; na rota Docker, `suap-setup deploy exec python manage.py migrate` ou `begin` em banco novo).
+3. **Criar o superusuário inicial**: `python manage.py createsuperuser` (Docker: `suap-setup deploy exec python manage.py createsuperuser`)
 4. Acessar `/comum/configuracao/` e revisar configurações institucionais.
 5. Se aplicável, configurar autenticação LDAP/AD em `/admin/ldap_backend/ldapconf/`.
 
@@ -1542,10 +1548,10 @@ sudo -u '#33' sh -c 'echo ok-B >> <SUAP_DEPLOY_DIR>/deploy/media/teste-nfs.txt'
 
 **Limpeza de `deploy/media/tmp`.** O SUAP usa `MEDIA_ROOT/tmp` como `TEMP_DIR` e `FILE_UPLOAD_TEMP_DIR`, e vários módulos gravam ali PDFs, DOCX e dumps com `delete=False`. Na cópia do código consultada não há tarefa nem comando que limpe a pasta (o beat usa o `DatabaseScheduler`, então tarefas cadastradas no banco da sua instalação não aparecem no código). O `suap_deploy` (`docs/FAQ.md`) recomenda um cron **no host**, fora do container. O `suap-deploy.sh` faz isso:
 ```bash
-bash docker/prod/suap-deploy.sh clean-tmp --dry-run             # quantos arquivos e quanto espaço (nada é apagado)
-bash docker/prod/suap-deploy.sh clean-tmp                       # apaga, após confirmação
-bash docker/prod/suap-deploy.sh clean-tmp --install-cron        # cron diário às 3h30 em /etc/cron.d/suap-media-tmp
-bash docker/prod/suap-deploy.sh clean-tmp --remove-cron
+suap-setup deploy clean-tmp --dry-run             # quantos arquivos e quanto espaço (nada é apagado)
+suap-setup deploy clean-tmp                       # apaga, após confirmação
+suap-setup deploy clean-tmp --install-cron        # cron diário às 3h30 em /etc/cron.d/suap-media-tmp
+suap-setup deploy clean-tmp --remove-cron
 ```
 Ele apaga só **dentro** de `deploy/media/tmp` arquivos com mais de 3 dias (`--days N` muda; `--hour H` muda a hora do cron) e, depois, as subpastas vazias com a mesma idade (a remoção de arquivos atualiza a data da pasta, então ela some numa execução seguinte). Recusa operar se a pasta não existe ou não se chama `tmp` (por exemplo, um link para `/tmp`), e sem terminal exige `--yes`. O cron instalado chama o `find` direto, com o caminho real da pasta, sem depender do script (o root não executa um arquivo que o seu usuário pode editar); erros vão para o syslog com a tag `suap-clean-tmp`. Os 3 dias deixam margem para uploads, PDFs em geração e relatórios baixados depois.
 
@@ -1558,7 +1564,7 @@ Enquanto o servidor de mídia definitivo não existe, um dos nós de aplicação
 1. **No nó servidor (.50).** A mídia vai para uma pasta fora do `suap_deploy`, e o próprio nó a usa por **bind mount** (sem passar pelo NFS):
    ```bash
    D=<SUAP_DEPLOY_DIR>
-   bash docker/prod/suap-deploy.sh down
+   suap-setup deploy down
    sudo apt install -y nfs-kernel-server rsync
    sudo mkdir -p /srv/suap-media
    sudo rsync -aHAX $D/deploy/media/ /srv/suap-media/
@@ -1570,7 +1576,7 @@ Enquanto o servidor de mídia definitivo não existe, um dos nós de aplicação
    sudo mkdir -p /etc/exports.d                  # pode não existir
    echo "/srv/suap-media 192.0.2.51(rw,sync,no_subtree_check,no_root_squash)" | sudo tee /etc/exports.d/suap-media.exports
    sudo exportfs -ra && sudo exportfs -v
-   bash docker/prod/suap-deploy.sh check && bash docker/prod/suap-deploy.sh up
+   suap-setup deploy check && suap-setup deploy up
    ```
    Libere a 2049/tcp **só** para os clientes (por exemplo, `sudo ufw allow from 192.0.2.51 to any port 2049 proto tcp`).
 2. **No cliente (.51).** `down`, `sudo apt install -y nfs-common`, renomeie o `deploy/media` local, acrescente ao `fstab` `192.0.2.50:/srv/suap-media  <SUAP_DEPLOY_DIR>/deploy/media  nfs  nfsvers=4.2,rw,hard,_netdev  0  0`, `mount -a`, confira com `findmnt` (tipo `nfs4`) e `stat -c '%u:%g'` (33:33), aplique o `RequiresMountsFor` acima, `check` e `up`.
@@ -1595,7 +1601,7 @@ O `suap-setup` oferece instalação automatizada do MinIO via o item **MinIO (ob
 
 ```bash
 cd suap-setup
-bash setup.sh
+suap-setup menu
 # Selecione: MinIO (object storage S3), no grupo "Via Docker"
 ```
 
@@ -1687,7 +1693,7 @@ Procedimentos por rota: seção 11 (nativa) e seção 17 (Docker).
 - **Mídia:** backup incremental do volume NFS/MinIO, com retenção mínima de 30 dias.
 - **Configurações:** versionar `.env`, configurações de Nginx e Supervisor customizadas em um repositório interno privado.
 - **Teste de restauração:** validar periodicamente (ex.: trimestralmente) que os backups restauram um ambiente funcional, preferencialmente restaurando no ambiente de homologação.
-- **Rota Docker:** `bash docker/prod/suap-deploy.sh backup` grava o dump em `deploy/backup/dump_<data>.sql` (via container `db`, com as credenciais do `.env`) e `restore <arquivo>` o restaura. Para banco externo, prefira o `pg_dump` do próprio servidor de banco (seção 19.9). Os volumes Docker do `suap-setup` (Redis, PostgreSQL, MinIO) também precisam de rotina de backup própria.
+- **Rota Docker:** `suap-setup deploy backup` grava o dump em `deploy/backup/dump_<data>.sql` (via container `db`, com as credenciais do `.env`) e `restore <arquivo>` o restaura. Para banco externo, prefira o `pg_dump` do próprio servidor de banco (seção 19.9). Os volumes Docker do `suap-setup` (Redis, PostgreSQL, MinIO) também precisam de rotina de backup própria.
 - **Segredos:** guarde o `.env` do `suap_deploy` (e a chave `ENCRYPTION_KEY` do Arcane, se usado) em cofre; o `configure-node.sh` mantém cópias `.env.bak-<data>`, que também contêm segredos.
 
 ---
@@ -1698,7 +1704,7 @@ Procedimentos por rota: seção 11 (nativa) e seção 17 (Docker).
 - **Monitor do Celery:** painel **Flower**, protegido por autenticação forte e acessível apenas via rede interna.
 - **Métricas de infraestrutura:** recomenda-se Prometheus + Grafana (ou solução equivalente) para CPU, memória, conexões de banco e filas do Celery.
 - **Auditoria:** manter logs de acesso administrativo auditáveis.
-- **Estado e saúde (Docker):** `bash docker/prod/suap-deploy.sh status` e `check`; o `/ht/` de cada nó responde 200 (`healthy`) ou 503 (`drain`).
+- **Estado e saúde (Docker):** `suap-setup deploy status` e `check`; o `/ht/` de cada nó responde 200 (`healthy`) ou 503 (`drain`).
 
 ---
 
@@ -1723,7 +1729,7 @@ Procedimentos por rota: seção 11 (nativa) e seção 17 (Docker).
 
 **Rota Docker**
 
-- [ ] `bash docker/prod/suap-deploy.sh check` sem falhas em todos os nós.
+- [ ] `suap-setup deploy check` sem falhas em todos os nós.
 - [ ] Exatamente **um** nó com `celery-beat` e **um** com `celery-flower`.
 - [ ] Nós `app` com `SSL_ENABLED=false` (TLS no balanceador) e `TRUSTED_PROXIES` com o IP do balanceador.
 - [ ] `DRAIN_SECONDS` maior que o tempo do balanceador para retirar o nó; teste de `drain`/`healthy` feito.

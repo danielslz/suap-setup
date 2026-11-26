@@ -18,76 +18,100 @@ Os scripts automatizam instalação de dependências, configuração de ambiente
 - [Documentação Técnica](docs/TECHNICAL.md) — arquitetura interna, fluxo de cada script, variáveis de ambiente, testes
 
 ## Pré-requisitos
-
 - Acesso ao repositório Git do SUAP
 - Conexão com a internet
 - Permissões de `sudo` (para scripts de produção e infraestrutura)
 - Para opções Docker: Docker e Docker Compose (o script pode instalar automaticamente)
 - Para macOS: Homebrew instalado
-
-## Como usar
-
-### 1. Clonar o repositório
-
+## Instalação
+O caminho principal é o comando único `suap-setup`, instalado a partir de uma release do GitHub (tarball), sem precisar clonar o repositório.
+### Linux
+```bash
+curl -fsSL https://github.com/danielslz/suap-setup/releases/latest/download/install.sh | sudo bash
+```
+O instalador baixa o tarball da última release estável, confere o `SHA256SUMS` e instala em `/opt/suap-setup` (`releases/<versão>`, `current` e `previous`), com o comando em `/usr/local/bin/suap-setup` e a completion do bash em `/usr/share/bash-completion/completions/suap-setup`. Os diretórios de configuração (`/etc/suap-setup`) e de estado (`/var/lib/suap-setup`) são criados com dono `SUDO_USER` e modo 700, para os scripts rodarem sem root quando possível.
+Para fixar uma versão (inclusive pré-release): `curl -fsSL …/install.sh | sudo bash -s -- --version v1.2.3`. Opções do `install.sh`: `--prefix`, `--bin-dir`, `--config-dir`, `--state-dir`, `--completion-dir`, `--version`, `--from-dir`, `--migrate-from`, `--no-completion`.
+### Instalação manual com verificação
+```bash
+TAG=v1.2.3   # troque pela versão desejada
+BASE=https://github.com/danielslz/suap-setup/releases/download/${TAG}
+curl -fsSLO "${BASE}/suap-setup-${TAG}.tar.gz"
+curl -fsSLO "${BASE}/SHA256SUMS"
+sha256sum --ignore-missing -c SHA256SUMS          # no macOS: shasum -a 256 -c SHA256SUMS
+tar -xzf "suap-setup-${TAG}.tar.gz"
+sudo bash "suap-setup-${TAG}/install.sh" --from-dir "suap-setup-${TAG}"
+```
+> O `SHA256SUMS` vem do mesmo servidor do tarball: ele protege contra corrupção e download truncado, não contra uma release comprometida.
+### macOS
+No macOS a instalação não usa `sudo`. O programa fica em `~/.local/share/suap-setup`, o comando em `~/.local/bin/suap-setup` (garanta que `~/.local/bin` está no `PATH`), a configuração em `~/.config/suap-setup/.env` e o estado em `~/.local/state/suap-setup`:
+```bash
+curl -fsSL https://github.com/danielslz/suap-setup/releases/latest/download/install.sh | bash
+```
+A completion não é instalada automaticamente; adicione ao `~/.bash_profile`: `source <(suap-setup completion bash)`.
+### Legado: clone git
+O método anterior continua funcionando:
 ```bash
 git clone https://github.com/danielslz/suap-setup.git
 cd suap-setup
-```
-
-### 2. Executar o wrapper interativo
-
-```bash
 bash setup.sh
 ```
-
+Todos os scripts (`bash setup.sh`, `bash docker/prod/suap-deploy.sh …`, `bash deb/suap-dev.sh` etc.) seguem válidos e com o mesmo comportamento. O `.env` e o `.state` ficam na raiz do clone até você migrar (veja "Migrando de um clone git").
+## Uso
 Na primeira execução, um **wizard interativo** guia a criação do arquivo `.env` com prompts descritivos, exemplos e valores padrão para cada variável.
-
-### 3. Executar um script diretamente
-
 ```bash
-# Desenvolvimento nativo
-bash deb/suap-dev.sh      # Debian/Ubuntu
-bash rpm/suap-dev.sh      # Fedora/RHEL/Alma/Rocky
-bash arch/suap-dev.sh     # Arch Linux
-bash macos/suap-dev.sh    # macOS
-
-# Produção nativa (requer root)
-sudo bash deb/suap-prod.sh
-sudo bash rpm/suap-prod.sh
-sudo bash arch/suap-prod.sh
-
-# Atualização de produção (requer root)
-sudo bash deb/suap-update.sh
-sudo bash rpm/suap-update.sh
-sudo bash arch/suap-update.sh
-
-# Infraestrutura
-bash deb/install-redis.sh
-bash deb/install-nginx.sh
-bash deb/install-postgres.sh
-bash arch/install-redis.sh
-bash arch/install-nginx.sh
-
-# Docker
-bash docker/dev/docker-setup.sh
-bash docker/prod/docker-setup.sh
-bash docker/prod/suap-deploy.sh help      # operar o suap_deploy sem trocar de pasta
-bash docker/prod/configure-node.sh        # papel do nó (multi-servidor)
-bash docker/dockhand-setup.sh
-bash docker/arcane-setup.sh
-bash docker/haproxy-setup.sh              # balanceador para os nós do suap_deploy
-bash docker/arcane-agent-setup.sh         # agent do Arcane em um host remoto
-bash docker/install-docker.sh
-bash docker/minio-setup.sh
-bash docker/redis-setup.sh
-bash docker/postgres-setup.sh
+suap-setup menu
 ```
-
-> Scripts individuais exigem que o `.env` já exista. Se não existir, o script encerra com erro orientando a executar `setup.sh` primeiro.
-
+| Comando | Descrição | Script equivalente |
+|---|---|---|
+| `suap-setup menu` | Menu interativo | `bash setup.sh` |
+| `suap-setup host <dev\|prod\|update\|redis\|nginx\|postgres>` | Ambiente no host; escolhe `deb`, `rpm`, `arch` ou `macos` conforme a distribuição | `bash <distro>/suap-dev.sh`, `suap-prod.sh`, `suap-update.sh`, `install-*.sh` |
+| `suap-setup docker <dev\|prod\|install>` | Via Docker: SUAP dev, SUAP prod (suap_deploy) e instalação do Docker | `docker/dev/docker-setup.sh`, `docker/prod/docker-setup.sh`, `docker/install-docker.sh` |
+| `suap-setup stack <redis\|postgres\|dockhand\|arcane\|arcane-agent\|haproxy\|minio>` | Stacks Docker de apoio | `docker/<nome>-setup.sh` |
+| `suap-setup deploy <comando…>` | Opera o suap_deploy sem trocar de pasta (`help` lista os comandos) | `docker/prod/suap-deploy.sh` |
+| `suap-setup node configure [opções]` | Configura o papel de um nó (multi-servidor) | `docker/prod/configure-node.sh` |
+| `suap-setup revert [grupo] <alvo>` | Reverte uma funcionalidade. Grupos: `host`, `docker`, `stack`. Sem grupo, `redis` e `postgres` referem-se ao stack Docker; o grupo `host` aceita os mesmos alvos de `suap-setup host`, mas só existe script de reversão de host para `dev` nesta versão; um alvo sem script termina com erro (código 2) | scripts `*-revert.sh` |
+| `suap-setup config path` | Mostra o `.env` e o diretório de estado em uso | |
+| `suap-setup config migrate [--from DIR] [--dry-run]` | Copia `.env` e estado de um clone para os caminhos novos | |
+| `suap-setup self-update [--check] [--version vX.Y.Z] [--rollback]` | Atualiza o programa | |
+| `suap-setup version` | Mostra a versão instalada | |
+| `suap-setup completion bash` | Imprime o script de autocompletar | |
+| `suap-setup help` | Lista os comandos | |
+Exemplos:
+```bash
+suap-setup host dev                        # ambiente de desenvolvimento no host
+sudo suap-setup host prod                  # produção nativa (requer root)
+suap-setup stack haproxy                   # balanceador para os nós do suap_deploy
+suap-setup deploy update --migrate         # atualiza o suap_deploy e roda migrate
+suap-setup revert redis                    # reverte o Redis Docker
+suap-setup revert host dev                 # reverte o ambiente de desenvolvimento do host
+```
+> Os comandos individuais exigem que o `.env` já exista. Se não existir, o script encerra com erro orientando a executar `suap-setup menu` primeiro.
+### Atualização do suap-setup (`self-update`)
+```bash
+suap-setup self-update                     # instala a última release estável
+suap-setup self-update --check             # só informa se há versão nova
+suap-setup self-update --version v1.2.3    # fixa uma versão (aceita pré-release e downgrade)
+suap-setup self-update --rollback          # volta para a versão anterior
+suap-setup version
+```
+O download e a conferência do `SHA256SUMS` acontecem em um diretório temporário antes de qualquer escrita; se a rede falhar, nada é alterado. Pré-releases (tags com `-`, como `v1.3.0-rc.1`) nunca são escolhidas automaticamente. O `current` aponta para a versão ativa, o `previous` guarda a anterior e as 3 releases mais recentes são mantidas em disco. Em um clone git, o `self-update` recusa a execução e explica como migrar.
+### Completion do bash
+No Linux a completion é instalada pelo `install.sh`. Para ativar manualmente (ou no macOS): `source <(suap-setup completion bash)`.
+## Migrando de um clone git
+A migração é explícita e não destrutiva: copia, nunca sobrescreve um destino existente e não altera o clone.
+```bash
+# 1. instalar o suap-setup e já migrar o clone
+curl -fsSL https://github.com/danielslz/suap-setup/releases/latest/download/install.sh | sudo bash -s -- --migrate-from ~/suap-setup
+# ou, com o suap-setup já instalado:
+suap-setup config migrate --dry-run --from ~/suap-setup   # mostra o que seria copiado
+suap-setup config migrate --from ~/suap-setup             # copia .env e .state/*
+suap-setup config path                                    # confere os caminhos em uso
+```
+Depois da migração, os caminhos novos (`/etc/suap-setup/.env` e `/var/lib/suap-setup`) passam a valer também para `bash setup.sh` e os demais scripts do clone. Sem `--from`, o comando só procura um clone em `~/suap-setup` e sugere a migração, sem copiar nada.
+Precedência do `.env`: `SUAP_SETUP_ENV_FILE` > `${SUAP_SETUP_CONFIG_DIR}/.env` (se existir) > `<raiz>/.env` do clone (se existir) > local de criação. O estado segue a mesma lógica com `SUAP_SETUP_STATE_DIR`. Detalhes em [docs/TECHNICAL.md](docs/TECHNICAL.md).
 ## Menu interativo
 
-O `setup.sh` detecta automaticamente o sistema operacional e exibe apenas as opções disponíveis para a plataforma.
+O `suap-setup menu` (ou `bash setup.sh`) detecta automaticamente o sistema operacional e exibe apenas as opções disponíveis para a plataforma.
 
 **Linux (Debian/RPM/Arch):**
 
@@ -144,9 +168,11 @@ A numeração exibida é sequencial e gerada a partir de uma lista agrupada em s
 
 A opção **R) Reverter** abre um submenu que lista as funcionalidades que podem ser desfeitas na plataforma atual. A reversão é conservadora: remove apenas o que a instalação criou (registrado em um manifesto de estado), preserva o que já existia no sistema e pede confirmação para operações destrutivas (apagar diretórios/bancos, desinstalar pacotes).
 
+Sem o menu, o mesmo submenu está disponível como `suap-setup revert [grupo] <alvo>` (veja a tabela em "Uso").
 No macOS, opções de produção nativa, Redis e Nginx não estão disponíveis (macOS é suportado apenas para desenvolvimento).
 
 ## Variáveis de ambiente (`.env`)
+Na instalação por release o arquivo fica em `/etc/suap-setup/.env` (macOS: `~/.config/suap-setup/.env`); em um clone git, na raiz do clone. `suap-setup config path` mostra o caminho em uso. Variáveis do próprio suap-setup (não vão no `.env`): `SUAP_SETUP_ENV_FILE` (caminho do `.env`), `SUAP_SETUP_CONFIG_DIR`, `SUAP_SETUP_STATE_DIR`, `SUAP_SETUP_RELEASES_URL` e `SUAP_SETUP_LATEST_TAG` (espelho/teste do `self-update`).
 
 Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.env` na raiz do repositório. O wizard solicita as variáveis conforme a opção escolhida no menu.
 
@@ -177,6 +203,8 @@ Todas as variáveis compartilhadas entre os scripts são definidas no arquivo `.
 
 | Script | Plataforma | Descrição |
 |--------|------------|-----------|
+| `bin/suap-setup` | Todas | Comando único (`suap-setup`): despacha para os scripts abaixo |
+| `install.sh` | Todas | Instalador da release (tarball) |
 | `setup.sh` | Todas | Wrapper interativo com detecção de OS |
 | `deb/suap-dev.sh` | Debian/Ubuntu | Ambiente de desenvolvimento |
 | `rpm/suap-dev.sh` | Fedora/RHEL/Alma/Rocky | Ambiente de desenvolvimento |
@@ -313,7 +341,7 @@ Serviços típicos fornecidos pelo compose do SUAP:
 
 ```bash
 # Iniciar
-bash docker/dev/docker-setup.sh
+suap-setup docker dev
 
 # Após iniciar, use diretamente no diretório do SUAP:
 cd $SUAP_DIR
@@ -360,13 +388,13 @@ O script `docker/prod/docker-setup.sh` delega para o projeto suap_deploy:
 0) Sair
 ```
 
-Com o stack no ar, as opções 1 e 2 usam `make restart` (que dispara o drain) em vez de `make up`. As opções 12 a 22 chamam o `docker/prod/suap-deploy.sh`. A 17 pergunta o destino, mostra o plano (`--dry-run`) e pede confirmação; a 19 mostra o que seria apagado e pergunta se apaga agora ou instala o cron. Migrações e permissões gravam no banco compartilhado: rode as opções 15 e 16 em **um único** nó.
+Com o stack no ar, as opções 1 e 2 usam `make restart` (que dispara o drain) em vez de `make up`. As opções 12 a 22 chamam o `suap-setup deploy`. A 17 pergunta o destino, mostra o plano (`--dry-run`) e pede confirmação; a 19 mostra o que seria apagado e pergunta se apaga agora ou instala o cron. Migrações e permissões gravam no banco compartilhado: rode as opções 15 e 16 em **um único** nó.
 
 O suap_deploy suporta dois modos de imagem: **registry** (pull de imagens pré-construídas) e **local** (build a partir do código-fonte clonado em `./src/suap`). Os serviços ativos são controlados pela variável `COMPOSE_PROFILES` no `.env` do suap_deploy. Inclui OWASP ModSecurity CRS como WAF no Nginx e resource limits por container.
 
 ```bash
 # Iniciar
-bash docker/prod/docker-setup.sh
+suap-setup docker prod
 
 # Ou usar diretamente no diretório do suap_deploy:
 cd $SUAP_DEPLOY_DIR
@@ -376,24 +404,24 @@ make logs
 make down
 ```
 
-#### Atalho `suap-deploy.sh` (sem trocar de pasta)
+#### Atalho `suap-setup deploy` (sem trocar de pasta)
 
-`docker/prod/suap-deploy.sh` opera o suap_deploy de qualquer diretório, de forma não interativa (útil por SSH, cron e automações). É uma camada fina: resolve `SUAP_DEPLOY_DIR` e delega para o `make` e o `docker compose` do suap_deploy.
+`suap-setup deploy` (o mesmo que `bash docker/prod/suap-deploy.sh`, que continua funcionando) opera o suap_deploy de qualquer diretório, de forma não interativa (útil por SSH, cron e automações). É uma camada fina: resolve `SUAP_DEPLOY_DIR` e delega para o `make` e o `docker compose` do suap_deploy.
 
 ```bash
-bash docker/prod/suap-deploy.sh help                  # todos os comandos
-bash docker/prod/suap-deploy.sh update --git-pull     # build/pull + restart com drain (ou up, se parado)
-bash docker/prod/suap-deploy.sh image-copy op@outro-no   # copia a imagem para outro nó (modo local: compile uma vez)
-bash docker/prod/suap-deploy.sh update --no-build        # sobe com a imagem já presente, sem compilar
-bash docker/prod/suap-deploy.sh status
-bash docker/prod/suap-deploy.sh logs web nginx
-bash docker/prod/suap-deploy.sh migrate                 # mostra o plano e aplica após confirmação (UM só nó)
-bash docker/prod/suap-deploy.sh sync-permissions
-bash docker/prod/suap-deploy.sh update --git-pull --migrate --sync-permissions   # tudo em sequência, antes do restart
-bash docker/prod/suap-deploy.sh scale 3               # workers celery
-bash docker/prod/suap-deploy.sh backup
-bash docker/prod/suap-deploy.sh check                 # valida .env, TLS, DB/Redis, profiles, drain
-bash docker/prod/suap-deploy.sh check --db            # + login no banco com o Django do container
+suap-setup deploy help                  # todos os comandos
+suap-setup deploy update --git-pull     # build/pull + restart com drain (ou up, se parado)
+suap-setup deploy image-copy op@outro-no   # copia a imagem para outro nó (modo local: compile uma vez)
+suap-setup deploy update --no-build        # sobe com a imagem já presente, sem compilar
+suap-setup deploy status
+suap-setup deploy logs web nginx
+suap-setup deploy migrate                 # mostra o plano e aplica após confirmação (UM só nó)
+suap-setup deploy sync-permissions
+suap-setup deploy update --git-pull --migrate --sync-permissions   # tudo em sequência, antes do restart
+suap-setup deploy scale 3               # workers celery
+suap-setup deploy backup
+suap-setup deploy check                 # valida .env, TLS, DB/Redis, profiles, drain
+suap-setup deploy check --db            # + login no banco com o Django do container
 ```
 
 Comandos: `setup`, `build`, `pull`, `up`, `down`, `restart`, `update`, `image-copy`, `status`, `logs`, `scale`, `bash`, `shell`, `exec`, `begin`, `psql`, `backup`, `restore`, `migrate`, `sync-permissions`, `node`, `profiles`, `check`, `fix-perms`, `clean-tmp`, `drain`, `healthy`, `compose`, `dir`. O `fix-perms` corrige o dono de `deploy/` (33:33, `www-data`), cuja troca para outro usuário faz o Celery falhar com `PermissionError` em `deploy/media/tmp`; `up`, `restart` e `update` recusam rodar nesse estado. O `clean-tmp` apaga de `deploy/media/tmp` arquivos com mais de N dias (`--days`, padrão 3; `--dry-run` só conta) e `--install-cron` grava um cron diário em `/etc/cron.d/suap-media-tmp` (com mídia em NFS, em um único nó). O `update` detecta o modo de imagem (local ou registry) e usa `restart`, nunca `up`, em um stack em execução.
@@ -451,7 +479,7 @@ O [Dockhand](https://dockhand.pro/) é uma interface web para gerenciamento de c
 
 O script é idempotente (`docker compose up -d`): se nada mudou, o container não é recriado.
 
-Para usar outra porta, defina `DOCKHAND_PORT` no `.env` ou no ambiente (ex.: `DOCKHAND_PORT=9094 bash docker/dockhand-setup.sh`; evite 80, 443 e 8080 se o Nginx do suap_deploy rodar no mesmo servidor) e rode o script de novo: o compose recria o container com a nova porta, mantendo o volume `dockhand_data`.
+Para usar outra porta, defina `DOCKHAND_PORT` no `.env` ou no ambiente (ex.: `DOCKHAND_PORT=9094 suap-setup stack dockhand`; evite 80, 443 e 8080 se o Nginx do suap_deploy rodar no mesmo servidor) e rode o script de novo: o compose recria o container com a nova porta, mantendo o volume `dockhand_data`.
 
 Para desfazer, use `R) Reverter > Reverter Dockhand` (ou `bash docker/dockhand-revert.sh`). Executa `docker compose down`; o volume, a imagem e o diretório do stack só são apagados com confirmação.
 
@@ -486,13 +514,13 @@ Para desfazer, use `R) Reverter > Reverter Arcane` (ou `bash docker/arcane-rever
 
 O Arcane Manager mostra apenas o Docker da máquina em que roda. Para ver outros servidores (por exemplo, os nós do suap_deploy), cada host remoto roda um **Arcane Agent** e aparece na interface como um *environment*. O `docker/arcane-agent-setup.sh` sobe o agent via Docker Compose (stack em `/opt/docker/arcane-agent/`) no **modo Edge** (padrão: o agent conecta de saída no Manager e não publica porta no host). O modo **Direct** (o Manager conecta no agent pela porta 3553) continua disponível com `ARCANE_AGENT_MODE=direct`, mas o Arcane o marcou como obsoleto e vai removê-lo na v3.
 
-1. **Manager** (uma máquina): `ARCANE_APP_URL=http://<ip-do-manager>:3552 bash docker/arcane-setup.sh`. A URL precisa ser alcançável pelos agents. Troque a senha padrão (`arcane` / `arcane-admin`) no primeiro acesso.
+1. **Manager** (uma máquina): `ARCANE_APP_URL=http://<ip-do-manager>:3552 suap-setup stack arcane`. A URL precisa ser alcançável pelos agents. Troque a senha padrão (`arcane` / `arcane-admin`) no primeiro acesso.
 2. **No Manager**, crie o environment antes de subir o agent: *Environments → Add Environment →* aba **Edge**, informe o nome e clique em *Generate Agent Configuration*. A interface gera o token do agent (`arc_...`); use só o token, o script monta o compose.
 3. **No host remoto**, com o token:
 
    ```bash
    ARCANE_MANAGER_URL=http://<ip-do-manager>:3552 ARCANE_AGENT_TOKEN='arc_...' \
-     bash docker/arcane-agent-setup.sh
+     suap-setup stack arcane-agent
    ```
 
    Sem as variáveis, o script pergunta a URL do Manager e o token (digitado de forma oculta). No Manager, o environment deve ficar **Online** ou **Standby** (Standby é o estado normal do transporte `poll`, que faz check-in periódico e abre o túnel sob demanda).
@@ -528,7 +556,7 @@ O `docker/haproxy-setup.sh` sobe um HAProxy via Docker Compose (stack em `/opt/d
 
 ```bash
 HAPROXY_BACKENDS='192.0.2.50:80:3,192.0.2.51:80:1' HAPROXY_SERVER_NAME=suap.instituicao.edu.br \
-  bash docker/haproxy-setup.sh
+  suap-setup stack haproxy
 ```
 
 Sem variáveis, o script pergunta os nós e o nome do site. `HAPROXY_SERVER_NAME` deve ser o **domínio do SUAP** (o mesmo de `--site-url`), não o IP do servidor: ele vira o `Host` do health check, e o Django dos nós só aceita hosts de `ALLOWED_HOSTS`; com um IP os nós respondem 400 e ficam `DOWN` (o script avisa). Sem DNS, aponte o domínio para o IP do HAProxy no arquivo `hosts` do seu computador e acesse pelo domínio. Ao final ele faz um **autoteste**: confere que o container está estável (sem reinícios), que a porta 80 redireciona, que o TLS responde na 443 e o estado de cada nó, e mostra o log com uma dica se algo falhar. Se algum nó estiver `DOWN`, testa cada um com o mesmo `Host` e explica o motivo (400: host fora do `ALLOWED_HOSTS`; 301: nó com `SSL_ENABLED=true`; 503: em drain; sem conexão: nó desligado ou firewall). Ele valida o `haproxy.cfg` (`haproxy -c`) antes de aplicar; ao mudar nós ou pesos e rodar de novo, **recarrega** o HAProxy (SIGHUP) sem recriar o container. Nos nós do suap_deploy use `SSL_ENABLED=false` e `TRUSTED_PROXIES=<ip do HAProxy>`. Para desfazer: `R) Reverter > Reverter HAProxy (Docker)` (ou `bash docker/haproxy-revert.sh`); o certificado em `/etc/ssl/suap/haproxy` nunca é apagado.
@@ -557,7 +585,7 @@ Após iniciar, crie os buckets `media` e `temp` no console e configure o SUAP co
 
 ```bash
 # Iniciar
-bash docker/minio-setup.sh
+suap-setup stack minio
 
 # Ou usar diretamente no diretório do suap-minio:
 cd $SUAP_MINIO_DIR
@@ -682,10 +710,22 @@ As dependências (bats-core, bats-support, bats-assert) são resolvidas automati
 
 ```
 suap-setup/
-├── .env                              # Variáveis centralizadas
-├── setup.sh                          # Wrapper principal
+├── .env                              # Variáveis centralizadas (clone git; na instalação por release: /etc/suap-setup/.env)
+├── setup.sh                          # Wrapper principal (menu; equivale a `suap-setup menu`)
+├── install.sh                        # Instalador da release (tarball)
+├── bin/
+│   └── suap-setup                    # Comando único (dispatcher)
+├── completions/
+│   └── suap-setup.bash               # Autocompletar do bash
+├── scripts/
+│   └── build-release.sh              # Gera tarball + SHA256SUMS (não vai no tarball)
+├── .github/workflows/release.yml     # Tag vX.Y.Z → release com tarball, install.sh e SHA256SUMS
 ├── lib/
-│   └── common.sh                     # Funções utilitárias compartilhadas
+│   ├── common.sh                     # Funções utilitárias compartilhadas
+│   ├── paths.sh                      # Resolução de .env, estado e versão
+│   ├── release.sh                    # Download, verificação e troca de releases
+│   ├── cmd-self-update.sh            # suap-setup self-update
+│   └── cmd-config.sh                 # suap-setup config migrate
 ├── deb/                              # Debian/Ubuntu
 │   ├── suap-dev.sh
 │   ├── suap-prod.sh
